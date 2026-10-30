@@ -37,7 +37,7 @@ public static class Samples
     public static void EnsureGenerated()
     {
         Directory.CreateDirectory(GenDir);
-        var gens = new (string name, Func<Document> make)[] { ("g01_basic", Basic), ("g02_korean", Korean), ("g03_blocks_dims", BlocksDims), ("g04_curves", Curves), ("g05_100k", Big100k) };
+        var gens = new (string name, Func<Document> make)[] { ("g01_basic", Basic), ("g02_korean", Korean), ("g03_blocks_dims", BlocksDims), ("g04_curves", Curves), ("g05_100k", Big100k), ("g06_paper", Paper) };
         foreach (var (name, make) in gens)
         {
             string dxf = Path.Combine(GenDir, name + ".dxf"), dwg = Path.Combine(GenDir, name + ".dwg");
@@ -121,6 +121,18 @@ public static class Samples
         var h = new Hatch { Pattern = "ANSI31", Solid = false, PatternAngle = 45, PatternScale = 2, PatternType = 1 }; var loop = new HatchLoop { Type = 1 };
         loop.Edges.Add(new HatchEdge { Type = 1, P0 = new V3(200, 0), P1 = new V3(260, 0) }); loop.Edges.Add(new HatchEdge { Type = 2, Center = new V3(260, 20), Radius = 20, StartDeg = 270, EndDeg = 90, Ccw = true }); loop.Edges.Add(new HatchEdge { Type = 1, P0 = new V3(260, 40), P1 = new V3(200, 40) }); loop.Edges.Add(new HatchEdge { Type = 1, P0 = new V3(200, 40), P1 = new V3(200, 0) });
         h.Loops.Add(loop); h.Tail.Add(new Group(78, "1")); h.Tail.Add(new Group(53, "45.0")); h.Tail.Add(new Group(43, "0.0")); h.Tail.Add(new Group(44, "0.0")); h.Tail.Add(new Group(45, "-2.2450640303")); h.Tail.Add(new Group(46, "2.2450640303")); h.Tail.Add(new Group(79, "0")); Add(d, h);
+        return d;
+    }
+
+    /// <summary>Model content plus a Layout1 sheet in paper space (frame, title block, Korean title) - the paper-space round-trip sample.</summary>
+    public static Document Paper()
+    {
+        var d = Basic();
+        string ps = d.PaperSpaceHandle;
+        void P(Entity e) { e.Handle = d.NewHandle(); e.Layer = "0"; e.Dirty = true; e.PaperSpace = true; e.Owner = ps; d.Entities.Add(e); }
+        foreach (var (x0, y0, x1, y1) in new[] { (0.0, 0.0, 420.0, 0.0), (420.0, 0.0, 420.0, 297.0), (420.0, 297.0, 0.0, 297.0), (0.0, 297.0, 0.0, 0.0), (300.0, 0.0, 300.0, 40.0), (300.0, 40.0, 420.0, 40.0) }) P(new Line { P0 = new V3(x0, y0), P1 = new V3(x1, y1) });
+        P(new Text { Pos = new V3(305, 15), Align = new V3(305, 15), Height = 5, Value = "배치 제목 LAYOUT-1", Style = "KOR" });
+        P(new Circle { Center = new V3(30, 30), Radius = 10 });
         return d;
     }
 

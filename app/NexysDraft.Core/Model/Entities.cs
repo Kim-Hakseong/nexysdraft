@@ -351,7 +351,7 @@ public sealed class Layer
 }
 
 public sealed class LineType { public string Name = ""; public string Description = ""; public List<double> Pattern = new(); public double Length; public string Handle = ""; public List<Group>? Raw; }
-public sealed class TextStyle { public string Name = ""; public string Font = "txt"; public string BigFont = ""; public double Height, WidthFactor = 1, Oblique; public int Flags, GenFlags; public string Handle = ""; public List<Group>? Raw; public string? TrueTypeFamily; }
+public sealed class TextStyle { public string Name = ""; public string Font = "txt"; public string BigFont = ""; public double Height, WidthFactor = 1, Oblique; public int Flags, GenFlags; public string Handle = ""; public List<Group>? Raw; public string? TrueTypeFamily; public int FontFlags; }
 
 public sealed class Block
 {
@@ -385,6 +385,8 @@ public sealed class Document
     public int UnknownCount => Entities.Count(e => e is Unknown);
     public bool Dirty;
     public double TokenizeMs, ParseMs;
+    /// <summary>Drawing created by NexysDraft (new / CLI new): text and dimension sizes follow the extents so they print at 2.5 mm.</summary>
+    public bool AutoTextSize;
     public long HandSeed = 0x100;
     public Dictionary<string, string> Header = new();
 
@@ -392,7 +394,7 @@ public sealed class Document
     /// <summary>Empty drawing: layer 0, DASHED linetype, Standard style on malgun.ttf (TrueType, so Korean renders in every CAD), model/paper space blocks.</summary>
     public static Document CreateNew(string codePage = "ANSI_949")
     {
-        var d = new Document { CodePage = codePage, Version = "AC1015", Path = "" };
+        var d = new Document { CodePage = codePage, Version = "AC1015", Path = "", AutoTextSize = true };
         d.Layers.Add(new Layer { Name = "0", Handle = d.NewHandle(), Dirty = true });
         d.Linetypes.Add(new LineType { Name = "DASHED", Description = "Dashed __ __ __", Pattern = { 12.7, -6.35 }, Handle = d.NewHandle() });
         d.Styles.Add(new TextStyle { Name = "Standard", Font = "malgun.ttf", TrueTypeFamily = "Malgun Gothic", Handle = d.NewHandle() });

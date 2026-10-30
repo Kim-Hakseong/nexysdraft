@@ -206,7 +206,8 @@ public sealed class DxfReader
                 case 2: s.Name = g.Value; break; case 3: s.Font = g.Value; break; case 4: s.BigFont = g.Value; break; case 5: s.Handle = g.Value; break;
                 case 40: s.Height = DxfCodec.ParseDouble(g.Value); break; case 41: s.WidthFactor = DxfCodec.ParseDouble(g.Value); break; case 50: s.Oblique = DxfCodec.ParseDouble(g.Value); break;
                 case 70: s.Flags = DxfCodec.ParseInt(g.Value); break; case 71: s.GenFlags = DxfCodec.ParseInt(g.Value); break;
-                case 1000: if (s.TrueTypeFamily == null && g.Value.Length > 0 && !g.Value.EndsWith(".shx", StringComparison.OrdinalIgnoreCase)) s.TrueTypeFamily = g.Value; break;   // ACAD xdata: TrueType family name
+                case 1000: if (s.TrueTypeFamily == null && g.Value.Length > 0 && !g.Value.EndsWith(".shx", StringComparison.OrdinalIgnoreCase) && !g.Value.StartsWith("Annotative", StringComparison.OrdinalIgnoreCase)) s.TrueTypeFamily = g.Value; break;   // ACAD xdata: TrueType family name
+                case 1071: if (s.FontFlags == 0) s.FontFlags = DxfCodec.ParseInt(g.Value); break;
             }
         return s;
     }
@@ -233,7 +234,7 @@ public sealed class DxfReader
                         case 10: cur.Base = new V3(DxfCodec.ParseDouble(x.Value), cur.Base.Y, cur.Base.Z); break; case 20: cur.Base = cur.Base with { Y = DxfCodec.ParseDouble(x.Value) }; break; case 30: cur.Base = cur.Base with { Z = DxfCodec.ParseDouble(x.Value) }; break;
                     }
                 }
-                string key = cur.Name; int n = 1; while (_doc.Blocks.ContainsKey(key)) key = cur.Name + "~" + n++;
+                string key = cur.Name.Length == 0 ? "*NONAME~1" : cur.Name; int n = 1; while (_doc.Blocks.ContainsKey(key)) key = (cur.Name.Length == 0 ? "*NONAME" : cur.Name) + "~" + n++;   // nameless blocks (lost names in damaged DWGs) must not match INSERTs with an empty name — u04 drew a 2,255-line block 8.6× in model space
                 _doc.Blocks[key] = cur; _doc.BlockOrder.Add(key);
                 continue;
             }

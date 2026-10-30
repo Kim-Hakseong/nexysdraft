@@ -12,15 +12,60 @@ namespace NexysDraft.Core.Pdf;
 /// </summary>
 public static class DrawingPdf
 {
-    public sealed record Result(string Path, int Pages, List<Sheet> Sheets, bool SheetsDetected, double Ms, int Texts, string FontPath);
-    public const double A3W = 1190.55, A3H = 841.89, Margin = 18;
+    /// <summary>Paper of one page: ISO name, size in mm (landscape when W &gt; H), why it was chosen, and the text cap heights on it.</summary>
+    public sealed record PageInfo(string Label, string Paper, double WidthMm, double HeightMm, string Basis, int Texts, double MinTextMm, double P10TextMm, double MedianTextMm);
+    public sealed record Result(string Path, int Pages, List<Sheet> Sheets, bool SheetsDetected, double Ms, int Texts, string FontPath)
+    {
+        public List<PageInfo> PageInfos { get; init; } = new();
+    }
+    public const double A3W = 1190.55, A3H = 841.89, MarginMm = 10, Margin = MarginMm * 72 / 25.4;
+    public static readonly (string name, double w, double h)[] Iso = { ("A4", 297, 210), ("A3", 420, 297), ("A2", 594, 420), ("A1", 841, 594), ("A0", 1189, 841) };
+    const double Pt = 72 / 25.4;
+
+    /// <summary>Paper size of the Model layout's plot settings (LAYOUT "Model", groups 44/45 mm, 4 media name), when the drawing carries one.</summary>
+    public static (double w, double h, string media)? ModelPlotPaper(Document doc)
+    {
+        var o = doc.ObjectsRaw; (double w, double h, string media)? found = null;
+        for (int i = 0; i < o.Count; i++)
+        {
+            if (o[i].Code != 0 || o[i].Value != "LAYOUT") continue;
+            double w = 0, h = 0; string media = "", name = ""; int j = i + 1;
+            for (; j < o.Count && o[j].Code != 0; j++)
+            {
+                var g = o[j];
+                if (g.Code == 44) w = Dxf.DxfCodec.ParseDouble(g.Value); else if (g.Code == 45) h = Dxf.DxfCodec.ParseDouble(g.Value); else if (g.Code == 4 && media == "") media = g.Value; else if (g.Code == 1) name = g.Value;
+            }
+            if (name.Equals("Model", StringComparison.OrdinalIgnoreCase) && w > 1 && h > 1) found = (w, h, media);
+        }
+        return found;
+    }
+
+    /// <summary>ISO A4–A0 for a sheet: the paper of the drawing's own plot settings (nearest ISO by area) when present, else A3 (the company default);
+    /// orientation from the sheet's aspect ratio.</summary>
+    public static (string name, double wMm, double hMm, string basis) ChoosePaper(Document doc, Sheet sheet)
+    {
+        bool land = sheet.W >= sheet.H; var plot = ModelPlotPaper(doc);
+        (string name, double w, double h) pick; string basis;
+        if (plot != null)
+        {
+            double area = plot.Value.w * plot.Value.h;
+            pick = Iso.OrderBy(p => Math.Abs(Math.Log(p.w * p.h / area))).First();
+            basis = $"Model plot settings: media '{plot.Value.media}' {plot.Value.w:F0}×{plot.Value.h:F0} mm → nearest ISO {pick.name}";
+        }
+        else { pick = Iso[1]; basis = "no plot settings → A3 default"; }
+        basis += $", {(land ? "landscape" : "portrait")} (sheet {sheet.W:F0}×{sheet.H:F0}, ratio {Math.Max(sheet.W, sheet.H) / Math.Max(1e-9, Math.Min(sheet.W, sheet.H)):F3})";
+        return land ? (pick.name, pick.w, pick.h, basis) : (pick.name, pick.h, pick.w, basis);
+    }
+
+    /// <summary>Scale (paper mm per drawing unit) for a sheet on its chosen paper with the 10 mm margin.</summary>
+    public static double MmPerUnit(Document doc, Sheet sheet) { var p = ChoosePaper(doc, sheet); return Math.Min((p.wMm - 2 * MarginMm) / Math.Max(1e-9, sheet.W), (p.hMm - 2 * MarginMm) / Math.Max(1e-9, sheet.H)); }
 
     public static Result Export(Document doc, string path, string? fontPath = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         fontPath ??= TrueTypeFont.FindSystemFont() ?? throw new FileNotFoundException("no TrueType font (malgun.ttf) found");
         var font = TrueTypeFont.Load(fontPath); var pdf = new PdfWriter(font);
-        var sheets = SheetDetector.Detect(doc, out bool detected);
+        var sheets = SheetDetector.Detect(doc, out bool detected); var infos = new List<PageInfo>();
         var pageSheets = new List<Sheet>(sheets);
         var ents = doc.Entities.Where(e => !e.PaperSpace && e is not Unknown && Visible(doc, e)).ToList();
         if (detected)
@@ -33,20 +78,29 @@ public static class DrawingPdf
         int texts = 0;
         foreach (var sheet in pageSheets)
         {
-            var page = pdf.AddPage(A3W, A3H);
-            double w = Math.Max(1e-9, sheet.W), h = Math.Max(1e-9, sheet.H); double scale = Math.Min((A3W - 2 * Margin) / w, (A3H - 2 * Margin) / h);
-            double ox = (A3W - w * scale) / 2 - sheet.X0 * scale, oy = (A3H - h * scale) / 2 - sheet.Y0 * scale;
-            var ctx = new Ctx(doc, page, scale, ox, oy, sheet);
-            foreach (var e in ents)
-            {
-                var b = Bounds.Of(e, doc, 0); if (b == null) continue;
-                if (b.Value.x1 < sheet.X0 || b.Value.x0 > sheet.X1 || b.Value.y1 < sheet.Y0 || b.Value.y0 > sheet.Y1) continue;
-                texts += ctx.Draw(e, null, Xform.Identity, 0);
-            }
+            var (ctx, info) = RenderSheet(doc, pdf, sheet, ents);
+            texts += info.Texts; infos.Add(info);
         }
         var bytes = pdf.Build(Path.GetFileNameWithoutExtension(doc.Path));
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!); File.WriteAllBytes(path, bytes);
-        return new Result(path, pageSheets.Count, pageSheets, detected, sw.Elapsed.TotalMilliseconds, texts, fontPath);
+        return new Result(path, pageSheets.Count, pageSheets, detected, sw.Elapsed.TotalMilliseconds, texts, fontPath) { PageInfos = infos };
+    }
+
+    static (Ctx ctx, PageInfo info) RenderSheet(Document doc, PdfWriter pdf, Sheet sheet, List<Entity> ents)
+    {
+        var paper = ChoosePaper(doc, sheet); double pw = paper.wMm * Pt, ph = paper.hMm * Pt;
+        var page = pdf.AddPage(pw, ph);
+        double w = Math.Max(1e-9, sheet.W), h = Math.Max(1e-9, sheet.H); double scale = Math.Min((pw - 2 * Margin) / w, (ph - 2 * Margin) / h);
+        double ox = (pw - w * scale) / 2 - sheet.X0 * scale, oy = (ph - h * scale) / 2 - sheet.Y0 * scale;
+        var ctx = new Ctx(doc, page, scale, ox, oy, sheet); int texts = 0;
+        foreach (var e in ents)
+        {
+            var b = Bounds.Of(e, doc, 0); if (b == null) continue;
+            if (b.Value.x1 < sheet.X0 || b.Value.x0 > sheet.X1 || b.Value.y1 < sheet.Y0 || b.Value.y0 > sheet.Y1) continue;
+            texts += ctx.Draw(e, null, Xform.Identity, 0);
+        }
+        var hs = ctx.TextMm.OrderBy(x => x).ToList();
+        return (ctx, new PageInfo(sheet.Label, paper.name, paper.wMm, paper.hMm, paper.basis, texts, hs.Count > 0 ? hs[0] : 0, hs.Count > 0 ? hs[hs.Count / 10] : 0, hs.Count > 0 ? hs[hs.Count / 2] : 0));
     }
 
     /// <summary>One single-page PDF per detected sheet next to the main file: name__001.pdf … (the main file keeps all pages).</summary>
@@ -60,9 +114,7 @@ public static class DrawingPdf
     {
         var font = TrueTypeFont.Load(fontPath); var pdf = new PdfWriter(font);
         var ents = doc.Entities.Where(e => !e.PaperSpace && e is not Unknown && Visible(doc, e)).ToList();
-        var page = pdf.AddPage(A3W, A3H); double w = Math.Max(1e-9, sheet.W), h = Math.Max(1e-9, sheet.H); double scale = Math.Min((A3W - 2 * Margin) / w, (A3H - 2 * Margin) / h);
-        var ctx = new Ctx(doc, page, scale, (A3W - w * scale) / 2 - sheet.X0 * scale, (A3H - h * scale) / 2 - sheet.Y0 * scale, sheet);
-        foreach (var e in ents) { var b = Bounds.Of(e, doc, 0); if (b == null || b.Value.x1 < sheet.X0 || b.Value.x0 > sheet.X1 || b.Value.y1 < sheet.Y0 || b.Value.y0 > sheet.Y1) continue; ctx.Draw(e, null, Xform.Identity, 0); }
+        RenderSheet(doc, pdf, sheet, ents);
         File.WriteAllBytes(path, pdf.Build(Path.GetFileNameWithoutExtension(path)));
     }
 
@@ -183,33 +235,56 @@ public static class DrawingPdf
             if (tx.HAlign == 1 || tx.HAlign == 4) dx = -wpt / 2; else if (tx.HAlign == 2) dx = -wpt; else if (tx.HAlign == 3 || tx.HAlign == 5) { var ins = P(tx.Pos, t); double d = Math.Sqrt((anchor.x - ins.x) * (anchor.x - ins.x) + (anchor.y - ins.y) * (anchor.y - ins.y)); anchor = ins; wf = wpt > 0 ? d / (wpt / wf) : wf; }
             if (tx.VAlign == 2 || tx.HAlign == 4) dy = -h / 2; else if (tx.VAlign == 3) dy = -h; else if (tx.VAlign == 1) dy = 0;
             double r = rot * Math.PI / 180; double x = anchor.x + dx * Math.Cos(r) - dy * Math.Sin(r), y = anchor.y + dx * Math.Sin(r) + dy * Math.Cos(r);
-            _p.Fill(rgb); _p.Text(s, x, y, size, rot, wf);
+            _p.Fill(rgb); _p.Text(s, x, y, size, rot, wf); TextMm.Add(h * 25.4 / 72);
         }
+        /// <summary>One piece of an MTEXT line: text with its own cap height (pt) and width factor (from the run's \H and \W codes).</summary>
+        sealed record Piece(string Text, double CapPt, double Wf) { public double Width(PdfWriter.Page p) => p.Measure(Text) * (CapPt / p.CapHeightEm) * Wf; }
         int DrawMText(MText m, Xform t, int rgb)
         {
             var lines = MTextParser.Parse(m.Value); double h = m.Height; if (h <= 0 && lines.Count > 0 && lines[0].Runs.Count > 0 && lines[0].Runs[0].HeightFactorIsAbsolute) h = lines[0].Runs[0].HeightFactor; if (h <= 0) h = 2.5;
-            double hp = h * t.ScaleFactor * _k; if (hp <= 0.05) return 0; double size = hp / _p.CapHeightEm; double lh = hp * 1.667 * (m.LineSpacing > 0 ? m.LineSpacing : 1);
+            double hp = h * t.ScaleFactor * _k; if (hp <= 0.05) return 0;
             double rot = t.ApplyAngleDeg(m.RotationDeg); double r = rot * Math.PI / 180; var pos = P(m.Pos, t);
-            // wrap by width
-            var outLines = new List<string>(); double wpt = m.Width >= h * 2 ? m.Width * t.ScaleFactor * _k : 0;   // dxf2dwg round trips leave rect_width = 1.0: narrower than two characters means "no wrapping"
+            double wpt = m.Width >= h * 2 ? m.Width * t.ScaleFactor * _k : 0;   // dxf2dwg round trips leave rect_width = 1.0: narrower than two characters means "no wrapping"
+            // runs → pieces (per-run height: \H2.5; absolute world height, \H1.5x; factor of the base height; width factor \W), wrapped by words
+            var outLines = new List<List<Piece>>();
             foreach (var l in lines)
             {
-                string plain = l.Plain; if (wpt <= 0) { outLines.Add(plain); continue; }
-                var words = plain.Split(' '); string cur = "";
-                foreach (var wd in words) { string cand = cur.Length == 0 ? wd : cur + " " + wd; if (_p.Measure(cand) * size > wpt && cur.Length > 0) { outLines.Add(cur); cur = wd; } else cur = cand; }
+                var cur = new List<Piece>(); double curW = 0;
+                foreach (var run in l.Runs)
+                {
+                    double cap = run.HeightFactorIsAbsolute ? run.HeightFactor * t.ScaleFactor * _k : hp * run.HeightFactor; double wf = (run.WidthFactor > 0 ? run.WidthFactor : 1) * (run.Tracking > 0 ? run.Tracking : 1);   // T tracking approximated as horizontal scale
+                    var words = wpt > 0 ? System.Text.RegularExpressions.Regex.Split(run.Text, "(?<= )") : new[] { run.Text };
+                    foreach (var wd in words)
+                    {
+                        if (wd.Length == 0) continue; var pc = new Piece(wd, cap, wf); double w = pc.Width(_p);
+                        if (wpt > 0 && curW + w > wpt && curW > 0) { outLines.Add(cur); cur = new List<Piece>(); curW = 0; }
+                        if (cur.Count > 0 && cur[^1].CapPt == cap && cur[^1].Wf == wf) cur[^1] = cur[^1] with { Text = cur[^1].Text + wd }; else cur.Add(pc);
+                        curW += w;
+                    }
+                }
                 outLines.Add(cur);
             }
-            int nl = outLines.Count; double boxH = nl * lh; double boxW = wpt > 0 ? wpt : outLines.Max(l => _p.Measure(l) * size);
+            double spacing = 1.667 * (m.LineSpacing > 0 ? m.LineSpacing : 1);
+            var heights = outLines.Select(l => (l.Count == 0 ? hp : l.Max(p => p.CapPt)) * spacing).ToList();
+            double boxH = heights.Sum(); double boxW = wpt > 0 ? wpt : Math.Max(1e-6, outLines.Max(l => l.Sum(p => p.Width(_p))));
             int colA = (m.Attach - 1) % 3, rowA = (m.Attach - 1) / 3; double left = colA == 0 ? 0 : colA == 1 ? -boxW / 2 : -boxW; double top = rowA == 0 ? 0 : rowA == 1 ? boxH / 2 : boxH;
-            int n = 0;
-            for (int i = 0; i < nl; i++)
+            int n = 0; double yCursor = top;
+            for (int i = 0; i < outLines.Count; i++)
             {
-                string s = outLines[i]; if (string.IsNullOrWhiteSpace(s)) continue; double lw = _p.Measure(s) * size;
-                double lx = left + (colA == 1 ? (boxW - lw) / 2 : colA == 2 ? boxW - lw : 0), ly = top - (i + 1) * lh + lh * 0.25;
-                double x = pos.x + lx * Math.Cos(r) - ly * Math.Sin(r), y = pos.y + lx * Math.Sin(r) + ly * Math.Cos(r);
-                _p.Fill(rgb); _p.Text(s, x, y, size, rot); n++;
+                var l = outLines[i]; double lhI = heights[i]; yCursor -= lhI;
+                if (l.Count == 0 || l.All(p => string.IsNullOrWhiteSpace(p.Text))) continue;
+                double lw = l.Sum(p => p.Width(_p)); double lx = left + (colA == 1 ? (boxW - lw) / 2 : colA == 2 ? boxW - lw : 0), ly = yCursor + lhI * 0.25;
+                foreach (var pc in l)
+                {
+                    double x = pos.x + lx * Math.Cos(r) - ly * Math.Sin(r), y = pos.y + lx * Math.Sin(r) + ly * Math.Cos(r);
+                    if (!string.IsNullOrWhiteSpace(pc.Text)) { _p.Fill(rgb); _p.Text(pc.Text, x, y, pc.CapPt / _p.CapHeightEm, rot, pc.Wf); TextMm.Add(pc.CapPt * 25.4 / 72); }
+                    lx += pc.Width(_p);
+                }
+                n++;
             }
             return n;
         }
+        /// <summary>Cap heights of the texts written on this page, in mm on paper.</summary>
+        public List<double> TextMm { get; } = new();
     }
 }

@@ -6,7 +6,7 @@ namespace NexysDraft.Core.MTextFmt;
 /// <summary>One formatted run of an MTEXT line.</summary>
 public sealed class MRun
 {
-    public string Text = ""; public string? Font; public bool Bold, Italic, Underline, Overline, Strike; public double HeightFactor = 1; public bool HeightFactorIsAbsolute; public double WidthFactor = 1; public int? Color; public bool Shx;
+    public string Text = ""; public string? Font; public bool Bold, Italic, Underline, Overline, Strike; public double HeightFactor = 1; public bool HeightFactorIsAbsolute; public double WidthFactor = 1; public double Tracking = 1; public int? Color; public bool Shx;
     public MRun Clone() => (MRun)MemberwiseClone();
 }
 
@@ -79,7 +79,8 @@ public static class MTextParser
                 case 'H': { Flush(); double v = DxfCodec.ParseDouble(arg.TrimEnd('x', 'X')); if (arg.EndsWith("x", StringComparison.OrdinalIgnoreCase)) st.HeightFactor *= v; else st.HeightFactor = v; st.HeightFactor = st.HeightFactor <= 0 ? 1 : st.HeightFactor; st.HeightFactorIsAbsolute = !arg.EndsWith("x", StringComparison.OrdinalIgnoreCase); break; }
                 case 'W': { Flush(); double v = DxfCodec.ParseDouble(arg.TrimEnd('x', 'X')); st.WidthFactor = v > 0 ? v : 1; break; }
                 case 'C': { Flush(); st.Color = DxfCodec.ParseInt(arg); break; }
-                case 'c': case 'T': case 'Q': case 'A': case 'p': break;
+                case 'T': { Flush(); double v = DxfCodec.ParseDouble(arg.TrimEnd('x', 'X')); st.Tracking = v > 0 ? v : 1; break; }
+                case 'c': case 'Q': case 'A': case 'p': break;
                 case 'S':
                     {
                         // stacked: num^den, num/den, num#den → "num/den"

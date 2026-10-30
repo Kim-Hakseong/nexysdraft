@@ -325,6 +325,20 @@ public sealed class Editor
         items.Add(new Text { Pos = d.TextMid, Align = d.TextMid, Height = txt, Rotation = Arc.Norm(rot), Style = tstyle, HAlign = 1, VAlign = 2, Value = text, Color = 0, Linetype = "BYBLOCK" });
         foreach (var e in items) { e.Handle = Doc.NewHandle(); e.Layer = "0"; e.Dirty = true; e.Owner = blk.RecordHandle; blk.Entities.Add(e); }
     }
+    /// <summary>Rebuild every linear (rotated) dimension block from the current $DIM* header values (used after text auto-sizing). Not undoable by itself.</summary>
+    public int RegenerateDimensions()
+    {
+        int n = 0;
+        foreach (var d in Doc.Entities.OfType<Dimension>().Where(x => x.Kind == 0 && x.Block != "" && Doc.Blocks.ContainsKey(x.Block)).ToList())
+        {
+            var blk = Doc.Blocks[d.Block];
+            var nb = new Block { Name = blk.Name, Base = blk.Base, Flags = blk.Flags, Handle = blk.Handle, EndHandle = blk.EndHandle, RecordHandle = blk.RecordHandle, Layer = blk.Layer };
+            BuildLinearDim(d, nb, d.DefPoint); Doc.Blocks[blk.Name] = nb; d.Dirty = true; d.Raw = null; n++;
+        }
+        if (n > 0) Doc.Dirty = true;
+        return n;
+    }
+
     void RegenerateDimension(Dimension d, Change c)
     {
         if (d.Kind != 0 || !Doc.Blocks.TryGetValue(d.Block, out var blk)) return;

@@ -17,6 +17,9 @@ public sealed class Engine
     public Editor? Editor { get; private set; }
     public string Theme { get; set; } = "light";
     public string CurrentLayer { get; set; } = "0";
+    /// <summary>nanoCAD font compatibility on save (default ON, remembered in layout.json).</summary>
+    public bool FontCompat { get; set; } = true;
+    public List<FontFix> LastFontFixes { get; } = new();
     public List<string> Selection { get; } = new();
     public List<string> Recent { get; } = new();
     public const int RecentMax = 10;
@@ -39,6 +42,7 @@ public sealed class Engine
     {
         app = new { name = AppInfo.Name, versionText = AppInfo.VersionText, libredwg = LibreDwg.Available ? LibreDwg.Version : null },
         theme = Theme, status = new { text = StatusText, led = Led, saving = Saving },
+        fontCompat = FontCompat,
         file = Doc == null ? null : new { path = Doc.Path, name = Doc.Path == "" ? "untitled.dxf" : Path.GetFileName(Doc.Path), version = Doc.Version, codepage = Doc.CodePage, dirty = Doc.Dirty, sourceDwg = SourceDwg, openMs = OpenMs, convertMs = ConvertMs, entities = Doc.Entities.Count, blocks = Doc.Blocks.Count, unknown = Doc.UnknownCount, warnings = OpenWarnings, counts = Doc.TypeCounts, size = File.Exists(Doc.Path) ? new FileInfo(Doc.Path).Length : 0 },
         layers = Doc?.Layers.Select(l => new { name = l.Name, color = l.Color, tc = l.TrueColor, off = l.Off, frozen = l.Frozen, locked = l.Locked, lt = l.Linetype, count = 0 }).ToList(),
         currentLayer = CurrentLayer, selection = Selection,
@@ -105,21 +109,23 @@ public sealed class Engine
             {
                 string tmp = Path.Combine(Path.GetTempPath(), "NexysDraft", "save", Path.GetFileNameWithoutExtension(path) + ".dxf"); Directory.CreateDirectory(Path.GetDirectoryName(tmp)!);
                 var loss = R2000Loss.Detect(Doc); var docRef = Doc;
-                var w = await Task.Run(() => DxfWriter.Write(docRef, tmp, DxfWriter.Mode.R2000));
-                SaveEstimate = EstimateDwgSeconds(new FileInfo(tmp).Length); Saving = true; _saveCts = new CancellationTokenSource(); var ct = _saveCts.Token;
+                var fixes = FontCompat ? Core.Dxf.FontCompat.Plan(docRef) : new List<FontFix>(); LastFontFixes.Clear(); LastFontFixes.AddRange(fixes);
+                var w = await Task.Run(() => DxfWriter.Write(docRef, tmp, DxfWriter.Mode.R2000, fixes));
+                SaveEstimate = R2000Check.EstimateSeconds(new FileInfo(tmp).Length); Saving = true; _saveCts = new CancellationTokenSource(); var ct = _saveCts.Token;
                 var ticker = Task.Run(async () => { while (!ct.IsCancellationRequested && Saving) { SaveElapsed = sw.Elapsed.TotalSeconds; SetStatus($"Saving DWG via LibreDWG dxf2dwg … {SaveElapsed:F0} s / ~{SaveEstimate:F0} s (cancel in the status bar)", "busy"); try { await Task.Delay(500, ct); } catch { } } });
                 var r = await Task.Run(() => LibreDwg.DxfToDwg(tmp, path, "r2000", 3600000, ct));
                 Saving = false; try { _saveCts.Cancel(); } catch { } await ticker;
                 if (ct.IsCancellationRequested && !r.Ok) { SetStatus($"DWG save cancelled after {sw.Elapsed.TotalSeconds:F0} s", "idle"); StateChanged?.Invoke(); return false; }
                 if (!r.Ok) { SetStatus("DXF → DWG failed: " + string.Join(" | ", LibreDwg.Summarize(r.Stderr).Take(2)), "error"); StateChanged?.Invoke(); return false; }
                 Doc.Dirty = false; Doc.Path = path; SourceDwg = path;
-                SetStatus($"Saved {Path.GetFileName(path)} (R2000 via LibreDWG, {r.Ms / 1000:F1} s{(SaveEstimate > 0 ? $", estimate was {SaveEstimate:F0} s" : "")}){(loss.Count > 0 ? $" — {loss.Sum(l => l.Count)} item(s) not carried: " + string.Join(", ", loss.Take(3).Select(l => l.Kind)) : "")}{(w.Count > 0 ? "; " + w[0] : "")}");
+                SetStatus($"Saved {Path.GetFileName(path)} (R2000 via LibreDWG, {(LastFontFixes.Count > 0 ? $"font compat {LastFontFixes.Count} style(s), " : "")}{r.Ms / 1000:F1} s{(SaveEstimate > 0 ? $", estimate was {SaveEstimate:F0} s" : "")}){(loss.Count > 0 ? $" — {loss.Sum(l => l.Count)} item(s) not carried: " + string.Join(", ", loss.Take(3).Select(l => l.Kind)) : "")}{(w.Count > 0 ? "; " + w[0] : "")}");
             }
             else
             {
-                var docRef = Doc; await Task.Run(() => DxfWriter.Write(docRef, path, DxfWriter.Mode.Preserve));
+                var docRef = Doc; var fixes = FontCompat ? Core.Dxf.FontCompat.Plan(docRef) : new List<FontFix>(); LastFontFixes.Clear(); LastFontFixes.AddRange(fixes);
+                await Task.Run(() => DxfWriter.Write(docRef, path, DxfWriter.Mode.Preserve, fixes));
                 Doc.Dirty = false; Doc.Path = path; SourceDwg = null;
-                SetStatus($"Saved {Path.GetFileName(path)} ({Doc.Version}, ASCII, {sw.Elapsed.TotalMilliseconds:F0} ms)");
+                SetStatus($"Saved {Path.GetFileName(path)} ({Doc.Version}, ASCII, {sw.Elapsed.TotalMilliseconds:F0} ms){(LastFontFixes.Count > 0 ? $" — font compat: {LastFontFixes.Count} style(s) → " + string.Join(", ", LastFontFixes.Select(f => $"{f.Style}: {f.OldFont} → {f.NewFamilyKo}")) : "")}");
             }
             AddRecent(path);
             StateChanged?.Invoke(); TitleChanged?.Invoke(); return true;
@@ -128,19 +134,38 @@ public sealed class Engine
     }
     public void CancelSave() { try { _saveCts?.Cancel(); } catch { } }
     public List<LossWarning> LossWarnings() => Doc == null ? new() : R2000Loss.Detect(Doc);
+    public R2000CheckResult? Check() => Doc == null ? null : R2000Check.Run(Doc, FontCompat);
 
     /// <summary>PDF through the built-in writer: one page per detected sheet (+ rest page), real text (Malgun Gothic subset). With sheets, also one file per sheet next to it.</summary>
+    /// <summary>New drawings: set $DIMTXT/$DIMASZ/$DIMEXO/$DIMEXE/$DIMGAP/$TEXTSIZE so text prints at 2.5 mm on the chosen paper, and rebuild the
+    /// linear dimensions with them (two passes: dimensions change the extents). Returns the text height in drawing units, or 0 when not applicable.</summary>
+    public double AutoSizeText(double paperMm = 2.5)
+    {
+        if (Doc == null || !Doc.AutoTextSize || Editor == null) return 0;
+        double txt = 0;
+        for (int pass = 0; pass < 2; pass++)
+        {
+            var sheet = Core.Pdf.SheetDetector.Detect(Doc, out _).First(); double mmPerUnit = Core.Pdf.DrawingPdf.MmPerUnit(Doc, sheet); if (mmPerUnit <= 0) return 0;
+            txt = paperMm / mmPerUnit; var ic = System.Globalization.CultureInfo.InvariantCulture;
+            Doc.Header["$DIMTXT"] = txt.ToString("R", ic); Doc.Header["$DIMASZ"] = txt.ToString("R", ic); Doc.Header["$DIMEXO"] = (txt * 0.25).ToString("R", ic); Doc.Header["$DIMEXE"] = (txt * 0.5).ToString("R", ic); Doc.Header["$DIMGAP"] = (txt * 0.25).ToString("R", ic); Doc.Header["$TEXTSIZE"] = txt.ToString("R", ic); Doc.Header["$DIMSCALE"] = "1.0";
+            Editor.RegenerateDimensions();
+        }
+        DocReplaced?.Invoke();
+        return txt;
+    }
+
     public async Task<string?> ExportPdfAsync(string pdfPath, bool perSheet = true)
     {
         if (Doc == null) return null;
         try
         {
+            AutoSizeText();
             SetStatus("Exporting PDF …", "busy"); var docRef = Doc;
             var res = await Task.Run(() => DrawingPdf.Export(docRef, pdfPath));
             int files = 0;
             if (perSheet && res.SheetsDetected) files = await Task.Run(() => DrawingPdf.ExportPerSheet(docRef, pdfPath, res));
             LastPdf = res;
-            SetStatus($"PDF saved: {pdfPath} ({res.Pages} page(s){(res.SheetsDetected ? $", {res.Sheets.Count(s => s.Label != "rest")} sheets detected, {files} per-sheet files" : "")}, {res.Texts} texts, {res.Ms:F0} ms)"); return pdfPath;
+            SetStatus($"PDF saved: {pdfPath} ({res.Pages} page(s) {string.Join("/", res.PageInfos.Select(p => p.Paper).Distinct())}{(res.SheetsDetected ? $", {res.Sheets.Count(s => s.Label != "rest")} sheets detected, {files} per-sheet files" : "")}, {res.Texts} texts, {res.Ms:F0} ms)"); return pdfPath;
         }
         catch (Exception ex) { Diag.Trace("pdf failed " + ex); SetStatus("PDF export failed: " + ex.Message, "error"); return null; }
     }

@@ -37,6 +37,8 @@ export function installTests(ctx: { view: CanvasView; cmd: any; getDoc: () => Do
     layerClick(name: string, toggle?: string) { const row = ctx.layers.body.querySelector(`[data-l="${CSS.escape(name)}"]`); if (!row) return false; (toggle ? row.querySelector(`[data-t=${toggle}]`) : row).dispatchEvent(new MouseEvent('click', { bubbles: true })); return true; },
     probe() { return (window as any).nxProbe ? (window as any).nxProbe() : null; },
     async setLayerRailName(name: string) { ctx.layers.input.value = name; ctx.layers.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await settle(60); },
+    async saveCheck(preferDwg = true) { const { showLossThenSave } = await import('./rails'); await showLossThenSave(preferDwg); await settle(80); const d = document.querySelector('.save-check'); if (!d) return null; const res = { title: d.querySelector('h3')!.textContent, primary: (d.querySelector('.btns .primary') as HTMLElement)?.dataset.b, rows: d.querySelectorAll('table.reasons tr').length, beta: d.textContent!.includes('(beta)') }; return res; },
+    closeModal() { document.querySelectorAll('.modal-bg').forEach(m => m.remove()); return true; },
     accentScan() { let n = 0; for (const el of Array.from(document.querySelectorAll('body *')) as HTMLElement[]) { const cs = getComputedStyle(el); if (cs.display === 'none') continue; for (const side of ['borderLeftColor', 'borderTopColor', 'borderRightColor', 'borderBottomColor'] as const) { const w = parseFloat((cs as any)[side.replace('Color', 'Width')]); if (w >= 1 && (cs as any)[side] === 'rgb(232, 96, 28)') n++; } } return n; },
   };
   (window as any).nx = { test: T, bridge };

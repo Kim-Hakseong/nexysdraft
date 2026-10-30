@@ -29,7 +29,7 @@ public partial class MainWindow : Window
             {
                 var r = MessageBox.Show(this, "저장하지 않은 변경이 있습니다. 저장할까요?", AppInfo.Name, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
                 if (r == MessageBoxResult.Cancel) { e.Cancel = true; return; }
-                if (r == MessageBoxResult.Yes && !SaveWithDialog(false)) { e.Cancel = true; return; }
+                if (r == MessageBoxResult.Yes) { e.Cancel = true; _ = SaveWithDialog(false).ContinueWith(t => { if (t.Result) Dispatcher.BeginInvoke(Close); }); return; }
             }
             LayoutStore.Save(this);
         };
@@ -75,8 +75,8 @@ public partial class MainWindow : Window
                     if (dlg.ShowDialog(this) == true) await Engine.OpenAsync(dlg.FileName);
                     return null;
                 }
-            case "saveDialog": return SaveWithDialog(Bridge.B(args, "dwg"));
-            case "save": { if (Engine.Doc == null) return false; if (Engine.Doc.Path.EndsWith(".dxf", StringComparison.OrdinalIgnoreCase) || Engine.Doc.Path.EndsWith(".dwg", StringComparison.OrdinalIgnoreCase)) return await Engine.SaveAsync(Engine.Doc.Path); return SaveWithDialog(false); }
+            case "saveDialog": if (args.TryGetProperty("fontCompat", out var fc) && (fc.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)) Engine.FontCompat = fc.GetBoolean(); return await SaveWithDialog(Bridge.B(args, "dwg"));
+            case "save": { if (Engine.Doc == null) return false; if (Engine.Doc.Path.EndsWith(".dxf", StringComparison.OrdinalIgnoreCase) || Engine.Doc.Path.EndsWith(".dwg", StringComparison.OrdinalIgnoreCase)) return await Engine.SaveAsync(Engine.Doc.Path); return await SaveWithDialog(false); }
             case "exportPdfDialog":
                 {
                     if (Engine.Doc == null) return null;
@@ -92,12 +92,13 @@ public partial class MainWindow : Window
         throw new NotSupportedException("unknown command " + cmd);
     }
 
-    bool SaveWithDialog(bool dwg)
+    /// <summary>Native save dialog, then a background save (no UI wait: DWG saves run minutes for large drawings).</summary>
+    async Task<bool> SaveWithDialog(bool dwg)
     {
         if (Engine.Doc == null) return false;
-        var dlg = new SaveFileDialog { Filter = dwg ? "DWG (R2000, LibreDWG)|*.dwg|DXF|*.dxf" : "DXF|*.dxf|DWG (R2000, LibreDWG)|*.dwg", FileName = Path.GetFileNameWithoutExtension(Engine.Doc.Path) + (dwg ? ".dwg" : ".dxf") };
+        var dlg = new SaveFileDialog { Filter = dwg ? "DWG (R2000, LibreDWG)|*.dwg|DXF|*.dxf" : "DXF|*.dxf|DWG (R2000, LibreDWG)|*.dwg", FileName = Path.GetFileNameWithoutExtension(Engine.Doc.Path == "" ? "untitled" : Engine.Doc.Path) + (dwg ? ".dwg" : ".dxf") };
         if (dlg.ShowDialog(this) != true) return false;
-        var t = Engine.SaveAsync(dlg.FileName); t.Wait(); return t.Result;
+        return await Engine.SaveAsync(dlg.FileName);
     }
 
     public async Task CaptureAsync(string path)

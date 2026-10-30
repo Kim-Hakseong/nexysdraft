@@ -17,6 +17,7 @@ public sealed class DxfWriter
     /// <summary>R2000 mode: write the full AutoCAD-style OBJECTS skeleton (layouts, plot settings, mline style). Off by default — see the OBJECTS note in BuildR2000.</summary>
     public static bool FullObjects { get; set; }
     readonly bool _fullObjects = FullObjects;
+    Dictionary<string, FontFix>? _fontFixes;
     /// <summary>R2000 mode: hatch loops as tessellated polyline loops and dimension blocks written explicitly (dxf2dwg 0.14 drops edge-type hatch boundaries — docs/libredwg.md).</summary>
     public static bool HatchAsPolylineLoops { get; set; } = true;
     public List<string> Warnings { get; } = new();
@@ -30,9 +31,9 @@ public sealed class DxfWriter
         _enc = _year >= 2007 ? new UTF8Encoding(false) : DxfCodec.CodePageEncoding(doc.CodePage);
     }
 
-    public static List<string> Write(Document doc, string path, Mode mode)
+    public static List<string> Write(Document doc, string path, Mode mode, IReadOnlyList<FontFix>? fontFixes = null)
     {
-        var w = new DxfWriter(doc, mode);
+        var w = new DxfWriter(doc, mode) { _fontFixes = fontFixes?.ToDictionary(f => f.Style, StringComparer.OrdinalIgnoreCase) };
         var bytes = w.Build();
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllBytes(path, bytes);
@@ -79,7 +80,7 @@ public sealed class DxfWriter
             {
                 case "LAYER": foreach (var l in _doc.Layers) WriteLayer(l, th); break;
                 case "LTYPE": foreach (var l in _doc.Linetypes) if (l.Raw != null) Raw(l.Raw); else WriteLtype(l, th); break;
-                case "STYLE": foreach (var s in _doc.Styles) if (s.Raw != null) Raw(s.Raw); else WriteStyle(s, th); break;
+                case "STYLE": foreach (var s in _doc.Styles) EmitStyle(s, th, true); break;
                 case "BLOCK_RECORD":
                     foreach (var e in t.Entries) Raw(e);
                     foreach (var b in _doc.Blocks.Values) if (b.RecordRaw == null && !t.Entries.Any(e => e.Any(g => g.Code == 2 && g.Value.Equals(b.Name, StringComparison.OrdinalIgnoreCase)))) WriteBlockRecord(b, th, null);
@@ -141,7 +142,7 @@ public sealed class DxfWriter
         // STYLE
         W(0, "TABLE"); W(2, "STYLE"); W(5, _tStyle); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, _doc.Styles.Count + 1);
         if (!_doc.Styles.Any(s => s.Name.Equals("Standard", StringComparison.OrdinalIgnoreCase))) WriteStyle(new TextStyle { Name = "Standard", Font = "txt", Handle = _doc.NewHandle() }, _tStyle);
-        foreach (var s in _doc.Styles) WriteStyle(s, _tStyle);
+        foreach (var s in _doc.Styles) EmitStyle(s, _tStyle, false);
         W(0, "ENDTAB");
         W(0, "TABLE"); W(2, "VIEW"); W(5, _tView); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, 0); W(0, "ENDTAB");
         W(0, "TABLE"); W(2, "UCS"); W(5, _tUcs); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, 0); W(0, "ENDTAB");
@@ -162,7 +163,7 @@ public sealed class DxfWriter
         else foreach (var e in dsEntries) Raw(e);
         W(0, "ENDTAB");
         // BLOCK_RECORD
-        var blocks = _doc.BlockOrder.Select(k => _doc.Blocks[k]).Where(b => !b.IsLayout).ToList();
+        var blocks = _doc.BlockOrder.Select(k => _doc.Blocks[k]).Where(b => !b.IsLayout && b.Name.Length > 0).ToList();   // nameless blocks cannot be referenced (R2000Loss reports them)
         int droppedLayouts = _doc.Blocks.Values.Count(b => b.Name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase) && !b.Name.Equals("*Paper_Space", StringComparison.OrdinalIgnoreCase));
         if (droppedLayouts > 0) Warnings.Add($"{droppedLayouts} additional paper-space layout(s) dropped (R2000 export keeps Model and one Layout)");
         foreach (var b in blocks) if (string.IsNullOrEmpty(b.RecordHandle) || b.RecordHandle.Trim() == "0") b.RecordHandle = _doc.NewHandle();
@@ -280,6 +281,13 @@ public sealed class DxfWriter
     {
         if (string.IsNullOrEmpty(s.Handle)) s.Handle = _doc.NewHandle();
         W(0, "STYLE"); W(5, s.Handle); W(330, tableHandle); W(100, "AcDbSymbolTableRecord"); W(100, "AcDbTextStyleTableRecord"); W(2, s.Name); W(70, s.Flags); W(40, s.Height); W(41, s.WidthFactor); W(50, s.Oblique); W(71, s.GenFlags); W(42, 2.5); W(3, s.Font); W(4, s.BigFont);
+        if (s.TrueTypeFamily != null) { W(1001, "ACAD"); W(1000, s.TrueTypeFamily); W(1071, s.FontFlags != 0 ? s.FontFlags : 34); }   // TrueType family (u01 'PDF Arial' form)
+    }
+    /// <summary>Style as written: the font-compat replacement when one is planned for it.</summary>
+    void EmitStyle(TextStyle s, string tableHandle, bool preserveRaw)
+    {
+        if (_fontFixes != null && _fontFixes.TryGetValue(s.Name, out var f)) { WriteStyle(FontCompat.Applied(s, f), tableHandle); return; }
+        if (preserveRaw && s.Raw != null) Raw(s.Raw); else WriteStyle(s, tableHandle);
     }
     void WriteBlockRecord(Block b, string tableHandle, string? layout)
     {
@@ -316,6 +324,7 @@ public sealed class DxfWriter
     void WriteEntity(Entity e, string owner)
     {
         if (_mode == Mode.R2000 && !R2000Loss.R2000Entities.Contains(e.DxfName)) return;   // counted by R2000Loss.Detect
+        if (_mode == Mode.R2000 && e is Insert ins0 && (ins0.Block.Length == 0 || !_doc.Blocks.ContainsKey(ins0.Block))) return;   // unresolved block reference — counted by R2000Loss.Detect
         if (_mode == Mode.Preserve && e.Raw != null && !e.Dirty)
         {
             Raw(e.Raw);

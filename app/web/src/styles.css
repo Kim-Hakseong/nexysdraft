@@ -163,3 +163,5 @@ input::placeholder { color: var(--faint); }
 .modal table { border-collapse: collapse; font-size: 11px; width: 100%; }
 .modal td { padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .modal td:first-child { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+.modal table.reasons tr { cursor: zoom-in; }
+.modal table.reasons tr:hover td { background: var(--panel-alt); }

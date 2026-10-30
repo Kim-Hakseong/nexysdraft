@@ -22,17 +22,35 @@ export class FileRail {
     this.body.addEventListener('click', e => {
       const t = e.target as HTMLElement; const a = (t.closest('[data-a]') as HTMLElement | null)?.dataset.a; const o = (t.closest('[data-open]') as HTMLElement | null)?.dataset.open;
       if (o) { bridge.call('open', { paths: [o] }); return; }
-      if (a === 'open') bridge.call('openDialog'); else if (a === 'save') bridge.call('save'); else if (a === 'saveas') bridge.call('saveDialog', { dwg: false }); else if (a === 'savedwg') showLossThenSave(); else if (a === 'pdf') bridge.call('exportPdfDialog');
+      if (a === 'open') bridge.call('openDialog'); else if (a === 'save') bridge.call('save'); else if (a === 'saveas') showLossThenSave(false); else if (a === 'savedwg') showLossThenSave(true); else if (a === 'pdf') bridge.call('exportPdfDialog');
     });
   }
 }
 
-export async function showLossThenSave() {
-  const loss: { kind: string; count: number; detail: string }[] = await bridge.call('lossWarnings');
-  if (!loss || loss.length === 0) { bridge.call('saveDialog', { dwg: true }); return; }
-  const dlg = h(`<div class="modal-bg"><div class="modal"><h3>DWG (R2000) 저장 — 유지되지 않는 요소</h3><p>LibreDWG 0.14는 R2000 DWG만 씁니다. 아래 항목은 저장 파일에 들어가지 않습니다.</p><table>${loss.map(l => `<tr><td>${esc(l.kind)} ×${l.count}</td><td>${esc(l.detail)}</td></tr>`).join('')}</table><div class="btns"><button class="pill" data-b="cancel">취소</button><button class="pill primary" data-b="ok">그래도 저장</button></div></div></div>`);
-  dlg.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-b]') as HTMLElement | null; if (b?.dataset.b === 'ok') bridge.call('saveDialog', { dwg: true }); if (b || e.target === dlg) dlg.remove(); });
+/** Save dialog (draft3 G2): R2000 pre-check verdict, reasons with handles (double-click = zoom to them), font compatibility checkbox (remembered).
+ *  Default button: DWG when the pre-check passes (and not plan B), else DXF. */
+export async function showLossThenSave(preferDwg = true) {
+  const r: any = await bridge.call('check');
+  if (!r) return;
+  const dwgDefault = r.recommended === 'dwg' && preferDwg;
+  const fc = (window as any).nxState?.fontCompat !== false;
+  const rows = (r.items as any[]).map((i, k) => `<tr data-k="${k}" title="더블클릭: 해당 객체로 줌"><td>${i.blocking ? '<b>' + esc(i.kind) + '</b>' : esc(i.kind)} ×${i.count}</td><td>${esc(i.detail)}${i.handles?.length ? `<br><span class="chip">${esc(i.handles.slice(0, 6).join(' · '))}</span>` : ''}</td></tr>`).join('');
+  const fixes = (r.fontFixes as any[]).map(f => `<tr><td>${esc(f.style)}</td><td>${esc(f.oldFont || '(없음)')} → ${esc(f.newFont)}</td></tr>`).join('');
+  const dlg = h(`<div class="modal-bg save-check"><div class="modal"><h3>${r.dwgOk && !r.planB ? 'DWG 저장 가능' : 'DXF 권장'}</h3>
+    <p>${r.dwgOk ? 'R2000 사전 점검 통과.' : '아래 사유로 DWG(R2000, LibreDWG) 저장은 다른 CAD에서 열리지 않거나 내용이 빠질 수 있습니다. DXF는 원본 그대로 저장됩니다.'} 예상 DWG 저장 시간 ${Math.round(r.estimateSeconds)} s.</p>
+    ${rows ? `<table class="reasons">${rows}</table>` : ''}
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" data-f="fc" ${fc ? 'checked' : ''}> nanoCAD 글꼴 호환 (PC에 없는 글꼴을 쓰는 한글 스타일 ${r.fontFixes.length}개 치환)</label>
+    ${fixes ? `<table>${fixes}</table>` : ''}
+    <div class="btns"><button class="pill" data-b="cancel">취소</button><button class="pill${dwgDefault ? '' : ' primary'}" data-b="dxf">DXF로 저장</button><button class="pill${dwgDefault ? ' primary' : ''}" data-b="dwg">DWG로 저장${r.planB || !r.dwgOk ? ' (beta)' : ''}</button></div></div></div>`);
+  dlg.addEventListener('click', e => {
+    const b = (e.target as HTMLElement).closest('[data-b]') as HTMLElement | null; if (!b && e.target !== dlg) return;
+    const on = (dlg.querySelector('[data-f=fc]') as HTMLInputElement).checked;
+    if (b?.dataset.b === 'dxf' || b?.dataset.b === 'dwg') { bridge.call('setFontCompat', { on }); bridge.call('saveDialog', { dwg: b.dataset.b === 'dwg', fontCompat: on }); }
+    dlg.remove();
+  });
+  dlg.addEventListener('dblclick', e => { const tr = (e.target as HTMLElement).closest('[data-k]') as HTMLElement | null; if (!tr) return; const it = r.items[+tr.dataset.k!]; if (it?.handles?.length) { document.dispatchEvent(new CustomEvent('nx-zoom-handles', { detail: it.handles })); dlg.remove(); } });
   document.body.append(dlg);
+  (dlg.querySelector(dwgDefault ? '[data-b=dwg]' : '[data-b=dxf]') as HTMLElement).focus();
 }
 
 export class LayerRail {

@@ -176,7 +176,7 @@ export class Doc {
           // no block: draw a plain linear dimension from the definition points
           seg(p[4], p[5], p[0], p[1]); seg(p[6], p[7], p[0], p[1]);
           g.texts.push({ x: T(p[2], p[3])[0], y: T(p[2], p[3])[1], ax: T(p[2], p[3])[0], ay: T(p[2], p[3])[1], h: 2.5 * kscale, rot: e.rot ?? 0, text: e.s && e.s !== '<>' ? e.s : (e.meas ?? 0).toFixed(2), font: 'Malgun Gothic', shx: true, ha: 1, va: 2, wf: 1, w: 0, at: 0, ls: 1, col, mtext: false, ob: 0, bw: 0, ud: 0, h0: e.h });
-        } else if (e.t === 'I') { seg(p[0] - 2, p[1], p[0] + 2, p[1]); seg(p[0], p[1] - 2, p[0], p[1] + 2); }
+        }   // INSERT of an unresolved block: nothing to draw (no stray cross inflating the extents)
         break;
       }
       default: break;

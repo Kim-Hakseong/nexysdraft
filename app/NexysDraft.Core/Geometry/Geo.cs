@@ -161,7 +161,7 @@ public static class Bounds
                             }
                         }
                     }
-                    if (!any) Add(ins.Pos.X, ins.Pos.Y);
+                    // an INSERT of an empty or unresolved block draws nothing → no extent (AutoCAD rule; u04's AVE_RENDER/AVE_GLOBAL inserts sit 30,000 units away)
                     break;
                 }
             case Hatch h: foreach (var l in h.Loops) { var p = Tess.HatchLoop(l); for (int i = 0; i < p.Count; i += 2) Add(p[i], p[i + 1]); } break;

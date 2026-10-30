@@ -48,7 +48,7 @@ function renderFooter() {
 document.addEventListener('nx-frame', (e: any) => { const d = e.detail; frameInfo = `frame ${d.ms.toFixed(1)} ms · ${fmtInt(d.segs)} segs · ${d.texts} texts`; ftr.querySelector('.r')!.textContent = frameInfo; });
 
 function applyState(next: any) {
-  S = next; document.documentElement.dataset.theme = S.theme; view.setDark(S.theme === 'dark'); layers.dark = S.theme === 'dark';
+  S = next; (window as any).nxState = S; document.documentElement.dataset.theme = S.theme; view.setDark(S.theme === 'dark'); layers.dark = S.theme === 'dark';
   renderHeader(); renderFooter(); files.render(S);
   if (doc && S.layers) { if (doc.setLayers(S.layers)) { doc.computeBBox(); view.invalidate(); } }
   if (!S.file && doc) { doc = null; view.setDoc(null); }
@@ -71,7 +71,7 @@ view.onPrompt = t => { cmd.prompt(t); renderToolbar(); };
 view.onHistory = t => cmd.add(t);
 view.onCommand = name => {
   switch (name) {
-    case 'open': bridge.call('openDialog'); return true; case 'save': bridge.call('save'); return true; case 'saveas': bridge.call('saveDialog', { dwg: false }); return true; case 'exportdwg': showLossThenSave(); return true; case 'pdf': bridge.call('exportPdfDialog'); return true;
+    case 'open': bridge.call('openDialog'); return true; case 'save': bridge.call('save'); return true; case 'saveas': showLossThenSave(false); return true; case 'exportdwg': showLossThenSave(); return true; case 'pdf': bridge.call('exportPdfDialog'); return true;
     case 'layer': layers.input.focus(); return true;
     case 'new': bridge.call('new'); return true;
   }
@@ -124,6 +124,12 @@ function showHelp() {
   document.body.append(dlg);
 }
 
+// pre-check reasons → select and zoom to the listed handles
+document.addEventListener('nx-zoom-handles', (e: any) => {
+  const ids: string[] = (e.detail || []).filter((h: string) => doc?.ents.has(h)); if (!doc || !ids.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const h of ids) { const b = doc.geomOf(h)?.bbox; if (!b) continue; x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[2]); y1 = Math.max(y1, b[3]); }
+  view.setSelection(ids); if (x0 <= x1) { const m = Math.max(x1 - x0, y1 - y0, 1) * 0.15; view.zoomWindow([x0 - m, y0 - m], [x1 + m, y1 + m]); }
+});
 installTests({ view, cmd, getDoc: () => doc, getState: () => S, layers, props });
 bridge.call('state').then(st => applyState(st));
 bridge.post({ cmd: 'ready' });

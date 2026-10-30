@@ -50,6 +50,12 @@ public static class R2000Loss
         }
         if (dyn > 0 || evalGraphs > 0) w.Add(new LossWarning("dynamic-block", Math.Max(dyn, evalGraphs), $"dynamic block definitions become static ({string.Join(", ", dynBlocks.Take(5))}{(dynBlocks.Count > 5 ? ", …" : "")}; {evalGraphs} evaluation objects)"));
         if (newerObjects > 0) w.Add(new LossWarning("object", newerObjects, "objects newer than R2000 dropped: " + string.Join(", ", objNames.OrderByDescending(k => k.Value).Take(8).Select(k => $"{k.Key}×{k.Value}"))));
+        int unresolved = 0; var unresolvedHandles = new List<string>();
+        void ScanIns(IEnumerable<Entity> es) { foreach (var e in es) if (e is Insert i && (i.Block.Length == 0 || !doc.Blocks.ContainsKey(i.Block))) { unresolved++; if (unresolvedHandles.Count < 5) unresolvedHandles.Add(i.Handle); } }
+        ScanIns(doc.Entities); foreach (var b in doc.Blocks.Values) ScanIns(b.Entities);
+        if (unresolved > 0) w.Add(new LossWarning("unresolved-block", unresolved, "block references without a (named) block definition are dropped: " + string.Join(", ", unresolvedHandles)));
+        int nameless = doc.Blocks.Values.Count(b => b.Name.Length == 0);
+        if (nameless > 0) w.Add(new LossWarning("nameless-block", nameless, "block definitions without a name are dropped"));
         if (doc.VersionYear >= 2007 && doc.SourceUtf8) w.Add(new LossWarning("encoding", 1, $"text re-encoded from UTF-8 to {doc.CodePage} (characters outside it become \\U+XXXX)"));
         return w;
     }
