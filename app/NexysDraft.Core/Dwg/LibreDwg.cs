@@ -11,7 +11,20 @@ namespace NexysDraft.Core.Dwg;
 public static class LibreDwg
 {
     public sealed record Result(bool Ok, int ExitCode, string Stderr, double Ms, string Output);
-    public const string Version = "0.14";
+    /// <summary>"0.14.8679 (33bfac15)" for a source build (COMMIT.txt next to the tools: commit, then git describe), else the release "0.14".</summary>
+    public static string Version
+    {
+        get
+        {
+            try
+            {
+                var dir = Dir; var f = dir == null ? null : Path.Combine(dir, "COMMIT.txt");
+                if (f != null && File.Exists(f)) { var l = File.ReadAllLines(f).Where(x => x.Trim().Length > 0).ToArray(); if (l.Length >= 2) return $"{l[1].Trim()} ({l[0].Trim()[..8]})"; }
+            }
+            catch (IOException) { }
+            return "0.14";
+        }
+    }
 
     /// <summary>Folder with dwg2dxf.exe: next to the exe (tools/libredwg), or the repository's app/tools/libredwg, or NEXYSDRAFT_LIBREDWG.</summary>
     public static string? Dir

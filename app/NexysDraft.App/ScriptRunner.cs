@@ -73,7 +73,7 @@ public static class ScriptRunner
             case "check":
                 {
                     var r = Core.Dwg.R2000Check.Run(Doc(), !a.Contains("--no-fontfix"));
-                    return new { dwgOk = r.DwgOk, recommended = r.Recommended, planB = r.PlanB, estimateSeconds = r.EstimateSeconds, r2000DxfBytes = r.R2000DxfBytes, items = r.Items.Select(i => new { i.Kind, i.Count, i.Detail, i.Blocking, handles = i.Handles }).ToList(), fontFixes = r.FontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, newFont = f.NewFamilyKo }).ToList() };
+                    return new { dwgOk = r.DwgOk, recommended = r.Recommended, planB = r.PlanB, estimateSeconds = r.EstimateSeconds, r2000DxfBytes = r.R2000DxfBytes, items = r.Items.Select(i => new { i.Kind, i.Count, i.Detail, i.Blocking, i.RecommendDxf, handles = i.Handles }).ToList(), fontFixes = r.FontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, newFont = f.NewFamilyKo }).ToList() };
                 }
             case "pdf": { string p = Path.GetFullPath(string.Join(" ", a)); Doc(); var r = e.ExportPdfAsync(p).GetAwaiter().GetResult() ?? throw new IOException(e.StatusText); var lp = e.LastPdf!; return new { path = p, pages = lp.Pages, sheets = lp.Sheets.Count(s => s.Label != "rest"), detected = lp.SheetsDetected, texts = lp.Texts, ms = lp.Ms, paper = lp.PageInfos.Select(pi => new { pi.Label, pi.Paper, pi.WidthMm, pi.HeightMm, pi.Basis, pi.Texts, minTextMm = Math.Round(pi.MinTextMm, 2), p10TextMm = Math.Round(pi.P10TextMm, 2), medianTextMm = Math.Round(pi.MedianTextMm, 2) }).ToList() }; }
             case "select":

@@ -22,6 +22,6 @@
   <ItemGroup>
     <Resource Include="Assets\brand\AppIcon.ico" />
     <Content Include="..\web\dist\**\*" Link="wwwroot\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\tools\libredwg\*.exe;..\tools\libredwg\*.dll;..\tools\libredwg\COPYING;..\tools\libredwg\SOURCE.txt;..\tools\libredwg\README.txt" Link="tools\libredwg\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\tools\libredwg\*.exe;..\tools\libredwg\*.dll;..\tools\libredwg\COPYING;..\tools\libredwg\SOURCE.txt;..\tools\libredwg\README.txt;..\tools\libredwg\COMMIT.txt;..\tools\libredwg\SHA256SUMS.txt;..\tools\libredwg\build-libredwg.sh" Link="tools\libredwg\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

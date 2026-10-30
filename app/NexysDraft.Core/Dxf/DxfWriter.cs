@@ -132,7 +132,14 @@ public sealed class DxfWriter
         W(0, "TABLE"); W(2, "LTYPE"); W(5, _tLtype); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, _doc.Linetypes.Count + 3);
         var ltNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var n in new[] { "ByBlock", "ByLayer", "Continuous" }) { var l = _doc.Linetypes.FirstOrDefault(x => x.Name.Equals(n, StringComparison.OrdinalIgnoreCase)); if (l == null) { WriteLtype(new LineType { Name = n, Description = n == "Continuous" ? "Solid line" : "", Handle = _doc.NewHandle() }, _tLtype); ltNames.Add(n); } }
-        foreach (var l in _doc.Linetypes) { if (!ltNames.Add(l.Name)) continue; WriteLtype(l, _tLtype); }   // R2000: always regenerated — raw LibreDWG LTYPE/STYLE entries make dxf2dwg write a DWG that ODA rejects silently (0-byte output, work/oda/exp5 v7e)
+        foreach (var l in _doc.Linetypes)
+        {
+            if (!ltNames.Add(l.Name)) continue;
+            // ByBlock/ByLayer/Continuous get fresh handles: LibreDWG dxf2dwg keeps the source handle, and a source ByLayer at
+            // handle B (u01/u06/u07, docs/libredwg-build.md) yields a DWG that ODA reads as empty. Layers refer to linetypes by name.
+            bool std = l.Name.Equals("ByBlock", StringComparison.OrdinalIgnoreCase) || l.Name.Equals("ByLayer", StringComparison.OrdinalIgnoreCase) || l.Name.Equals("Continuous", StringComparison.OrdinalIgnoreCase);
+            WriteLtype(std ? new LineType { Name = l.Name, Description = l.Description, Pattern = l.Pattern, Length = l.Length, Handle = _doc.NewHandle() } : l, _tLtype);
+        }   // R2000: always regenerated — raw LibreDWG LTYPE/STYLE entries make dxf2dwg write a DWG that ODA rejects silently (0-byte output, work/oda/exp5 v7e)
         W(0, "ENDTAB");
         // LAYER
         W(0, "TABLE"); W(2, "LAYER"); W(5, _tLayer); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, _doc.Layers.Count + 1);

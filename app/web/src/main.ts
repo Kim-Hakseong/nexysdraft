@@ -118,7 +118,7 @@ function showHelp() {
     <p><b>선택</b> 클릭, 왼→오 창(안에 든 것), 오→왼 교차(걸친 것), Shift = 추가/제거, Ctrl+A 전체, Del 삭제.</p>
     <p><b>명령줄</b> L 선 · PL 폴리선(C 닫기) · C 원 · DLI 선형 치수 · M 이동 · CO 복사 · RO 회전 · MI 대칭 · O 간격띄우기 · S 신축(교차 창) · E 지우기 · U 실행취소 · Z E 전체 · 좌표 <code>x,y</code> · 상대 <code>@dx,dy</code> · 거리 숫자.</p>
     <p><b>스냅</b> 끝점 □ · 중점 △ · 중심 ○ · 교차점 × · 사분점 ◇ (F3 토글). <b>텍스트</b> 더블클릭 = 편집(Enter 적용, MTEXT는 Ctrl+Enter).</p>
-    <ul><li>MVP 제외: 트림·연장·필렛·동적 블록·해치 편집·3D·XREF 편집·플롯 스타일.</li><li>DWG 쓰기는 LibreDWG 0.14 한계로 R2000. 저장 전 손실 목록을 보여준다.</li></ul>
+    <ul><li>MVP 제외: 트림·연장·필렛·동적 블록·해치 편집·3D·XREF 편집·플롯 스타일.</li><li>DWG 쓰기는 LibreDWG(소스 빌드) 한계로 R2000. 저장 전 사전 점검(읽기 가능 여부·DXF 권장 사유)을 보여준다.</li></ul>
     <div class="btns"><button class="pill primary" data-b="ok">CLOSE</button></div></div></div>`);
   dlg.addEventListener('click', e => { if ((e.target as HTMLElement).closest('[data-b]') || e.target === dlg) dlg.remove(); });
   document.body.append(dlg);

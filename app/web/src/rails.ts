@@ -34,10 +34,12 @@ export async function showLossThenSave(preferDwg = true) {
   if (!r) return;
   const dwgDefault = r.recommended === 'dwg' && preferDwg;
   const fc = (window as any).nxState?.fontCompat !== false;
-  const rows = (r.items as any[]).map((i, k) => `<tr data-k="${k}" title="더블클릭: 해당 객체로 줌"><td>${i.blocking ? '<b>' + esc(i.kind) + '</b>' : esc(i.kind)} ×${i.count}</td><td>${esc(i.detail)}${i.handles?.length ? `<br><span class="chip">${esc(i.handles.slice(0, 6).join(' · '))}</span>` : ''}</td></tr>`).join('');
+  const rows = (r.items as any[]).map((i, k) => `<tr data-k="${k}" title="더블클릭: 해당 객체로 줌"><td>${i.blocking || i.recommendDxf ? '<b>' + esc(i.kind) + '</b>' : esc(i.kind)} ×${i.count}</td><td>${esc(i.detail)}${i.handles?.length ? `<br><span class="chip">${esc(i.handles.slice(0, 6).join(' · '))}</span>` : ''}</td></tr>`).join('');
   const fixes = (r.fontFixes as any[]).map(f => `<tr><td>${esc(f.style)}</td><td>${esc(f.oldFont || '(없음)')} → ${esc(f.newFont)}</td></tr>`).join('');
-  const dlg = h(`<div class="modal-bg save-check"><div class="modal"><h3>${r.dwgOk && !r.planB ? 'DWG 저장 가능' : 'DXF 권장'}</h3>
-    <p>${r.dwgOk ? 'R2000 사전 점검 통과.' : '아래 사유로 DWG(R2000, LibreDWG) 저장은 다른 CAD에서 열리지 않거나 내용이 빠질 수 있습니다. DXF는 원본 그대로 저장됩니다.'} 예상 DWG 저장 시간 ${Math.round(r.estimateSeconds)} s.</p>
+  const why = !r.dwgOk ? '아래 사유로 DWG(R2000, LibreDWG) 저장은 다른 CAD에서 열리지 않을 수 있습니다.'
+    : r.recommended === 'dxf' && !r.planB ? 'DWG는 열리지만 동적 블록의 매개변수가 빠집니다.' : r.planB ? 'DWG 저장은 beta입니다.' : 'R2000 사전 점검 통과.';
+  const dlg = h(`<div class="modal-bg save-check"><div class="modal"><h3>${r.recommended === 'dwg' ? 'DWG 저장 가능' : 'DXF 권장'}</h3>
+    <p>${why}${r.recommended === 'dxf' ? ' DXF는 원본 그대로 저장됩니다.' : ''} 예상 DWG 저장 시간 ${Math.max(1, Math.round(r.estimateSeconds))} s.</p>
     ${rows ? `<table class="reasons">${rows}</table>` : ''}
     <label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" data-f="fc" ${fc ? 'checked' : ''}> nanoCAD 글꼴 호환 (PC에 없는 글꼴을 쓰는 한글 스타일 ${r.fontFixes.length}개 치환)</label>
     ${fixes ? `<table>${fixes}</table>` : ''}

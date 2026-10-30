@@ -34,7 +34,7 @@ public sealed class Bridge
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 string json = doc == null ? JsonSerializer.Serialize(new { ev = "doc", doc = (object?)null }, JsonOpts) : Encoding.UTF8.GetString(NexysDraft.Core.Page.PageJson.DocMessage(doc));
                 double ms = sw.Elapsed.TotalMilliseconds;
-                _ui.BeginInvoke(DispatcherPriority.Background, () => { if (gen != _docGen || !PageReady) return; _e.SnapshotMs = ms; try { _wv.PostWebMessageAsJson(json); } catch (Exception ex) { Diag.Trace("post doc failed " + ex.Message); } });
+                _ui.BeginInvoke(DispatcherPriority.Background, () => { if (gen != _docGen || !PageReady) return; _e.SnapshotMs = ms; try { _wv.PostWebMessageAsString(json); } catch (Exception ex) { Diag.Trace("post doc failed " + ex.Message); } });   // AsJson validates the JSON on the UI thread: u03 (25k entities) stalled the UI 380–440 ms (draft3 G5); the page parses strings
             });
         };
         _e.Patched += p => _ui.BeginInvoke(DispatcherPriority.Background, () => { if (PageReady) Post(new { ev = "patch", upsert = p.upsert, remove = p.remove, blocks = p.blocks, name = p.name }); });
@@ -89,7 +89,7 @@ public sealed class Bridge
             case "saveTo": return e.SaveAsync(S(r, "path")).ContinueWith(t => (object?)t.Result, TaskScheduler.FromCurrentSynchronizationContext());
             case "exportPdfTo": return e.ExportPdfAsync(S(r, "path")).ContinueWith(t => (object?)t.Result, TaskScheduler.FromCurrentSynchronizationContext());
             case "lossWarnings": return e.LossWarnings();
-            case "check": { var ck = e.Check(); return ck == null ? null : new { dwgOk = ck.DwgOk, recommended = ck.Recommended, planB = ck.PlanB, estimateSeconds = ck.EstimateSeconds, items = ck.Items.Select(i => new { kind = i.Kind, count = i.Count, detail = i.Detail, blocking = i.Blocking, handles = i.Handles }).ToList(), fontFixes = ck.FontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, newFont = f.NewFamilyKo }).ToList() }; }
+            case "check": { var ck = e.Check(); return ck == null ? null : new { dwgOk = ck.DwgOk, recommended = ck.Recommended, planB = ck.PlanB, estimateSeconds = ck.EstimateSeconds, items = ck.Items.Select(i => new { kind = i.Kind, count = i.Count, detail = i.Detail, blocking = i.Blocking, recommendDxf = i.RecommendDxf, handles = i.Handles }).ToList(), fontFixes = ck.FontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, newFont = f.NewFamilyKo }).ToList() }; }
             case "setFontCompat": e.FontCompat = B(r, "on", true); e.Touch(); return null;
             case "setTheme": e.Theme = S(r, "theme", "light"); e.Touch(); return null;
             case "setLayer": e.CurrentLayer = S(r, "layer", "0"); e.Touch(); return null;

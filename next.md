@@ -1,19 +1,17 @@
-# next — NexysDraft 다음 런 후보 (draft2 종료 시점, 2026-10-30)
+# next — NexysDraft 다음 런 후보 (draft3 종료 시점, 2026-10-30)
 
-## 사용자 확인이 먼저 (docs/report-draft2.md §사용자 확인)
-1. nanoCAD로 열기: work/oda/*.r2000.dwg(u01·u02·u04·u05·u07·selftest) — RECOVER 없이 열리는지, 치수·해치 표시, MTEXT 크기.
-2. nanoCAD로 열기: work/oda/*.ours.dxf — 한글 TEXT가 제대로 보이는지("??" 사라졌는지), 엔티티 수 25/25.
-3. PDF: work/pdf/u05_hthp_pid.pdf(10쪽)에서 Ctrl+F 한글·영문 검색, 쪽 수.
+## 사용자 확인이 먼저 (docs/report-draft3.md §사용자 확인)
+1. nanoCAD 5로 work/d3_user_check/u04_hthp_pfd.nexys.dwg·.dxf를 열어 한글("?" 없음)과 모형 공간(두 시트, 큰 테두리 없음)을 확인. Layout1은 원본부터 비어 있다.
+2. nanoCAD 5로 u01·u07 .nexys.dwg가 RECOVER 없이 열리는지 확인.
+3. 셀프테스트 저장본의 24/25 재현 여부와 빠진 유형.
 
-## 백로그 (run-draft2 명시)
-- OCR 옵션(래스터 포함 도면), cad-skills 팩(KiCad·FreeCAD·Blender 헤드리스 레시피), 바이너리 전송(10만 엔티티 열기 1.9 s → ≈0.9 s), 설치판(Inno Setup·.dwg 연결), 측정 도구, 트림·필렛.
+## §결정 필요 (보고서)
+- PDF 글자 크기 관문(A3 우선 vs ≥1.5 mm), u06 IMAGE 처리(빼고 저장 / 이미지 정의까지 쓰기 / 현행), dwgread.exe 동봉 여부.
 
-## LibreDWG
-- MSYS2 설치 후 업스트림 master 빌드: dxf2dwg 속도·MTEXT 높이·해치 엣지 루프·레이아웃 객체가 고쳐졌는지 측정. 고쳐졌으면 소스 패치 없이 교체(COPYING·소스 동봉).
-- u06(동적 블록 `*U` 블록) DWG가 ODA에서 "Object improperly read": dwgread JSON으로 블록 헤더 owner 추적.
+## 백로그 (run-draft3 명시)
+- 레이아웃 탭 UI(페이퍼 스페이스 보기), 동적 블록 → 정적 변환, 자체 DWG R2000 라이터(플랜 C), 설치판(Inno Setup·.dwg 연결), OCR 옵션, 바이너리 전송(10만 엔티티 열기 2.0 s → ≤1 s), 측정 도구, 트림·필렛.
 
-## PDF
-- MTEXT run 단위 높이·폭 비율·밑줄, 선종류 대시, 선가중치별 선폭 표, 페이지 크기 자동(A3 고정 → 도곽 비율), 북마크.
-
-## 품질 관문
-- 스트레스 메모리 관문(첫 열기 이후 20→40회 ≤100 MB)은 draft2에서 재측정하지 않았다 — 다음 런에서 측정.
+## 기술 부채·관찰
+- D1 DWG 왕복: u07 POLYLINE 2개 좌표 비교 오차 0.1(UNVERIFIED). dwg2dxf master가 u04에 "Invalid LWPOLYLINE.widths ×4"를 낸다(개수는 ODA와 일치).
+- LibreDWG 업스트림에 핸들 B 문제(dxf2dwg가 원본 표준 선종류 핸들을 그대로 쓸 때 ODA가 빈 도면으로 읽음) 재현 사례를 이슈로 낼지 검토.
+- app/dist/NexysDraft.exe 갱신: 사용자 draft1 창을 닫은 뒤 `powershell -File tools\package.ps1 -Version 0.3.0`.

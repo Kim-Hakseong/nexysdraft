@@ -43,7 +43,7 @@ public class D1FormatTests
             // model writer (R2000 clean): same entities must survive our own reader
             string outR = Path.Combine(Samples.WorkDir("rt"), Path.GetFileNameWithoutExtension(dwg) + ".r2000.dxf");
             var w = DxfWriter.Write(a, outR, DxfWriter.Mode.R2000); var c = DxfReader.Read(outR);
-            var cmpR = Compare.Documents(a, c, 1e-6, Compare.CoordTypes, Compare.CountTypes, layersToo: false);
+            var cmpR = Compare.Documents(a, c, 1e-6, Compare.CoordTypes, Compare.CountTypes, layersToo: false, r2000: true);
             bool ok = cmp.Ok && entsEq && layersEq && cmpR.Ok;
             allOk &= ok;
             string line = $"{(ok ? "PASS" : "FAIL")}\t{Path.GetFileName(dwg)}\tents {a.Entities.Count}={b.Entities.Count}\tlayers {a.Layers.Count}={b.Layers.Count}\tread {readMs:F0} ms\twrite {writeMs:F0} ms\tpreserve: {cmp.Summary}\tr2000: {cmpR.Summary}{(cmp.Mismatches.Count > 0 ? "\n\t\tpreserve mismatches: " + string.Join(" | ", cmp.Mismatches.Take(5)) : "")}{(cmpR.Mismatches.Count > 0 ? "\n\t\tr2000 mismatches: " + string.Join(" | ", cmpR.Mismatches.Take(5)) : "")}";
@@ -70,7 +70,7 @@ public class D1FormatTests
             var r2 = LibreDwg.DwgToDxf(outDwg, backDxf);
             if (!r2.Ok) { string l = $"FAIL\t{Path.GetFileName(dwg)}\tdwg2dxf(back) failed: {string.Join(" | ", LibreDwg.Summarize(r2.Stderr).Take(3))}"; lines.Add(l); unverified.Add(l); _o.WriteLine(l); continue; }
             var b = DxfReader.Read(backDxf);
-            var cmp = Compare.Documents(a, b, 1e-6, Compare.CoordTypes, Compare.CountTypes, layersToo: false);
+            var cmp = Compare.Documents(a, b, 1e-6, Compare.CoordTypes, Compare.CountTypes, layersToo: false, r2000: true);
             string line = $"{(cmp.Ok ? "PASS" : "UNVERIFIED")}\t{Path.GetFileName(dwg)}\tdxf2dwg {toDwgMs:F0} ms\tdwg {new FileInfo(outDwg).Length / 1024} KB\tlayers {a.Layers.Count}/{b.Layers.Count}\t{cmp.Summary}\tloss: {string.Join("; ", loss.Select(x => $"{x.Kind}×{x.Count}"))}{(cmp.Mismatches.Count > 0 ? "\n\t\tmismatches: " + string.Join(" | ", cmp.Mismatches.Take(6)) : "")}{(r1.Stderr.Length > 0 ? "\n\t\tdxf2dwg: " + string.Join(" | ", LibreDwg.Summarize(r1.Stderr).Take(4)) : "")}";
             lines.Add(line); _o.WriteLine(line);
             if (!cmp.Ok) unverified.Add(line);

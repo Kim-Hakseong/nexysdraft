@@ -38,11 +38,11 @@ public static class Compare
     }
 
     /// <summary>Compare model-space entities of two documents. Types in <paramref name="coordTypes"/> must match coordinates within tol; <paramref name="countTypes"/> only by count.</summary>
-    public static Result Documents(Document a, Document b, double tol, string[] coordTypes, string[] countTypes, bool includeBlocks = true, bool layersToo = true)
+    public static Result Documents(Document a, Document b, double tol, string[] coordTypes, string[] countTypes, bool includeBlocks = true, bool layersToo = true, bool r2000 = false)
     {
         var r = new Result();
         if (layersToo && a.Layers.Count != b.Layers.Count) r.Mismatches.Add($"layers {a.Layers.Count} vs {b.Layers.Count}");
-        var ea = Flatten(a, includeBlocks); var eb = Flatten(b, includeBlocks);
+        var ea = Flatten(a, includeBlocks, r2000); var eb = Flatten(b, includeBlocks, r2000);
         foreach (var t in coordTypes.Concat(countTypes))
         {
             var la = ea.Where(e => TypeName(e) == t).ToList(); var lb = eb.Where(e => TypeName(e) == t).ToList();
@@ -69,10 +69,12 @@ public static class Compare
     static string Fmt(double[] s) => string.Join(",", s.Take(8).Select(v => v.ToString("G6", CultureInfo.InvariantCulture)));
     static double Err(double[] a, double[] b) { if (a.Length != b.Length) return double.MaxValue; double m = 0; for (int i = 0; i < a.Length; i++) m = Math.Max(m, Math.Abs(a[i] - b[i])); return m; }
     sealed class Cmp : IComparer<double[]> { public static readonly Cmp Instance = new(); public int Compare(double[]? x, double[]? y) { if (x == null || y == null) return 0; int n = Math.Min(x.Length, y.Length); for (int i = 0; i < n; i++) { int c = x[i].CompareTo(y[i]); if (c != 0) return c; } return x.Length.CompareTo(y.Length); } }
-    public static List<Entity> Flatten(Document d, bool blocks)
+    /// <summary>R2000 view: what the R2000 writer keeps on purpose — no nameless blocks, no inserts of missing / nameless blocks (R2000Loss reports both).</summary>
+    public static List<Entity> Flatten(Document d, bool blocks, bool r2000 = false)
     {
-        var list = d.Entities.Where(e => !e.PaperSpace).ToList();
-        if (blocks) foreach (var b in d.Blocks.Values) if (!b.IsLayout && !b.Name.StartsWith("*D", StringComparison.OrdinalIgnoreCase)) list.AddRange(b.Entities);
+        bool keep(Entity e) => !r2000 || !(e is Insert i && (i.Block.Length == 0 || !d.Blocks.ContainsKey(i.Block)));
+        var list = d.Entities.Where(e => !e.PaperSpace && keep(e)).ToList();
+        if (blocks) foreach (var b in d.Blocks.Values) if (!b.IsLayout && !b.Name.StartsWith("*D", StringComparison.OrdinalIgnoreCase) && !(r2000 && b.Name.Length == 0)) list.AddRange(b.Entities.Where(keep));
         foreach (var ins in list.OfType<Insert>().ToList()) foreach (var at in ins.Attribs) list.Add(at.Text);
         return list;
     }

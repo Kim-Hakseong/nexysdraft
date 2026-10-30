@@ -1,5 +1,19 @@
 # 진행 현황 — NexysDraft
 
+## 2026-10-30 draft3 (run-draft3.md)
+
+| 블록 | 판정 | 근거 |
+|---|---|---|
+| G0 LibreDWG 재빌드 | **완료 — 교체** | MSYS2 + master 33bfac15 빌드 1회차 성공. 사용자 도면 ODA 6/7(0.14는 1/7), u05 0.71 s. 원인 셋 확정(ByLayer 핸들 B·IMAGE·표본 매듭 수). docs/libredwg.md, libredwg-build.md |
+| G1 페이퍼·글꼴 | **완료** | 모형/페이퍼 수 7/7 ODA 일치, 페이퍼 스페이스 DXF·DWG 보존, u04 범위 = 두 시트(이름 없는 블록이 원인), 글꼴 치환 후 없는 글꼴 0·u01 변경 0. g1_*.txt |
+| G2 저장 정책 | **완료** | 사전 점검 예측 7/7 일치, 대화상자(사유·핸들·더블클릭 줌·글꼴 체크박스·beta), 셀프테스트 두 경로 PASS. g2_check.txt |
+| G3 PDF | **완료(글자 ≥1.5 mm 미달)** | 용지 자동(u01·u05·u07 A3, u04 2쪽), 추출률 ≥99 %, 색·MTEXT run, CLI 2.5 mm. 사용자 도면 글자 0.28~1.74 mm → §결정 필요. g3_*.txt |
+| G4 패키지 | **완료** | NexysDraft-v0.3.0-win64.zip, 새 폴더 스모크 3종 PASS, GitHub Release v0.3.0. app/dist exe는 사용자 창이 잡고 있어 미갱신 |
+| G5 측정 | **완료** | 스트레스 40회 메모리 +30.6 MB, UI 멈춤 0(문서 전송 방식 수정), 유형별 표 25/25 |
+| G6 cad-skills | **완료** | skills/cad-headless/SKILL.md, KiCad·FreeCAD 레시피 실행 |
+
+산출물: docs/report-draft3.md, docs/screens/30~35, next.md, 태그 v0.3.0.
+
 ## 2026-10-30 draft2 (run-draft2.md, 11:10 시작)
 
 | 블록 | 판정 | 근거 |

@@ -1,6 +1,35 @@
-# LibreDWG 사용 기록 — NexysDraft (draft2 갱신 2026-10-30)
+# LibreDWG 사용 기록 — NexysDraft (draft3 갱신 2026-10-30)
 
-## 버전·출처
+## draft3: master 소스 빌드로 교체 (G0, 확정)
+- 번들 = LibreDWG **master `33bfac15` (0.14.8679)**, MSYS2 mingw64 정적 빌드, 패치 없음. 빌드 기록 docs/libredwg-build.md, 해시 app/tools/libredwg/SHA256SUMS.txt.
+- 교체 기준(run-draft3 G0): 사용자 도면 ODA 오류 0 ≥ 5/7 **그리고** u05 저장 ≤ 60 s → **6/7, u05 0.67 s로 충족**.
+
+| 도면 | R2000 DXF | 0.14 (draft2 라이터) | master (draft2 라이터) | **master + draft3 라이터 (채택)** |
+|---|---|---|---|---|
+| u01 | 0.5 MB | FAIL 빈 출력 (2.5 s) | FAIL 빈 출력 (0.12 s) | **PASS 0.12 s** |
+| u02 | 3.9 MB | FAIL 300 s 초과 | PASS 0.63 s | **PASS 0.64 s** |
+| u03 | 10.1 MB | FAIL 300 s 초과 | PASS 1.7 s (스플라인 961/961) | **PASS 1.6 s** |
+| u04 | 2.2 MB | PASS 126 s | PASS 0.33 s | **PASS 0.34 s** |
+| u05 | 4.7 MB | FAIL 300 s 초과 | PASS 0.67 s (도면 영역 2/2) | **PASS 0.67 s** |
+| u06 | 0.5 MB | FAIL BlockBegin owner (2.2 s) | FAIL Object improperly read | FAIL Object improperly read (IMAGE 1개) |
+| u07 | 2.3 MB | FAIL BlockBegin owner (105 s) | FAIL 빈 출력 | **PASS 0.31 s** |
+| 사용자 합계 | | **1/7** | 4/7 | **6/7** |
+| g01·g02·g03·g06·selftest | | PASS | PASS | PASS |
+| g04 | | FAIL 스플라인 1→0 | FAIL 스플라인 1→0 | 표본 매듭 수 오류 — 표본 수정 후 재측정(work/gates/f2_oda_dwg.txt) |
+| g05 10만 엔티티 | 21.5 MB | 300 s 초과 | 6.4 s, ODA 읽기 정상 | — |
+
+근거: work/gates/f2_oda_dwg_v014.txt, f2_oda_dwg_master.txt, f2_oda_dwg_master2.txt (ODA File Converter 27.1, 개발 PC 전용). 0.14 열의 시간은 같은 PC의 같은 시각 측정.
+"PASS" = ODA 오류 0, 레이어·엔티티 개수 일치(라이터가 일부러 빼는 것 제외), TEXT/MTEXT 손실 0, 한글 100%, 도면 영역 보존.
+
+### draft3에서 찾은 원인 (확정)
+| # | 현상 | 원인 | 조치 |
+|---|---|---|---|
+| 9 | u01·u07 DWG를 ODA가 오류 없이 빈 도면으로 읽음(draft2 7b "미해결") | 원본의 **ByLayer 선종류 핸들이 `B`**. 엔티티를 전부 지워도 실패, LTYPE 항목을 지우면 통과, 핸들 B만 새 번호로 바꾸면 통과(9·29만 바꾸면 실패). 0.14에서도 같은 수정으로 u01 통과(2.5 s). draft2의 "LTYPE 재생성"은 원래 핸들을 유지했기 때문에 효과가 없었다 | R2000 라이터가 ByBlock·ByLayer·Continuous에 항상 새 핸들 발급(레이어는 이름으로 참조) |
+| 10 | u06 "Object improperly read" | 엔티티 이분 탐색 → **IMAGE 1개**(핸들 5F, 이미지 정의 객체 없이 기록됨) | 사전 점검이 IMAGE를 "읽기 불가 예상"으로 표시, DXF 기본 |
+| 11 | g04 스플라인이 ODA에서 사라짐 | 생성 표본이 잘못됨: 3차·제어점 5개인데 매듭 10개(9개여야 함). 법선·공차·플래그 변형은 무관 | 표본 수정, 사전 점검에 "매듭 수 오류 스플라인" 경고(비차단) |
+| 12 | u04 DWG에 큰 테두리가 보임(nanoCAD 사용자 확인 a) | LibreDWG가 이름 없는 블록을 이름 "" 로 내보내고 INSERT도 "" 를 가리킴 | 리더가 `*NONAME~n`로 구분, R2000 라이터는 이름 없는 블록·해석 불가 삽입을 뺌 |
+
+## 버전·출처 (draft2까지)
 - GNU LibreDWG **0.14** win64 바이너리 (`libredwg-0.14-win64.zip`, SHA256 `1AD7E15344D20B3426C3435B078D82FB84B35062815946B2CCA9C5FC9810FEA8`, https://github.com/LibreDWG/libredwg/releases/tag/0.14). 0.14가 2026-10-30 기준 latest 릴리스.
 - 업스트림 git(master 2026-10-29 `33bfac15`)에는 릴리스 뒤 수정이 계속 있으나 Windows 바이너리 아티팩트가 없고 CI(cmake·msvc·mingw·msys 잡)가 2026-10-22·10-29 모두 실패 상태. 개발 PC에 네이티브 gcc/MSYS2가 없어(NI Linux 크로스 컴파일러만 있음) 재빌드·패치는 이번 런에서 하지 않았다(blockers #8).
 - 라이선스 GPLv3+. NexysDraft는 `app/tools/libredwg/`의 `dwg2dxf.exe`·`dxf2dwg.exe`를 **별도 프로세스**로만 실행한다(`NexysDraft.Core.Dwg.LibreDwg`). 링크·코드 복사 없음. 소스 포인터와 COPYING을 같은 폴더에 둔다(`SOURCE.txt`).
@@ -28,7 +57,7 @@
 | 6 | BLOCK_RECORD 핸들 0 → 블록 소실 | "Unknown INSERT.block_header" | 핸들 0 → 새 핸들 |
 | 7 | 속도(R2000 DXF 크기 기준): 0.53 MB 2.4 s, 2.38 MB 38~59 s, 2.80 MB 79~125 s, 4.13 MB 128~205 s, u05(≈5 MB)·u03·10만 엔티티 300 s 초과 | d1b/f2 관문 | 백그라운드 저장 + 경과/예상(≈1+12·MB²) + 취소. u03·u05·10만 엔티티는 DWG 관문에서 SKIP/타임아웃 |
 | 7a | HATCH에 경계 원본 핸들(97 n + 330…)을 쓰면 "Unknown DXF code 330 for HATCH" → 객체 손상 | work/oda/exp5 v4b.log | R2000 출력은 97 0, 71(associative) 0 |
-| 7b | 사용자 도면(u01·u07)의 DWG는 ODA가 **오류 메시지 없이 0바이트**를 내놓는다. 엔티티 유형별 제거(11종)·테이블 재생성(LTYPE·STYLE·LAYER·VPORT)으로도 변화 없음(r2004/r14 출력은 미시험); LibreDWG 자신의 DXF→DWG(lib_u01)도 같은 결과 | work/oda/exp7·exp8·exp9 | **미해결(UNVERIFIED)** — dxf2dwg 0.14 자체의 실도면 처리 결함으로 추정. 생성 샘플·selftest(블록·치수·해치 포함)는 ODA 오류 0 |
+| 7b | 사용자 도면(u01·u07)의 DWG는 ODA가 **오류 메시지 없이 0바이트**를 내놓는다. 엔티티 유형별 제거(11종)·테이블 재생성(LTYPE·STYLE·LAYER·VPORT)으로도 변화 없음(r2004/r14 출력은 미시험); LibreDWG 자신의 DXF→DWG(lib_u01)도 같은 결과 | work/oda/exp7·exp8·exp9 | ~~미해결~~ → **draft3에서 해결(#9)**: 원인은 ByLayer 선종류 핸들 `B`. draft2의 "dxf2dwg 0.14 자체 결함" 추정은 틀렸다 |
 | 8 | u06(동적 블록·`*U` 표현 블록, AcAecLayerStandard xdata)은 OBJECTS 최소화·xdata 제거 후에도 "BlockBegin owner Id is invalid"·"Object improperly read" | work/oda/exp4 | 미해결(UNVERIFIED 원인) — R2000 손실 목록에 동적 블록 경고, DXF 저장 권장 |
 
 ## 그 밖에 알게 된 것

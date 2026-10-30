@@ -1,6 +1,9 @@
-The files in this folder (dwg2dxf.exe, dxf2dwg.exe, dwgread.exe, libredwg-0.dll, libiconv-2.dll, libpcre2-*.dll) are the
-unmodified win64 binaries published by the LibreDWG project:
-  https://github.com/LibreDWG/libredwg/releases/tag/0.14  (libredwg-0.14-win64.zip,
-  SHA256 1AD7E15344D20B3426C3435B078D82FB84B35062815946B2CCA9C5FC9810FEA8)
-LibreDWG is GNU GPL v3 or later (COPYING). Source: https://ftp.gnu.org/gnu/libredwg/libredwg-0.14.tar.xz
-NexysDraft runs these programs as separate processes (command line in, file out). It does not link to or include LibreDWG code.
+The programs in this folder (dwg2dxf.exe, dxf2dwg.exe, dwgread.exe, libiconv-2.dll) are GNU LibreDWG built from unmodified
+upstream source by NexysDraft draft3 (2026-10-30):
+  repository  https://github.com/LibreDWG/libredwg.git
+  commit      33bfac155464cd560f41537ae627efbd66ed7348  (git describe 0.14.8679)
+  source      https://github.com/LibreDWG/libredwg/archive/33bfac155464cd560f41537ae627efbd66ed7348.tar.gz
+  toolchain   MSYS2 mingw-w64-x86_64-gcc, static (--disable-shared --enable-static), no patches
+  script      build-libredwg.sh (this folder); hashes in SHA256SUMS.txt; libiconv-2.dll is the MSYS2 mingw64 libiconv (LGPL).
+LibreDWG is GNU GPL v3 or later (COPYING). NexysDraft runs these programs as separate processes (command line in, file out).
+It does not link to or include LibreDWG code. On request the corresponding source is the commit above; a copy can be supplied.

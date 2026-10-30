@@ -20,3 +20,15 @@
 | 12 | F3 | 생성 샘플 g02 MTEXT가 pdftotext에서 빠짐(68.75 %) — dxf2dwg 왕복 뒤 rect_width 1.0 때문에 MTEXT 범위 추정이 좁아 페이지 밖으로 나간 것 | work/gates/f3_pdf.txt, pymupdf 좌표 | 범위 추정을 긴 줄 기준으로 바꿔 100 %. 남은 FAIL은 u06 96 %(MTEXT 1건 줄바꿈 순서) |
 | 13 | F2 | u01·u07 DWG: ODA가 오류 없이 0바이트, u06·u07: "BlockBegin owner Id is invalid" — 엔티티 유형 11종 제거·LTYPE/STYLE/LAYER/VPORT 재생성·xdata 제거로도 변화 없음, LibreDWG 자신의 DXF→DWG도 동일 | work/oda/exp5~exp8 | UNVERIFIED(dxf2dwg 0.14 결함 추정). u02·u04·생성 샘플·selftest는 PASS. nanoCAD 수동 확인 요청 |
 | 14 | F2 | dxf2dwg가 SPLINE을 버린다(g04 1→0) | f2 관문 | UNVERIFIED. 손실 목록에 SPLINE 경고 추가는 백로그 |
+
+## draft3 (2026-10-30)
+| # | 블록 | 블로커 / 이전 항목 갱신 | 판단 근거 | 대체 경로 / 결과 |
+|---|---|---|---|---|
+| 8 → 해결 | G0 | MSYS2를 winget으로 무인 설치(UAC 없이 성공), master 1회차 빌드 성공 | docs/libredwg-build.md | master `33bfac15`로 교체 |
+| 13 → 해결 | G0 | u01·u07 빈 출력의 원인 = 원본 ByLayer 선종류 핸들 `B` | tools/bisect_sections.py, work/g0/rehandle_* | R2000 라이터가 표준 선종류 3개에 새 핸들. u01·u07 PASS |
+| 9 → 원인 확정 | G0 | u06 = IMAGE 1개(핸들 5F) | work/g0/bisect_u06 | 사전 점검 "읽기 불가 예상", DXF 기본 |
+| 14 → 해결 | G0 | g04 SPLINE 소실은 표본 매듭 수 오류(10개, 9개여야 함) | work/g0/spline_g04 | 표본 수정, 사전 점검에 비차단 경고 |
+| 15 | G0 | 교체 판정 4/7(master + draft2 라이터)이 기준 ≥5/7에 미달해 한때 플랜 B 조건이었다 | f2_oda_dwg_master.txt | 원인을 찾아 라이터를 고친 뒤 재측정 6/7(f2_oda_dwg_master2.txt) → 교체. 플랜 B 아님 |
+| 16 | G1 | 글꼴 호환 규칙을 글자 그대로 적용하면 u01의 스타일도 바뀐다(관문 "u01 STYLE 변경 0"과 충돌) | work/gates/g1_fonts.txt | 치환 대상을 "한글 TEXT/ATTRIB 또는 인라인 \f 없는 한글 MTEXT가 실제로 쓰는 스타일"로 좁힘 → u01 0건, 나머지 PC에 없는 글꼴 참조 0 |
+| 17 | G1 | run-draft3의 "u01 '굴림' 스타일" 은 u01 STYLE 테이블에 없다(u01 한글은 MTEXT 인라인 `\f굴림`) | u01 DXF STYLE 테이블 | 같은 PDF Arial 형식(그룹 3/4 비움 + ACAD xdata 1000 패밀리·1071)을 복사 |
+| 18 | G3 | "용지상 TEXT ≥1.5 mm" 와 "u01·u05·u07 = A3" 를 동시에 만족할 수 없다: A3에 맞추면 사용자 도면 글자 중앙값 0.28~1.74 mm(원 도면이 A3 플롯 기준이라도 작은 주석 글자가 많음) | work/gates/g3_pdf.txt | 용지 A3 관문을 우선. 글자 크기는 측정값만 보고(§결정 필요). CLI 새 도면은 2.5 mm 자동 |

@@ -57,6 +57,7 @@ public static class SelfTest
         string open = Arg("--open"); if (open != "") await Open(w, open);
         if (Arg("--zoom") != "") { var z = Arg("--zoom").Split(','); if (z.Length == 4) await JS(w, $"nx.test.view.zoomWindow([{z[0]},{z[1]}],[{z[2]},{z[3]}]); return true;"); }
         if (Arg("--select") == "all") await JS(w, "await nx.test.cmd('all'); return true;");
+        if (Arg("--check") == "1") await JS(w, "return await nx.test.saveCheck(true);");   // leaves the DWG pre-check dialog open for the capture
         await Shot(w, Arg("--name", "shot"));
         if (Arg("--texts") == "1") { var t = await JS(w, "return nx.test.texts();"); File.WriteAllText(Path.Combine(OutDir, Arg("--name", "shot") + "_texts.json"), t.GetRawText()); }
     }
@@ -163,6 +164,16 @@ public static class SelfTest
         // searchable: the edited Korean TEXT and the dimension value must come back from pdftotext
         var ptt = PdfToText(pdf);
         GB("pdf_text_searchable", ptt == null || (ptt.Contains("한글수정TEXT") && ptt.Contains("100")), ptt == null ? "pdftotext not found → SKIP" : $"extracted {ptt.Length} chars, 한글수정TEXT={ptt.Contains("한글수정TEXT")} 100={ptt.Contains("100")}");
+        // G2 save dialog, path 1: a clean generated drawing → "DWG 저장 가능", DWG is the default button (unless plan B)
+        await Open(w, sample);
+        var ck1 = await JS(w, "const r = await nx.test.saveCheck(true); nx.test.closeModal(); return r;");
+        string want1 = Core.Dwg.R2000Check.PlanB ? "dxf" : "dwg";
+        GB("save_dialog_dwg_ok_path", ck1.ValueKind == JsonValueKind.Object && ck1.GetProperty("primary").GetString() == want1, ck1.GetRawText());
+        // path 2: a drawing with a blocking reason (a raster IMAGE entity, which made u06's DWG unreadable in ODA) → "DXF 권장", DXF default, DWG marked beta
+        e.Edit(ed => ed.Add(new Core.Model.Unknown { Name = "IMAGE", Layer = "0" }, "0", "Raster image"));
+        var ck2 = await JS(w, "const r = await nx.test.saveCheck(true); nx.test.closeModal(); return r;");
+        GB("save_dialog_dxf_recommended_path", ck2.ValueKind == JsonValueKind.Object && ck2.GetProperty("primary").GetString() == "dxf" && ck2.GetProperty("beta").GetBoolean() && ck2.GetProperty("rows").GetInt32() >= 1, ck2.GetRawText());
+        e.Undo();
         // design gate: no accent borders
         var acc = await JS(w, "return nx.test.accentScan();"); G("accent_border_count", acc.GetDouble(), "", "<=0");
         await JS(w, "await nx.test.key('Escape'); return true;");

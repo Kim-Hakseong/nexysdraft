@@ -9,7 +9,7 @@ class Bridge {
   readonly hosted: boolean;
   constructor() {
     this.hosted = !!(window.chrome && window.chrome.webview);
-    if (this.hosted) window.chrome.webview.addEventListener('message', (e: any) => this.onMessage(e.data));
+    if (this.hosted) window.chrome.webview.addEventListener('message', (e: any) => this.onMessage(typeof e.data === 'string' ? JSON.parse(e.data) : e.data));   // doc messages arrive as strings (PostWebMessageAsString: no JSON validation on the UI thread)
   }
   on(ev: string, fn: Listener) { const l = this.listeners.get(ev) || []; l.push(fn); this.listeners.set(ev, l); }
   private emit(ev: string, msg: any) { for (const fn of this.listeners.get(ev) || []) { try { fn(msg); } catch (err) { console.error(err); } } }

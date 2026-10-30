@@ -76,7 +76,7 @@ public static class MTextParser
                         foreach (var p in parts.Skip(1)) { if (p.StartsWith("b")) st.Bold = p.EndsWith("1"); else if (p.StartsWith("i")) st.Italic = p.EndsWith("1"); }
                         break;
                     }
-                case 'H': { Flush(); double v = DxfCodec.ParseDouble(arg.TrimEnd('x', 'X')); if (arg.EndsWith("x", StringComparison.OrdinalIgnoreCase)) st.HeightFactor *= v; else st.HeightFactor = v; st.HeightFactor = st.HeightFactor <= 0 ? 1 : st.HeightFactor; st.HeightFactorIsAbsolute = !arg.EndsWith("x", StringComparison.OrdinalIgnoreCase); break; }
+                case 'H': { Flush(); double v = DxfCodec.ParseDouble(arg.TrimEnd('x', 'X')); if (arg.EndsWith("x", StringComparison.OrdinalIgnoreCase)) st.HeightFactor *= v; else st.HeightFactor = v; st.HeightFactor = st.HeightFactor <= 0 ? 1 : st.HeightFactor; if (!arg.EndsWith("x", StringComparison.OrdinalIgnoreCase)) st.HeightFactorIsAbsolute = true; break; }   // \H1.5x; after an absolute \H4; stays absolute (4 × 1.5 = 6 world units)
                 case 'W': { Flush(); double v = DxfCodec.ParseDouble(arg.TrimEnd('x', 'X')); st.WidthFactor = v > 0 ? v : 1; break; }
                 case 'C': { Flush(); st.Color = DxfCodec.ParseInt(arg); break; }
                 case 'T': { Flush(); double v = DxfCodec.ParseDouble(arg.TrimEnd('x', 'X')); st.Tracking = v > 0 ? v : 1; break; }

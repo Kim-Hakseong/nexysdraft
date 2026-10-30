@@ -44,7 +44,7 @@ public static class Samples
             if (File.Exists(dwg) && File.Exists(dxf)) continue;
             var doc = make();
             DxfWriter.Write(doc, dxf, DxfWriter.Mode.R2000);
-            if (name == "g05_100k") continue;   // 100k entities: dxf2dwg 0.14 does not finish in 5 min (docs/blockers.md) — DXF only (render/open gate)
+            if (name == "g05_100k") continue;   // DXF only (render/open gate). dxf2dwg 0.14 did not finish in 5 min; the draft3 master build writes it in 6.4 s and ODA reads it (docs/libredwg.md) — kept out of the per-DWG gates for test time
             var r = LibreDwg.DxfToDwg(dxf, dwg, "r2000", 180000);
             if (!r.Ok) File.WriteAllText(Path.Combine(GenDir, name + ".dxf2dwg.err.txt"), r.Stderr);
         }
@@ -139,7 +139,7 @@ public static class Samples
     public static Document Curves()
     {
         var d = NewDoc();
-        var sp = new Spline { Degree = 3, Flags = 8 }; sp.Control.AddRange(new[] { new V3(0, 0), new V3(20, 40), new V3(60, -20), new V3(100, 30), new V3(140, 0) }); sp.Knots.AddRange(new double[] { 0, 0, 0, 0, 0.4, 0.7, 1, 1, 1, 1 }); Add(d, sp);
+        var sp = new Spline { Degree = 3, Flags = 8 }; sp.Control.AddRange(new[] { new V3(0, 0), new V3(20, 40), new V3(60, -20), new V3(100, 30), new V3(140, 0) }); sp.Knots.AddRange(new double[] { 0, 0, 0, 0, 0.5, 1, 1, 1, 1 });   // control + degree + 1 knots (draft3 G0: the old 10-knot spline was invalid and ODA dropped it) Add(d, sp);
         for (int i = 0; i < 20; i++) { var pl = new LwPolyline { ConstWidth = 0.5 * (i % 4) }; for (int k = 0; k < 8; k++) pl.Vertices.Add(new PVertex { X = i * 20 + k * 2, Y = 100 + Math.Sin(k + i) * 10, Bulge = k % 3 == 0 ? 0.4 : 0, StartWidth = 0.5 * (i % 4), EndWidth = 0.5 * (i % 4) }); Add(d, pl, "WALL"); }
         for (int i = 0; i < 10; i++) Add(d, new Arc { Center = new V3(i * 25, 200), Radius = 10, StartDeg = i * 36, EndDeg = i * 36 + 200 });
         for (int i = 0; i < 10; i++) Add(d, new Ellipse { Center = new V3(i * 25, 250), Major = new V3(10 * Math.Cos(i), 10 * Math.Sin(i)), Ratio = 0.3 + 0.05 * i, StartParam = 0, EndParam = i % 2 == 0 ? Math.PI * 2 : 2.5 });

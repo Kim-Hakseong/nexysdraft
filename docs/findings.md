@@ -65,3 +65,26 @@
 - `--selftest` 전 항목 PASS(UI 정지 0 — 감시자를 페이지 준비 뒤에 시작), `--skilltest` 8/8, `--stress --iter 40`: 20→40회 +20.8 MB(관문 100 MB PASS), 정지 1회 439 ms(테스트 스위트의 dxf2dwg와 동시 실행 중).
 - dist: app/dist/NexysDraft.exe 211 MB + tools/libredwg + wwwroot, `--shot`·`--script` 스모크 OK.
 - F5: 새 clone(github.com/Kim-Hakseong/nexysdraft, private) 빌드 → dotnet test 26/26(15 s) → --selftest PASS → 태그 v0.2.0-draft2. 추적 파일에 사용자 도면·회사명 0건.
+
+## 2026-10-30 draft3
+
+### LibreDWG (G0) — docs/libredwg.md, docs/libredwg-build.md
+- MSYS2(winget) + mingw64로 LibreDWG master `33bfac15`(0.14.8679) 정적 빌드 1회차 성공. 패치 없음. 번들 교체.
+- ODA 대리 관문(사용자 도면 7개): 0.14 **1/7**(u04 126 s, u02·u03·u05 300 s 초과) → master **6/7**, 최대 1.7 s(u03 10 MB). u05 0.67 s. 10만 엔티티 R2000 DXF(21.5 MB) 6.4 s, ODA 읽기 정상.
+- draft2에서 "dxf2dwg 0.14 결함(UNVERIFIED)"로 남긴 u01·u07 빈 출력의 원인은 **원본 ByLayer 선종류 핸들 `B`** (이분 탐색: 엔티티 0개로도 실패, LTYPE 항목 제거 시 통과, B만 바꾸면 통과). 0.14에서도 같은 수정으로 u01 통과. 라이터가 표준 선종류 3개에 새 핸들을 준다.
+- u06 실패는 IMAGE 1개(핸들 5F). g04 스플라인 소실은 표본의 매듭 수 오류(10개, 9개여야 함).
+
+### 공간·글꼴 (G1)
+- 7개 도면 모형/페이퍼 엔티티 수가 ODA와 일치(work/gates/g1_spaces.txt). u04는 페이퍼 스페이스 엔티티가 없다(ODA도 Layout1 빈 배치).
+- u04 "모형 뷰의 도곽"은 페이퍼 스페이스가 아니라, LibreDWG가 이름을 잃은 블록(LINE 2,255개)을 이름 "" 로 내보내고 INSERT도 "" 를 가리켜 8.6배로 그려진 것. 리더가 이름 없는 블록을 `*NONAME~n`으로 분리 → u04 범위 = 두 시트 범위(폭 비 1.129, 높이 비 1.000, work/gates/g1_u04_extents.txt).
+- 현재 R2000 라이터(OBJECTS = 루트 사전)로 페이퍼 스페이스 엔티티가 dxf2dwg→ODA에서 보존됨(g06_paper 8/8, u05 2/2). LAYOUT 객체를 다시 넣을 필요 없음.
+- 글꼴 호환: 한글을 실제로 쓰는 스타일 중 PC에 없는 글꼴만 치환(u01 0, u02 0, u03 2, u04 3, u05 3, u06 1, u07 1; 치환 후 없는 글꼴 참조 0, work/gates/g1_fonts.txt).
+
+### 저장 정책 (G2)
+- 사전 점검의 "읽기 불가 예상"(IMAGE·R2000 이후 객체·시간 초과)이 ODA 결과와 **7/7 일치**(work/gates/g2_check.txt). 동적 블록(u02·u03)은 읽히지만 정책상 DXF 기본.
+- 이름 없는 블록·해석 불가 삽입은 막지 않고 손실 안내(라이터가 빼고, u04는 ODA 통과).
+
+### PDF (G3)
+- 용지 자동: 모델 플롯 설정 → 최근접 ISO, 없으면 A3. u01·u03·u04·u05·u07 A3 가로, u02·u06 A4 가로. 추출률 99.25~100 %, u04 2쪽, u05 10쪽(work/gates/g3_pdf.txt).
+- 사용자 도면의 용지상 글자 높이 중앙값 0.28~1.74 mm — "≥1.5 mm" 와 "A3" 를 함께 만족할 수 없다(blockers #18).
+- MTEXT 파서 결함: 절대 `\H4;` 뒤의 상대 `\H1.5x;`가 절대 표시를 지워 기본 높이의 6배로 그렸다(g02 "큰 글자"). 수정.
