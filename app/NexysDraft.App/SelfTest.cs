@@ -84,7 +84,9 @@ public static class SelfTest
     // ================================================================== --selftest (D5 user path)
     static async Task FullAsync(MainWindow w)
     {
-        string root = Root(); string sample = Arg("--open", Path.Combine(root, "samples", "gen", "g03_blocks_dims.dwg")); string user = Arg("--user", Directory.GetFiles(Path.Combine(root, "samples", "user"), "*.dwg").OrderBy(f => new FileInfo(f).Length).FirstOrDefault() ?? "");
+        string root = Root(); string sample = Arg("--open", Path.Combine(root, "samples", "gen", "g03_blocks_dims.dwg"));
+        string userDir = Path.Combine(root, "samples", "user");   // user drawings are never in the repository: a fresh clone has none → that part is skipped
+        string user = Arg("--user", Directory.Exists(userDir) ? Directory.GetFiles(userDir, "*.dwg").OrderBy(f => new FileInfo(f).Length).FirstOrDefault() ?? "" : "");
         GB("libredwg_available", LibreDwg.Available, LibreDwg.Dir ?? "missing");
         // 1) open a DWG (LibreDWG) — user sample with Korean text
         if (user != "")

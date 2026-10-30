@@ -135,12 +135,12 @@ public static class Bounds
             case Ellipse el: { var p = Tess.EllipseArc(el.Center, el.Major, el.Ratio, el.StartParam, el.EndParam); for (int i = 0; i < p.Count; i += 2) Add(p[i], p[i + 1]); break; }
             case LwPolyline p: foreach (var v in p.Vertices) Add(v.X, v.Y); break;
             case Polyline p: foreach (var v in p.Vertices) Add(v.X, v.Y); break;
-            case Text t: { double w = t.Height * t.WidthFactor * 0.8 * Math.Max(1, t.Value.Length); var a = t.Anchor; Add(a.X, a.Y); Add(a.X + w, a.Y + t.Height); Add(a.X - (t.HAlign >= 1 ? w : 0), a.Y - (t.VAlign >= 1 ? t.Height : 0)); break; }
+            case Text t: { double w = t.Height * t.WidthFactor * 1.2 * Math.Max(1, t.Value.Length); var a = t.Anchor; Add(a.X, a.Y); Add(a.X + w, a.Y + t.Height); Add(a.X - (t.HAlign >= 1 ? w : 0), a.Y - (t.VAlign >= 1 ? t.Height : 0)); break; }
             case MText m:
                 {
                     // width: the rect width when plausible, else the longest line (dxf2dwg round trips leave rect_width = 1.0)
                     var lines = MTextFmt.MTextParser.Parse(m.Value); int longest = lines.Count == 0 ? 1 : lines.Max(l => l.Plain.Length);
-                    double h = m.Height > 0 ? m.Height : 2.5; double w = m.Width >= h * 2 ? m.Width : Math.Max(1, longest) * h * 0.9; double hgt = Math.Max(1, lines.Count) * h * 1.667;
+                    double h = m.Height > 0 ? m.Height : 2.5; double w = m.Width >= h * 2 ? m.Width : Math.Max(1, longest) * h * 1.6; double hgt = Math.Max(1, lines.Count) * h * 1.667;   // 1.6·h per character: TrueType glyphs are set from the cap height, so a line is ~1.5–2× the "text height" per char
                     double r = m.RotationDeg * Math.PI / 180, cr = Math.Cos(r), sr = Math.Sin(r);
                     int col = (m.Attach - 1) % 3, row = (m.Attach - 1) / 3; double ox = col == 0 ? 0 : col == 1 ? -w / 2 : -w, oy = row == 0 ? -hgt : row == 1 ? -hgt / 2 : 0;
                     foreach (var (lx, ly) in new[] { (ox, oy), (ox + w, oy), (ox, oy + hgt), (ox + w, oy + hgt) }) Add(m.Pos.X + lx * cr - ly * sr, m.Pos.Y + lx * sr + ly * cr);
