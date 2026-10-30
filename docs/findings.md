@@ -64,3 +64,4 @@
 - F3 pdftotext: 11/12 ≥99 %(u06 96 %). g02 68.75 → 100 %(MTEXT 범위 추정).
 - `--selftest` 전 항목 PASS(UI 정지 0 — 감시자를 페이지 준비 뒤에 시작), `--skilltest` 8/8, `--stress --iter 40`: 20→40회 +20.8 MB(관문 100 MB PASS), 정지 1회 439 ms(테스트 스위트의 dxf2dwg와 동시 실행 중).
 - dist: app/dist/NexysDraft.exe 211 MB + tools/libredwg + wwwroot, `--shot`·`--script` 스모크 OK.
+- F5: 새 clone(github.com/Kim-Hakseong/nexysdraft, private) 빌드 → dotnet test 26/26(15 s) → --selftest PASS → 태그 v0.2.0-draft2. 추적 파일에 사용자 도면·회사명 0건.

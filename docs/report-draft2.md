@@ -69,7 +69,9 @@ TEXT·MTEXT 소실 0(읽힌 파일 전부), 한글 100 %(읽힌 파일 전부). 
 
 ## F5 실사용·저장소
 - 드래그앤드롭·Ctrl+S·수정 후 닫기 경고(draft1 유지), 최근 파일 10개.
-- 저장소: `.gitignore`(samples/user, work, app/dist, config/dev.json, node_modules, bin/obj, web/dist). 첫 커밋 120 파일, 회사명 문자열은 테스트 문자열·목업에서 치환(grep 0건, LibreDWG README의 "Downloads"만 업스트림 문장). 관문(새 clone → 빌드 → dotnet test → --selftest → 태그)은 아래 "F5 관문 결과".
+- 저장소: GitHub **Kim-Hakseong/nexysdraft (private)**, `.gitignore`(samples/user, work, app/dist, config/dev.json, node_modules, bin/obj, web/dist). 커밋 4개(a8641b7), 회사명·사용자 도면 문자열 `git grep` 0건(LibreDWG README의 "Downloads"만 업스트림 문장).
+- 관문(새 clone C:ea-work\draft\work\clone_check): `npm install && npm run build` → `dotnet build` App·Tests 오류 0 → `dotnet test` **26/26 통과(15 s; 사용자 도면·ODA 없는 환경에서는 해당 행 SKIP)** → clone 빌드의 `--selftest` exit 0(20 PASS, 사용자 도면 부분은 건너뜀) → 태그 **v0.2.0-draft2** 푸시.
+- 테스트 클래스는 순차 실행으로 바꿨다(병렬 실행 때 공유 샘플 파일 경쟁으로 clone에서 F1이 한 번 실패).
 
 ## §결정 필요
 1. **u06 같은 동적 블록 도면의 DWG 저장**: ODA가 여전히 거부. (a) 저장 대화상자에서 "이 도면은 DXF로 저장 권장" 경고로 끝낼지, (b) `*U` 표현 블록을 정적 블록으로 풀어 쓰는 변환을 다음 런에 할지.
