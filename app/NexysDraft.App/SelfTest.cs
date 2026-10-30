@@ -209,14 +209,17 @@ public static class SelfTest
     static async Task StressAsync(MainWindow w)
     {
         string root = Root(); int iter = int.Parse(Arg("--iter", "20")); var files = Directory.GetFiles(Path.Combine(root, "samples", "user"), "*.dwg").Concat(Directory.GetFiles(Path.Combine(root, "samples", "gen"), "*.dwg")).ToList();
-        Diag.ResetStats(); double m0 = Process.GetCurrentProcess().WorkingSet64 / 1048576.0; int errors = 0;
+        Diag.ResetStats(); double m0 = Process.GetCurrentProcess().WorkingSet64 / 1048576.0; int errors = 0; double m20 = double.NaN;
         for (int i = 0; i < iter; i++)
         {
             string f = files[i % files.Count];
             try { await Open(w, f); await JS(w, "await nx.test.zoomExtents(); await nx.test.pan(5); await nx.test.cmd('all'); await nx.test.key('Escape'); return true;"); w.Engine.Close(); await JS(w, "await nx.test.settle(50); return true;"); }
             catch (Exception ex) { errors++; L("iter " + i + " " + ex.Message); }
+            if (i == 19) { m20 = Process.GetCurrentProcess().WorkingSet64 / 1048576.0; L($"memory after 20 iterations {m20:F1} MB"); }
         }
         G("stress_iterations", iter, ""); G("stress_errors", errors, "", "<=0"); G("stress_ui_stalls_300ms", Diag.StallCount, "", "<=0"); G("stress_max_stall_ms", Diag.MaxStallMs, "ms");
-        G("stress_memory_delta_mb", Process.GetCurrentProcess().WorkingSet64 / 1048576.0 - m0, "MB", "<=100");
+        double mEnd = Process.GetCurrentProcess().WorkingSet64 / 1048576.0;
+        G("stress_memory_delta_from_start_mb", mEnd - m0, "MB");
+        if (!double.IsNaN(m20)) G("stress_memory_delta_20_to_40_mb", mEnd - m20, "MB", "<=100");   // draft2 gate: growth after the first open cycle (20 → 40 iterations) ≤ 100 MB
     }
 }

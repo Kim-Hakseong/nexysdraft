@@ -89,8 +89,8 @@ public sealed class Engine
         System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce; GC.Collect(2, GCCollectionMode.Optimized, false, true);
     }
 
-    /// <summary>dxf2dwg time estimate from the R2000 DXF size (measured 2026-10-29: 0.2 MB 2 s, 0.6 MB 109 s, 1.0 MB 278 s — superlinear, ≈ 2 + 250·MB²).</summary>
-    public static double EstimateDwgSeconds(long dxfBytes) { double mb = dxfBytes / 1048576.0; return 2 + 250 * mb * mb; }
+    /// <summary>dxf2dwg time estimate from the R2000 DXF size (measured 2026-10-30 on the R2000 DXF: 0.53 MB 2.4 s, 2.38 MB 38–59 s, 2.80 MB 79–125 s, 4.13 MB 128–205 s → ≈ 1 + 12·MB²).</summary>
+    public static double EstimateDwgSeconds(long dxfBytes) { double mb = dxfBytes / 1048576.0; return 1 + 12 * mb * mb; }
 
     /// <summary>Save as DXF (same version, verbatim for untouched parts, pure ASCII) or DWG (R2000 DXF → dxf2dwg in the background; status shows elapsed / estimate; cancellable).</summary>
     public async Task<bool> SaveAsync(string path)

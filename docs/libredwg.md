@@ -26,7 +26,9 @@
 | 4 | MTEXT text_height를 0으로 기록(자기 DXF 왕복에서도) | dwgread JSON | 문자열 앞 `\H<높이>;` 절대 높이 코드 |
 | 5 | MTEXT 코드 50 거부 | "Invalid DXF code 50 for MTEXT" | 11/21/31 X축 벡터로 |
 | 6 | BLOCK_RECORD 핸들 0 → 블록 소실 | "Unknown INSERT.block_header" | 핸들 0 → 새 핸들 |
-| 7 | 속도: 200 KB 2 s, 600 KB 95~109 s, 1.0 MB 278 s, 1.7 MB·21 MB 300 s 초과 | d1b/f2 관문 | 백그라운드 저장 + 경과/예상(≈2+250·MB²) + 취소. u03·10만 엔티티는 DWG 관문에서 SKIP |
+| 7 | 속도(R2000 DXF 크기 기준): 0.53 MB 2.4 s, 2.38 MB 38~59 s, 2.80 MB 79~125 s, 4.13 MB 128~205 s, u05(≈5 MB)·u03·10만 엔티티 300 s 초과 | d1b/f2 관문 | 백그라운드 저장 + 경과/예상(≈1+12·MB²) + 취소. u03·u05·10만 엔티티는 DWG 관문에서 SKIP/타임아웃 |
+| 7a | HATCH에 경계 원본 핸들(97 n + 330…)을 쓰면 "Unknown DXF code 330 for HATCH" → 객체 손상 | work/oda/exp5 v4b.log | R2000 출력은 97 0, 71(associative) 0 |
+| 7b | 사용자 도면(u01·u07)의 DWG는 ODA가 **오류 메시지 없이 0바이트**를 내놓는다. 엔티티 유형별 제거(11종)·테이블 재생성(LTYPE·STYLE·LAYER·VPORT)으로도 변화 없음(r2004/r14 출력은 미시험); LibreDWG 자신의 DXF→DWG(lib_u01)도 같은 결과 | work/oda/exp7·exp8·exp9 | **미해결(UNVERIFIED)** — dxf2dwg 0.14 자체의 실도면 처리 결함으로 추정. 생성 샘플·selftest(블록·치수·해치 포함)는 ODA 오류 0 |
 | 8 | u06(동적 블록·`*U` 표현 블록, AcAecLayerStandard xdata)은 OBJECTS 최소화·xdata 제거 후에도 "BlockBegin owner Id is invalid"·"Object improperly read" | work/oda/exp4 | 미해결(UNVERIFIED 원인) — R2000 손실 목록에 동적 블록 경고, DXF 저장 권장 |
 
 ## 그 밖에 알게 된 것

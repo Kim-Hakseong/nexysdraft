@@ -30,3 +30,30 @@
 - 10만 엔티티 열기 1.86 s(Server GC·QuickJitForLoops off, csproj에 고정), 팬·줌 0.6~1.4 ms.
 - 문서 교체 시 강제 gen2 GC(Server GC, 비동시)는 UI 정지 >300 ms로 나타난다 → 제거. Close()의 Optimized 수집만 유지.
 - 목업 vs 구현(tools/pixel_diff.py): 헤더 0.87·파일 레일 0.81·푸터 0.97 OK, 우측 레일 0.58·툴바 0.58·명령줄 0.67 DIFF(행 수·자리표시자 차이), 패널 열 경계 좌측 레일 2 px 차이.
+
+## 2026-10-30 draft2
+
+### ODA File Converter (개발 PC 검증 전용)
+- 27.1.0이 `C:\Program Files\ODA\ODAFileConverter 27.1.0\`에 있다(Program Files 탐색·레지스트리 Uninstall·시작 메뉴 .lnk 세 경로 모두 일치, where.exe에는 없음). config/dev.json에 기록, tools/oda.py·OdaGateTests가 사용. 더미 변환 DXF→DXF 1.2 s.
+- ODA는 폴더 단위 변환이며 `.err` 파일로 오류를 돌려준다. 읽기 실패 시 0바이트 출력 파일이 남는 경우가 있다(u01·u07 DWG 1차).
+
+### DXF 호환 (F1)
+- nanoCAD는 AC1015/AC1018/AC1024 DXF의 cp949 바이트 문자열을 "??"로 보인다(사용자 실측) → 라이터는 모든 비ASCII를 `\U+XXXX`로 쓰는 순수 ASCII 출력으로 바꿨다. ODA DXF→DXF 재변환: 사용자 도면 7개 + 생성 5개 + selftest 모두 읽기 오류 0, 엔티티 수·레이어 수(ODA가 추가하는 Defpoints 제외) 일치, 한글 문자열(글자만 비교) 동일(work/gates/f1_oda_dxf.txt).
+- ODA는 MTEXT 줄 끝 공백을 지우고 `\S1^2;`를 `\S1<U+FFF2>;`로 다시 쓴다. 치수가 있으면 Defpoints 레이어를 만든다.
+- nanoCAD "24/25": ODA 재변환에서는 25/25(INSERT 16·ATTRIB 16·DIMENSION 4·HATCH 1·LINE·CIRCLE·LWPOLYLINE·TEXT) — 빠진 엔티티 미특정(UNVERIFIED).
+
+### DWG 쓰기 (F2) — docs/libredwg.md 표
+- ODA는 LibreDWG 0.14 dxf2dwg의 기본 출력(LAYOUT/PLOTSETTINGS 포함)을 하나도 읽지 못한다. OBJECTS를 루트 DICTIONARY 하나로 줄이고 BLOCK_RECORD 340 링크를 빼면 읽는다(varE). nanoCAD RECOVER 원인("AcDbLayout ModelType flag invalid")과 같은 뿌리로 추정(UNVERIFIED — nanoCAD 재확인 필요).
+- 소스의 낮은 핸들(`*Paper_Space` ENDBLK 1F)이 dxf2dwg 내부 핸들과 충돌해 ODA가 0바이트를 낸다 → BLOCK/ENDBLK 핸들 재발급.
+- dxf2dwg는 엣지형 HATCH 경계를 버린다(폴리라인·타원 루프는 유지) → R2000 내보내기에서 엣지 루프를 폴리라인 루프로 테셀레이션. dxf2dwg 왕복 뒤 MTEXT rect_width가 1.0이 된다 → PDF·페이지 렌더는 폭 < 2×높이를 "줄바꿈 없음"으로.
+- draft1 리더 결함: HATCH 루프를 붙이지 않아 파일의 해치가 전부 경계 0개였다(nanoCAD 해치 미표시의 원인 일부). 수정.
+- u06(동적 블록) DWG는 우회 후에도 ODA "Object improperly read"(blockers #9). u03은 dxf2dwg 300 s 초과(SKIP).
+
+### PDF 내장 (F3)
+- 자체 PDF 1.4 라이터(Pdf/PdfWriter·TrueTypeFont·SheetDetector·DrawingPdf): 맑은 고딕(C:\Windows\Fonts\malgun.ttf, 13 MB) 글리프 제로잉 서브셋(CIDFontType2·Identity-H·ToUnicode), Flate 콘텐츠. dwg2spdf 의존 제거.
+- 시트 감지: 블록 인서트 ≥2(겹침 ≤5 %, 중심 포함 ≥60 %) 또는 같은 크기 사각형 반복. u05 9시트+rest 10쪽, u04 3쪽, u07 2쪽, 나머지 1쪽.
+- pdftotext 추출률(work/gates/f3_pdf.txt): u01 99.25 %, u02 100 %, u03 100 %, u04 99.75 %, u05 99.52 %, u06 96.0 %, u07 99.01 %, selftest 100 %. 1 MB 도면(u05) 2.1 s, 1.7 MB(u03) 1.7 s. PDF 크기 28 KB~943 KB.
+- Malgun Gothic OS/2 sCapHeight 기준 글꼴 크기 = 높이/CapHeightEm(≈0.72 em).
+
+### CLI·스킬 (F4)
+- `--script` 러너(ScriptRunner): 명령 19종, result.json(줄별 result/error/ms), exit 0/1/2, `AttachConsole`로 stdout. `--skilltest`: SKILL.md 예시 2 실행 → PDF 1쪽·텍스트 2 → pdftotext "600"·"2000" 발견, 0.63 s.

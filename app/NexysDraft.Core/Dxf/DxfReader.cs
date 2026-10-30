@@ -61,7 +61,7 @@ public sealed class DxfReader
             else
             {
                 string val;
-                if (IsStringCode(code)) { val = DxfCodec.Decode(new ReadOnlySpan<byte>(b, pos, e2 - pos), _cp, out bool u8); if (u8) _utf8Values++; else if (val.Any(ch => ch >= 0x80)) _cpValues++; }
+                if (IsStringCode(code)) { val = DxfCodec.Unescape(DxfCodec.Decode(new ReadOnlySpan<byte>(b, pos, e2 - pos), _cp, out bool u8)); if (u8) _utf8Values++; else if (val.Any(ch => ch >= 0x80)) _cpValues++; }
                 else { int a0 = pos, a1 = e2; while (a0 < a1 && b[a0] == ' ') a0++; while (a1 > a0 && b[a1 - 1] == ' ') a1--; val = a1 > a0 ? Encoding.ASCII.GetString(b, a0, a1 - a0) : ""; }
                 if (code != 999) _g.Add(new Group(code, val));
                 haveCode = false;

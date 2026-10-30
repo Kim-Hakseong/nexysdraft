@@ -136,7 +136,16 @@ public static class Bounds
             case LwPolyline p: foreach (var v in p.Vertices) Add(v.X, v.Y); break;
             case Polyline p: foreach (var v in p.Vertices) Add(v.X, v.Y); break;
             case Text t: { double w = t.Height * t.WidthFactor * 0.8 * Math.Max(1, t.Value.Length); var a = t.Anchor; Add(a.X, a.Y); Add(a.X + w, a.Y + t.Height); Add(a.X - (t.HAlign >= 1 ? w : 0), a.Y - (t.VAlign >= 1 ? t.Height : 0)); break; }
-            case MText m: { double w = m.Width > 0 ? m.Width : m.Height * 0.8 * 20; Add(m.Pos.X, m.Pos.Y); Add(m.Pos.X + w, m.Pos.Y - m.Height * 2); break; }
+            case MText m:
+                {
+                    // width: the rect width when plausible, else the longest line (dxf2dwg round trips leave rect_width = 1.0)
+                    var lines = MTextFmt.MTextParser.Parse(m.Value); int longest = lines.Count == 0 ? 1 : lines.Max(l => l.Plain.Length);
+                    double h = m.Height > 0 ? m.Height : 2.5; double w = m.Width >= h * 2 ? m.Width : Math.Max(1, longest) * h * 0.9; double hgt = Math.Max(1, lines.Count) * h * 1.667;
+                    double r = m.RotationDeg * Math.PI / 180, cr = Math.Cos(r), sr = Math.Sin(r);
+                    int col = (m.Attach - 1) % 3, row = (m.Attach - 1) / 3; double ox = col == 0 ? 0 : col == 1 ? -w / 2 : -w, oy = row == 0 ? -hgt : row == 1 ? -hgt / 2 : 0;
+                    foreach (var (lx, ly) in new[] { (ox, oy), (ox + w, oy), (ox, oy + hgt), (ox + w, oy + hgt) }) Add(m.Pos.X + lx * cr - ly * sr, m.Pos.Y + lx * sr + ly * cr);
+                    break;
+                }
             case Insert ins:
                 {
                     if (depth < 4 && doc.Blocks.TryGetValue(ins.Block, out var b))

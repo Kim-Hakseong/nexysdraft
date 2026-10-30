@@ -118,7 +118,7 @@ public sealed class DxfWriter
         // VPORT
         W(0, "TABLE"); W(2, "VPORT"); W(5, _tVport); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, 1);
         var vp = _doc.RawTables.FirstOrDefault(t => t.Name.Equals("VPORT", StringComparison.OrdinalIgnoreCase));
-        if (vp != null && vp.Entries.Count > 0) foreach (var e in vp.Entries) Raw(e);
+        if (false && vp != null && vp.Entries.Count > 0) foreach (var e in vp.Entries) Raw(e);   // R2000: VPORT regenerated
         else
         {
             var (mn, mx) = Extents();
@@ -131,7 +131,7 @@ public sealed class DxfWriter
         W(0, "TABLE"); W(2, "LTYPE"); W(5, _tLtype); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, _doc.Linetypes.Count + 3);
         var ltNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var n in new[] { "ByBlock", "ByLayer", "Continuous" }) { var l = _doc.Linetypes.FirstOrDefault(x => x.Name.Equals(n, StringComparison.OrdinalIgnoreCase)); if (l == null) { WriteLtype(new LineType { Name = n, Description = n == "Continuous" ? "Solid line" : "", Handle = _doc.NewHandle() }, _tLtype); ltNames.Add(n); } }
-        foreach (var l in _doc.Linetypes) { if (!ltNames.Add(l.Name)) continue; if (l.Raw != null) Raw(l.Raw); else WriteLtype(l, _tLtype); }
+        foreach (var l in _doc.Linetypes) { if (!ltNames.Add(l.Name)) continue; WriteLtype(l, _tLtype); }   // R2000: always regenerated — raw LibreDWG LTYPE/STYLE entries make dxf2dwg write a DWG that ODA rejects silently (0-byte output, work/oda/exp5 v7e)
         W(0, "ENDTAB");
         // LAYER
         W(0, "TABLE"); W(2, "LAYER"); W(5, _tLayer); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, _doc.Layers.Count + 1);
@@ -141,7 +141,7 @@ public sealed class DxfWriter
         // STYLE
         W(0, "TABLE"); W(2, "STYLE"); W(5, _tStyle); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, _doc.Styles.Count + 1);
         if (!_doc.Styles.Any(s => s.Name.Equals("Standard", StringComparison.OrdinalIgnoreCase))) WriteStyle(new TextStyle { Name = "Standard", Font = "txt", Handle = _doc.NewHandle() }, _tStyle);
-        foreach (var s in _doc.Styles) if (s.Raw != null) Raw(s.Raw); else WriteStyle(s, _tStyle);
+        foreach (var s in _doc.Styles) WriteStyle(s, _tStyle);
         W(0, "ENDTAB");
         W(0, "TABLE"); W(2, "VIEW"); W(5, _tView); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, 0); W(0, "ENDTAB");
         W(0, "TABLE"); W(2, "UCS"); W(5, _tUcs); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, 0); W(0, "ENDTAB");
@@ -264,7 +264,7 @@ public sealed class DxfWriter
     // ------------------------------------------------------------------ tables
     void WriteLayer(Layer l, string tableHandle)
     {
-        if (l.Raw != null && !l.Dirty) { Raw(l.Raw); return; }
+        if (l.Raw != null && !l.Dirty && _mode == Mode.Preserve) { Raw(l.Raw); return; }
         if (string.IsNullOrEmpty(l.Handle)) l.Handle = _doc.NewHandle();
         W(0, "LAYER"); W(5, l.Handle); W(330, tableHandle); W(100, "AcDbSymbolTableRecord"); W(100, "AcDbLayerTableRecord"); W(2, l.Name); W(70, l.Flags); W(62, l.Off ? -Math.Max(1, l.Color) : l.Color);
         if (l.TrueColor != null && _year >= 2004) W(420, l.TrueColor.Value);
@@ -381,7 +381,7 @@ public sealed class DxfWriter
                 }
             case Hatch h:
                 {
-                    W(100, "AcDbHatch"); P(10, new V3(0, 0, h.Elevation)); P(210, h.Normal); W(2, h.Pattern); W(70, h.Solid ? 1 : 0); W(71, h.Associative ? 1 : 0); W(91, h.Loops.Count);
+                    W(100, "AcDbHatch"); P(10, new V3(0, 0, h.Elevation)); P(210, h.Normal); W(2, h.Pattern); W(70, h.Solid ? 1 : 0); W(71, _mode == Mode.R2000 ? 0 : h.Associative ? 1 : 0); W(91, h.Loops.Count);
                     foreach (var loop in h.Loops)
                     {
                         if (_mode == Mode.R2000 && HatchAsPolylineLoops && !(loop.IsPolyline && loop.Edges.Count > 0 && loop.Edges[0].Type == 0))
@@ -415,7 +415,8 @@ public sealed class DxfWriter
                                 }
                             }
                         }
-                        W(97, loop.SourceHandles.Count); foreach (var sh in loop.SourceHandles) W(330, sh);
+                        if (_mode == Mode.R2000) W(97, 0);   // dxf2dwg 0.14: "Unknown DXF code 330 for HATCH" → corrupt object (ODA "Object improperly read") — no source boundary handles in R2000 output
+                        else { W(97, loop.SourceHandles.Count); foreach (var sh in loop.SourceHandles) W(330, sh); }
                     }
                     W(75, h.Style); W(76, h.PatternType); if (!h.Solid) { W(52, h.PatternAngle); W(41, h.PatternScale); W(77, h.DoubleFlag ? 1 : 0); }
                     bool tailHasSeed = h.Tail.Any(g => g.Code == 98);

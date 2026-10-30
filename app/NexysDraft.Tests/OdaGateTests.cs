@@ -53,6 +53,8 @@ public class OdaGateTests
     static List<string> Korean(Document d) => Compare.Texts(d).Select(t => new string(t.text.Where(ch => char.IsLetter(ch)).ToArray())).Where(t => t.Any(ch => ch is >= '가' and <= '힣')).OrderBy(t => t, StringComparer.Ordinal).ToList();
     /// <summary>ODA adds the Defpoints layer when a drawing has dimensions: not a difference.</summary>
     static int LayerCount(Document d) => d.Layers.Count(l => !l.Name.Equals("Defpoints", StringComparison.OrdinalIgnoreCase));
+    /// <summary>Layer names (minus Defpoints, case-insensitive) — the set must survive, a count may differ by what ODA adds.</summary>
+    static bool LayersSame(Document a, Document b) { var sa = a.Layers.Select(l => l.Name.ToUpperInvariant()).Where(n => n != "DEFPOINTS").ToHashSet(); var sb = b.Layers.Select(l => l.Name.ToUpperInvariant()).Where(n => n != "DEFPOINTS").ToHashSet(); return sa.IsSubsetOf(sb); }
 
     /// <summary>Entity signature list (type + rounded key coordinates) to find what vanished.</summary>
     static HashSet<string> Sigs(Document d) => Compare.Flatten(d, true).Select(e => (e.DxfName, Compare.Sig(e))).Where(x => x.Item2 != null).Select(x => x.DxfName + ":" + string.Join(",", x.Item2!.Take(4).Select(v => Math.Round(v, 3).ToString(System.Globalization.CultureInfo.InvariantCulture)))).ToHashSet();
@@ -78,7 +80,7 @@ public class OdaGateTests
             if (outp == null) { allOk = false; lines.Add($"FAIL\t{Path.GetFileName(f)}\tODA: {err}"); continue; }
             var b = DxfReader.Read(outp);
             var ca = Counts(a); var cb = Counts(b); var ka = Korean(a); var kb = Korean(b);
-            bool countsOk = ca.All(kv => cb.GetValueOrDefault(kv.Key) == kv.Value), layersOk = LayerCount(a) == LayerCount(b), koreanOk = ka.SequenceEqual(kb);
+            bool countsOk = ca.All(kv => cb.GetValueOrDefault(kv.Key) == kv.Value), layersOk = LayersSame(a, b), koreanOk = ka.SequenceEqual(kb);
             bool ok = string.IsNullOrEmpty(err) && countsOk && layersOk && koreanOk && ascii; allOk &= ok;
             lines.Add($"{(ok ? "PASS" : "FAIL")}\t{Path.GetFileName(f)}\tODA {ms:F0} ms\terr [{err}]\tascii {ascii}\tlayers {a.Layers.Count}/{b.Layers.Count}\tkorean {ka.Count}/{kb.Count} same {koreanOk}\tcounts {(countsOk ? "same" : "DIFF")}: {CountsText(ca)} | {CountsText(cb)}");
             if (!koreanOk) lines.Add("\t\tkorean diff: " + string.Join(" | ", ka.Except(kb).Take(5)) + " ⇐⇒ " + string.Join(" | ", kb.Except(ka).Take(5)));
@@ -112,7 +114,7 @@ public class OdaGateTests
             int ta = a.Entities.Count(e => e is Text t && !t.IsAttrib) + a.Entities.OfType<MText>().Count(), tb = b.Entities.Count(e => e is Text t && !t.IsAttrib) + b.Entities.OfType<MText>().Count();
             int dimA = a.Entities.OfType<Dimension>().Count(), dimB = b.Entities.OfType<Dimension>().Count(), hA = a.Entities.OfType<Hatch>().Count(), hB = b.Entities.OfType<Hatch>().Count();
             var msA = a.Entities.Where(e => !e.PaperSpace && e is not Unknown).GroupBy(e => e.DxfName).ToDictionary(g => g.Key, g => g.Count()); var msB = b.Entities.Where(e => !e.PaperSpace && e is not Unknown).GroupBy(e => e.DxfName).ToDictionary(g => g.Key, g => g.Count());
-            bool countsOk = msA.All(kv => msB.GetValueOrDefault(kv.Key) == kv.Value), layersOk = LayerCount(a) == LayerCount(b), textOk = ta == tb, koreanOk = ka.SequenceEqual(kb);
+            bool countsOk = msA.All(kv => msB.GetValueOrDefault(kv.Key) == kv.Value), layersOk = LayersSame(a, b), textOk = ta == tb, koreanOk = ka.SequenceEqual(kb);
             bool ok = string.IsNullOrEmpty(err) && countsOk && layersOk && textOk && koreanOk; if (ok) pass++; else fail++;
             lines.Add($"{(ok ? "PASS" : "FAIL")}\t{Path.GetFileName(f)}\tdxf2dwg {toDwg:F0} ms\tODA {ms:F0} ms\terr [{err}]\tlayers {a.Layers.Count}/{b.Layers.Count}\ttext+mtext {ta}/{tb}\tdim {dimA}/{dimB} hatch {hA}/{hB}\tkorean {ka.Count}/{kb.Count} same {koreanOk}\tmodel counts {(countsOk ? "same" : "DIFF")}: {CountsText(msA)} | {CountsText(msB)}{(warn.Count > 0 ? "\twriter: " + string.Join("; ", warn) : "")}");
             if (!countsOk || !textOk)
