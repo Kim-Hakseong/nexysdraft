@@ -57,3 +57,10 @@
 
 ### CLI·스킬 (F4)
 - `--script` 러너(ScriptRunner): 명령 19종, result.json(줄별 result/error/ms), exit 0/1/2, `AttachConsole`로 stdout. `--skilltest`: SKILL.md 예시 2 실행 → PDF 1쪽·텍스트 2 → pdftotext "600"·"2000" 발견, 0.63 s.
+
+### 최종 관문 (2026-10-30 저녁)
+- F1 ODA DXF→DXF: 12/12 PASS(읽기 오류 0, 엔티티 동일, 레이어 집합 동일, 한글 글자 동일). 리더가 모든 문자열의 U+ 이스케이프를 읽을 때 풀도록 바꿈(레이어·블록명 포함).
+- F2 ODA DWG→DXF: u02(238 s)·u04(136 s, HATCH 54/54)·g01·g02·g03·selftest PASS. u01 0바이트(무오류), u06·u07 BlockBegin owner invalid, u05 타임아웃, u03 SKIP, g04 SPLINE 소실.
+- F3 pdftotext: 11/12 ≥99 %(u06 96 %). g02 68.75 → 100 %(MTEXT 범위 추정).
+- `--selftest` 전 항목 PASS(UI 정지 0 — 감시자를 페이지 준비 뒤에 시작), `--skilltest` 8/8, `--stress --iter 40`: 20→40회 +20.8 MB(관문 100 MB PASS), 정지 1회 439 ms(테스트 스위트의 dxf2dwg와 동시 실행 중).
+- dist: app/dist/NexysDraft.exe 211 MB + tools/libredwg + wwwroot, `--shot`·`--script` 스모크 OK.

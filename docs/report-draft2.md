@@ -4,7 +4,7 @@ run-draft2.md를 11:10에 시작해 자율로 진행한 결과. 수치는 전부
 
 ## 요약
 - **DXF**: 순수 ASCII(`\U+XXXX`) 출력으로 바꿔 nanoCAD의 "??"를 없앴다(ODA 재변환 관문: 사용자 7 + 생성 5 + selftest 전부 읽기 오류 0, 엔티티·레이어 수 일치, 한글 동일).
-- **DWG**: ODA·nanoCAD가 LibreDWG 0.14 출력을 거부하던 원인을 변형 실험으로 좁혀(OBJECTS의 LAYOUT/사전 객체) **OBJECTS를 루트 사전 하나로** 줄였고, 핸들 충돌(0바이트 출력)·엣지형 해치 소실·draft1 리더의 해치 루프 누락을 고쳤다. 저장은 백그라운드 + 경과/예상 시간 + 취소. LibreDWG 재빌드는 툴체인 부재로 못 했다(blockers #8).
+- **DWG**: ODA·nanoCAD가 LibreDWG 0.14 출력을 거부하던 원인을 변형 실험으로 좁혀(OBJECTS의 LAYOUT/사전 객체, HATCH의 330 경계 핸들, 낮은 핸들 충돌, 원문 LTYPE/STYLE 엔트리) **OBJECTS를 루트 사전 하나로** 줄이고 테이블·핸들을 재생성해 **u02·u04와 생성 샘플·selftest는 ODA 오류 0**(해치 54/54, 치수, 한글 100 %)이 됐다. u01·u06·u07은 dxf2dwg 자체 결함으로 남았고(UNVERIFIED), u03·u05는 속도. 저장은 백그라운드 + 경과/예상 시간(≈1+12·MB² s) + 취소. LibreDWG 재빌드는 툴체인 부재로 못 했다(blockers #8).
 - **PDF**: dwg2spdf 의존을 없애고 자체 PDF 1.4 라이터(벡터 + 맑은 고딕 서브셋 실제 텍스트, 시트 자동 분할, 시트별 파일)를 넣었다. pdftotext 추출률 사용자 도면 6/7 ≥99 %(u06 96 %), u05 10쪽 2.1 s.
 - **CLI/스킬**: `NexysDraft.exe --script job.txt --out dir --json`(명령 19종, result.json, exit code), skills/nexysdraft/SKILL.md, `--skilltest` PASS.
 - **저장소**: GitHub Kim-Hakseong/nexysdraft(private), 사용자 도면·회사명 0건, 태그 v0.2.0-draft2(§F5).
@@ -14,8 +14,8 @@ run-draft2.md를 11:10에 시작해 자율로 진행한 결과. 수치는 전부
 |---|---|---|
 | F0 ODA 탐색 | 완료 | 27.1.0, 세 경로 일치 |
 | F1 DXF 라이터 호환 | 완료 | 24/25는 ODA에서 재현 불가(UNVERIFIED) |
-| F2 DWG 쓰기 | 완료(조건부) | u03 SKIP(속도), u06 UNVERIFIED(동적 블록) |
-| F3 PDF 내장 | 완료 | u06 96 %, 생성 샘플 g02는 dxf2dwg 왕복 산물(MTEXT 폭 1.0) 때문에 68 % → 폭 보정 후 재측정 §F3 |
+| F2 DWG 쓰기 | 부분 완료 | ODA 오류 0: u02·u04 + 생성 3 + selftest. u01·u06·u07 dxf2dwg 결함(UNVERIFIED), u03·u05 속도, g04 SPLINE 소실 |
+| F3 PDF 내장 | 완료 | 12개 중 11개 ≥99 %(u06 96 %: MTEXT 줄바꿈 1건) |
 | F4 CLI + 스킬 | 완료 | |
 | F5 실사용·저장소 | 완료 | |
 
@@ -45,13 +45,22 @@ run-draft2.md를 11:10에 시작해 자율로 진행한 결과. 수치는 전부
 - **저장 UX**: `SaveAsync`가 R2000 DXF를 쓴 뒤 크기로 예상 시간(≈2+250·MB² s)을 계산, 0.5 s마다 상태줄에 "경과 / ~예상", 푸터 CANCEL SAVE 알약 → 프로세스 kill. UI 스레드는 기다리지 않는다(Task.Run).
 - **LibreDWG git 최신**: Windows 아티팩트 없음·CI 실패·네이티브 gcc 없음 → 재측정 불가(blockers #8). 버전표는 docs/libredwg.md.
 
-| 파일 | dxf2dwg | ODA 읽기 | 레이어 | TEXT+MTEXT | DIM / HATCH | 한글 | 모델 엔티티 수 |
-|---|---|---|---|---|---|---|---|
-| (F2 관문 최종 수치는 아래 "F2 관문 결과" 절에 그대로 붙인다) | | | | | | | |
+| 파일 | dxf2dwg | ODA 읽기 | 레이어 | TEXT+MTEXT | DIM / HATCH | 한글 | 모델 엔티티 수 | 판정 |
+|---|---|---|---|---|---|---|---|---|
+| u01 (1,213) | 2.4 s | 오류 메시지 없이 **0바이트 출력** | — | — | — | — | — | FAIL (UNVERIFIED, libredwg.md 7b) |
+| u02 (37 + 블록 1194 INSERT) | 238 s | 오류 0 | 17/17 | 18/18 | 0/0 · 0/0 | 2/2 동일 | 동일 | **PASS** |
+| u03 (25,652) | > 300 s | — | | | | | | SKIP(속도) |
+| u04 (3,757) | 136 s | 오류 0 | 52/52 | 517/517 | 0/0 · **54/54** | 74/74 동일 | 동일 | **PASS** |
+| u05 (18,833) | 타임아웃 300 s | — | | | | | | FAIL(속도) |
+| u06 (722, 동적 블록·IMAGE) | 2.0 s | "BlockBegin owner Id is invalid" + "Object improperly read" | | | | | | FAIL (blockers #9) |
+| u07 (2,984) | 64 s | "BlockBegin owner Id is invalid" | | | | | | FAIL (UNVERIFIED) |
+| g01·g02·g03·selftest | 0.1 s | 오류 0 | 동일(+Defpoints) | 동일 | 3/3 · 1/1 | 동일 | 동일 | **PASS** (블록·치수·해치·한글 포함) |
+| g04 곡선 | 0.1 s | 오류 0 | 4/4 | — | 0/0 · 1/1 | — | SPLINE 1→0 | FAIL (dxf2dwg가 SPLINE을 버림, UNVERIFIED) |
+TEXT·MTEXT 소실 0(읽힌 파일 전부), 한글 100 %(읽힌 파일 전부). u01·u06·u07의 원인은 엔티티 유형별 제거·테이블 재생성 실험으로도 좁혀지지 않았고 LibreDWG 자신의 DXF→DWG도 같은 증상이라 dxf2dwg 0.14의 실도면 처리 결함으로 본다(UNVERIFIED). nanoCAD는 ODA보다 관대할 수 있어 §사용자 확인에 파일을 올린다.
 
 ## F3 PDF 내장 (work/gates/f3_pdf.txt)
 - 구현: `Core/Pdf/TrueTypeFont`(cmap 4/12·hmtx·loca/glyf·OS/2 sCapHeight, 글리프 제로잉 서브셋 + 합성 글리프 추적), `PdfWriter`(PDF 1.4, Flate, Type0/CIDFontType2/Identity-H, ToUnicode bfchar, W 배열), `SheetDetector`(dwg2spdf 규칙: 프레임 블록 ≥2·겹침 ≤5 %·중심 포함 ≥60 % / 같은 크기 사각형 반복 / 없으면 1장, 읽기 순서 행→열, rest 페이지), `DrawingPdf`(A3 가로 fit, 인쇄 색(7→검정, 밝은 색 어둡게), 선가중치 mm/100, TEXT 정렬 9종·회전·폭 비율, MTEXT 줄·attach·폭 줄바꿈, 해치 솔리드 채움/패턴 경계, 블록·치수 블록 재귀).
-- 결과: u01 1쪽 99.25 % 354 ms · u02 1쪽 100 % · u03 1쪽 100 % 1.7 s · u04 3쪽(감지) 99.75 % · u05 10쪽(9시트+rest, 감지) 99.52 % 2.1 s · u06 1쪽 96.0 % · u07 2쪽(감지) 99.01 % · selftest 100 %. 1 MB 도면(u05) ≤5 s PASS. 누락 예: "CAPA:713m/hr x2EA"(줄바꿈/특수문자), u06 "투명케이스(케이스가 있는 버튼 사용 가능)"(MTEXT 줄바꿈 뒤 pdftotext 순서).
+- 결과(최종 실행): u01 1쪽 99.25 % 257 ms · u02 100 % · u03 100 % 1.5 s · u04 3쪽(감지) 99.75 % · u05 10쪽(9시트+rest) 99.52 % 1.9 s · u06 96.0 % · u07 2쪽(감지) 99.26 % · g01~g04·selftest 100 %. 1 MB 도면(u05) ≤5 s PASS. 생성 샘플 g02는 MTEXT 범위 추정 수정(dxf2dwg 왕복 뒤 rect_width 1.0) 뒤 68.75 → 100 %. 누락 예: "CAPA:713m/hr x2EA"(줄바꿈/특수문자), u06 "투명케이스(케이스가 있는 버튼 사용 가능)"(MTEXT 줄바꿈 뒤 pdftotext 순서).
 - 셀프테스트: `pdf_text_searchable` — 편집한 "한글 수정 TEXT"와 치수 "100"을 pdftotext가 찾는다(PASS). 캡처 docs/screens/20~22.
 
 ## F4 CLI + 스킬

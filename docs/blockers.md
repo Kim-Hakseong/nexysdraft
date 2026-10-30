@@ -17,4 +17,6 @@
 | 9 | F2 | u06(동적 블록 `*U` 표현 블록 + AcAecLayerStandard xdata) DWG는 우회 후에도 ODA "Object improperly read" | work/oda/exp4 (xdata 제거 변형 포함) | UNVERIFIED 원인. R2000 손실 목록에 동적 블록 경고 유지, 이런 도면은 DXF 저장 권장 |
 | 10 | F2 | u03(1.7 MB) dxf2dwg 300 s 초과 — DWG 관문 SKIP | d1b/f2 | 저장은 가능하나 수 분(백그라운드·취소 가능). 예상 시간 표시 |
 | 11 | F1 | nanoCAD "24/25 엔티티" — ODA 재변환(DXF→DXF, DWG→DXF 모두)에서는 25/25로 빠진 엔티티를 특정하지 못함 | work/oda/out1, f1 관문 | UNVERIFIED. §사용자 확인에 "nanoCAD에서 빠진 엔티티 유형" 요청 |
-| 12 | F3 | 생성 샘플 g02 MTEXT 줄이 pdftotext에서 일부 빠짐(68.75 %) — 원인 조사 중(폰트 run·줄바꿈) | work/gates/f3_pdf.txt | 사용자 도면 7개는 96~100 %(u06 1건만 96 %) |
+| 12 | F3 | 생성 샘플 g02 MTEXT가 pdftotext에서 빠짐(68.75 %) — dxf2dwg 왕복 뒤 rect_width 1.0 때문에 MTEXT 범위 추정이 좁아 페이지 밖으로 나간 것 | work/gates/f3_pdf.txt, pymupdf 좌표 | 범위 추정을 긴 줄 기준으로 바꿔 100 %. 남은 FAIL은 u06 96 %(MTEXT 1건 줄바꿈 순서) |
+| 13 | F2 | u01·u07 DWG: ODA가 오류 없이 0바이트, u06·u07: "BlockBegin owner Id is invalid" — 엔티티 유형 11종 제거·LTYPE/STYLE/LAYER/VPORT 재생성·xdata 제거로도 변화 없음, LibreDWG 자신의 DXF→DWG도 동일 | work/oda/exp5~exp8 | UNVERIFIED(dxf2dwg 0.14 결함 추정). u02·u04·생성 샘플·selftest는 PASS. nanoCAD 수동 확인 요청 |
+| 14 | F2 | dxf2dwg가 SPLINE을 버린다(g04 1→0) | f2 관문 | UNVERIFIED. 손실 목록에 SPLINE 경고 추가는 백로그 |

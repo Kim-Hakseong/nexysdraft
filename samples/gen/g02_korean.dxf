@@ -27,7 +27,7 @@ $EXTMIN
  10
 0.0
  20
--8.0
+-20.004
  30
 0.0
   9
@@ -505,7 +505,7 @@ $SPLINESEGS
   9
 $HANDSEED
   5
-134
+138
   9
 $SURFTAB1
  70
@@ -951,7 +951,7 @@ AcDbViewportTableRecord
  12
 160.0
  22
-58.5
+52.498
  13
 0.0
  23
@@ -977,7 +977,7 @@ AcDbViewportTableRecord
  37
 0.0
  40
-146.3
+159.5044
  41
 1.5
  42
@@ -1410,8 +1410,6 @@ AcDbSymbolTableRecord
 AcDbBlockTableRecord
   2
 *Model_Space
-340
-12B
   0
 BLOCK_RECORD
   5
@@ -1424,8 +1422,6 @@ AcDbSymbolTableRecord
 AcDbBlockTableRecord
   2
 *Paper_Space
-340
-12C
   0
 ENDTAB
   0
@@ -1437,7 +1433,7 @@ BLOCKS
   0
 BLOCK
   5
-108
+133
 330
 107
 100
@@ -1463,7 +1459,7 @@ AcDbBlockBegin
   0
 ENDBLK
   5
-109
+134
 330
 107
 100
@@ -1475,7 +1471,7 @@ AcDbBlockEnd
   0
 BLOCK
   5
-10B
+135
 330
 10A
 100
@@ -1503,7 +1499,7 @@ AcDbBlockBegin
   0
 ENDBLK
   5
-10C
+136
 330
 10A
 100
@@ -1541,7 +1537,7 @@ AcDbText
  40
 5.0
   1
-고온고압 시험설비
+\U+ACE0\U+C628\U+ACE0\U+C555 \U+C2DC\U+D5D8\U+C124\U+BE44
   7
 KOR
 100
@@ -1567,7 +1563,7 @@ AcDbText
  40
 5.0
   1
-압력 전송기 PT-101
+\U+C555\U+B825 \U+C804\U+C1A1\U+AE30 PT-101
   7
 Standard
 100
@@ -1593,7 +1589,7 @@ AcDbText
  40
 5.0
   1
-밸브 (V-12) 열림
+\U+BC38\U+BE0C (V-12) \U+C5F4\U+B9BC
   7
 KOR
 100
@@ -1619,7 +1615,7 @@ AcDbText
  40
 5.0
   1
-제어반 배선도
+\U+C81C\U+C5B4\U+BC18 \U+BC30\U+C120\U+B3C4
   7
 Standard
 100
@@ -1645,7 +1641,7 @@ AcDbText
  40
 5.0
   1
-주의: 고전압
+\U+C8FC\U+C758: \U+ACE0\U+C804\U+C555
   7
 KOR
 100
@@ -1671,7 +1667,7 @@ AcDbText
  40
 5.0
   1
-온도 ±0.5℃
+\U+C628\U+B3C4 \U+00B10.5\U+2103
   7
 Standard
 100
@@ -1697,7 +1693,7 @@ AcDbText
  40
 5.0
   1
-직경 Ø25 mm
+\U+C9C1\U+ACBD \U+00D825 mm
   7
 KOR
 100
@@ -1723,7 +1719,7 @@ AcDbText
  40
 5.0
   1
-한글 TEXT
+\U+D55C\U+AE00 TEXT
   7
 Standard
 100
@@ -1749,7 +1745,7 @@ AcDbText
  40
 5.0
   1
-맑은 고딕 폴백
+\U+B9D1\U+C740 \U+ACE0\U+B515 \U+D3F4\U+BC31
   7
 KOR
 100
@@ -1775,7 +1771,7 @@ AcDbText
  40
 5.0
   1
-㈜디에스아이
+\U+321C\U+B125\U+C2DC\U+C2A4\U+D14C\U+D06C
   7
 Standard
 100
@@ -1807,7 +1803,7 @@ AcDbMText
  72
 1
   1
-{\fGulimChe|b1|i0|c129|p49;한글 MTEXT 첫 줄}\P{\f맑은 고딕|b0|i0|c129|p50;두 번째 줄 \U+2460 \U+00B1 0.5}\P세 번째 {\H1.5x;큰 글자}
+\H4.0;{\fGulimChe|b1|i0|c129|p49;\U+D55C\U+AE00 MTEXT \U+CCAB \U+C904}\P{\f\U+B9D1\U+C740 \U+ACE0\U+B515|b0|i0|c129|p50;\U+B450 \U+BC88\U+C9F8 \U+C904 \U+2460 \U+00B1 0.5}\P\U+C138 \U+BC88\U+C9F8 {\H1.5x;\U+D070 \U+AE00\U+C790}
   7
 Standard
  11
@@ -1847,7 +1843,7 @@ AcDbMText
  72
 1
   1
-{\fHeadline R|b0|i0|c129|p18;(주)디에스아이}\P분수 \S1^2; 끝
+\H4.0;{\fHeadline R|b0|i0|c129|p18;(\U+C8FC)\U+B125\U+C2DC\U+C2A4\U+D14C\U+D06C}\P\U+BD84\U+C218 \S1^2; \U+B05D
   7
 Standard
  11
@@ -1902,376 +1898,6 @@ DICTIONARY
 AcDbDictionary
 281
 1
-  3
-ACAD_GROUP
-350
-124
-  3
-ACAD_LAYOUT
-350
-12A
-  3
-ACAD_MLINESTYLE
-350
-127
-  3
-ACAD_PLOTSETTINGS
-350
-129
-  3
-ACAD_PLOTSTYLENAME
-350
-125
-  0
-DICTIONARY
-  5
-124
-330
-123
-100
-AcDbDictionary
-281
-1
-  0
-ACDBDICTIONARYWDFLT
-  5
-125
-330
-123
-100
-AcDbDictionary
-281
-1
-  3
-Normal
-350
-126
-100
-AcDbDictionaryWithDefault
-340
-126
-  0
-ACDBPLACEHOLDER
-  5
-126
-330
-125
-  0
-DICTIONARY
-  5
-127
-330
-123
-100
-AcDbDictionary
-281
-1
-  3
-Standard
-350
-128
-  0
-MLINESTYLE
-  5
-128
-330
-127
-100
-AcDbMlineStyle
-  2
-Standard
- 70
-0
-  3
-
- 62
-256
- 51
-90.0
- 52
-90.0
- 71
-2
- 49
-0.5
- 62
-256
-  6
-BYLAYER
- 49
--0.5
- 62
-256
-  6
-BYLAYER
-  0
-DICTIONARY
-  5
-129
-330
-123
-100
-AcDbDictionary
-281
-1
-  0
-DICTIONARY
-  5
-12A
-330
-123
-100
-AcDbDictionary
-281
-1
-  3
-Layout1
-350
-12C
-  3
-Model
-350
-12B
-  0
-LAYOUT
-  5
-12B
-330
-12A
-100
-AcDbPlotSettings
-  1
-
-  2
-none_device
-  4
-
-  6
-
- 40
-0.0
- 41
-0.0
- 42
-0.0
- 43
-0.0
- 44
-0.0
- 45
-0.0
- 46
-0.0
- 47
-0.0
- 48
-0.0
- 49
-0.0
-140
-0.0
-141
-0.0
-142
-1.0
-143
-1.0
- 70
-1712
- 72
-0
- 73
-0
- 74
-0
-  7
-
- 75
-0
-147
-1.0
-148
-0.0
-149
-0.0
-100
-AcDbLayout
-  1
-Model
- 70
-1
- 71
-0
- 10
-0.0
- 20
-0.0
- 11
-12.0
- 21
-9.0
- 12
-0.0
- 22
-0.0
- 32
-0.0
- 14
-0.0
- 24
-0.0
- 34
-0.0
- 15
-0.0
- 25
-0.0
- 35
-0.0
-146
-0.0
- 13
-0.0
- 23
-0.0
- 33
-0.0
- 16
-1.0
- 26
-0.0
- 36
-0.0
- 17
-0.0
- 27
-1.0
- 37
-0.0
- 76
-0
-330
-107
-  0
-LAYOUT
-  5
-12C
-330
-12A
-100
-AcDbPlotSettings
-  1
-
-  2
-none_device
-  4
-
-  6
-
- 40
-0.0
- 41
-0.0
- 42
-0.0
- 43
-0.0
- 44
-0.0
- 45
-0.0
- 46
-0.0
- 47
-0.0
- 48
-0.0
- 49
-0.0
-140
-0.0
-141
-0.0
-142
-1.0
-143
-1.0
- 70
-1712
- 72
-0
- 73
-0
- 74
-0
-  7
-
- 75
-0
-147
-1.0
-148
-0.0
-149
-0.0
-100
-AcDbLayout
-  1
-Layout1
- 70
-1
- 71
-1
- 10
-0.0
- 20
-0.0
- 11
-12.0
- 21
-9.0
- 12
-0.0
- 22
-0.0
- 32
-0.0
- 14
-0.0
- 24
-0.0
- 34
-0.0
- 15
-0.0
- 25
-0.0
- 35
-0.0
-146
-0.0
- 13
-0.0
- 23
-0.0
- 33
-0.0
- 16
-1.0
- 26
-0.0
- 36
-0.0
- 17
-0.0
- 27
-1.0
- 37
-0.0
- 76
-0
-330
-10A
   0
 ENDSEC
   0
