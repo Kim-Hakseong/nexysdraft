@@ -1,0 +1,110 @@
+// Rails: FILE (left), LAYERS + PROPERTIES (right), command bar (bottom).
+import { bridge } from './bridge';
+import { Doc, Ent } from './doc';
+import { I } from './icons';
+import { esc, fmtBytes, fmtInt, fmtNum, h, aciRgb, rgbCss } from './util';
+
+export class FileRail {
+  el = h(`<div class="card" style="flex:1"><div class="card-h"><span class="ic">${I.file()}</span><span class="t">FILE</span><span class="m"></span></div><div class="scroll body"></div></div>`);
+  body = this.el.querySelector('.body') as HTMLElement;
+  render(S: any) {
+    const f = S.file; const m = this.el.querySelector('.m') as HTMLElement; m.textContent = f ? `${fmtInt(f.entities)} ents · ${S.layers?.length ?? 0} layers` : '';
+    const counts = f?.counts ?? {}; const top = Object.entries<number>(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+    this.body.innerHTML = `<div class="btn-row"><button class="pill primary" data-a="open">${I.folder(13)} OPEN</button><button class="pill" data-a="save" ${f ? '' : 'disabled'}>${I.save(13)} SAVE</button><button class="pill" data-a="saveas" ${f ? '' : 'disabled'}>DXF…</button><button class="pill" data-a="savedwg" ${f ? '' : 'disabled'}>DWG…</button><button class="pill" data-a="pdf" ${f ? '' : 'disabled'}>${I.pdf(13)} PDF</button></div>` +
+      (f ? `<div class="file-card"><div class="fn">${esc(f.name)}${f.dirty ? ' <span class="chip">modified</span>' : ''}</div><div class="chips"><span class="chip">${esc(f.sourceDwg ? 'DWG' : 'DXF')}</span><span class="chip">${esc(f.version)}</span><span class="chip">${esc(f.codepage)}</span><span class="chip">${fmtBytes(f.size)}</span></div>
+        <div class="big">${fmtInt(f.entities)}<small>entities</small></div>
+        <div class="kv"><span class="k">LAYERS</span><span class="v">${S.layers?.length ?? 0}</span><span class="k">BLOCKS</span><span class="v">${f.blocks}</span><span class="k">OPEN</span><span class="v">${f.openMs.toFixed(0)} ms</span>${f.sourceDwg ? `<span class="k">LIBREDWG</span><span class="v">${f.convertMs.toFixed(0)} ms</span>` : ''}${f.unknown ? `<span class="k">UNSUPPORTED</span><span class="v">${f.unknown}</span>` : ''}</div></div>
+        <div class="lblh">ENTITY TYPES</div>${top.map(([k, v]) => `<div class="row"><span class="n">${esc(k)}</span><span class="m">${fmtInt(v)}</span></div>`).join('')}
+        ${f.warnings?.length ? `<div class="lblh">CONVERTER NOTES</div>${f.warnings.slice(0, 6).map((w: string) => `<div class="row warn">${esc(w)}</div>`).join('')}` : ''}` : `<div class="empty">DWG(LibreDWG 변환) 또는 DXF를 연다.<br>끌어다 놓기도 된다.</div>`) +
+      (S.recent?.length ? `<div class="lblh">RECENT</div><div class="recent">${S.recent.map((p: string) => `<div class="row" data-open="${esc(p)}" title="${esc(p)}"><span class="n">${esc(p.split(/[\\/]/).pop())}</span></div>`).join('')}</div>` : '');
+  }
+  constructor() {
+    this.body.addEventListener('click', e => {
+      const t = e.target as HTMLElement; const a = (t.closest('[data-a]') as HTMLElement | null)?.dataset.a; const o = (t.closest('[data-open]') as HTMLElement | null)?.dataset.open;
+      if (o) { bridge.call('open', { paths: [o] }); return; }
+      if (a === 'open') bridge.call('openDialog'); else if (a === 'save') bridge.call('save'); else if (a === 'saveas') bridge.call('saveDialog', { dwg: false }); else if (a === 'savedwg') showLossThenSave(); else if (a === 'pdf') bridge.call('exportPdfDialog');
+    });
+  }
+}
+
+export async function showLossThenSave() {
+  const loss: { kind: string; count: number; detail: string }[] = await bridge.call('lossWarnings');
+  if (!loss || loss.length === 0) { bridge.call('saveDialog', { dwg: true }); return; }
+  const dlg = h(`<div class="modal-bg"><div class="modal"><h3>DWG (R2000) 저장 — 유지되지 않는 요소</h3><p>LibreDWG 0.14는 R2000 DWG만 씁니다. 아래 항목은 저장 파일에 들어가지 않습니다.</p><table>${loss.map(l => `<tr><td>${esc(l.kind)} ×${l.count}</td><td>${esc(l.detail)}</td></tr>`).join('')}</table><div class="btns"><button class="pill" data-b="cancel">취소</button><button class="pill primary" data-b="ok">그래도 저장</button></div></div></div>`);
+  dlg.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-b]') as HTMLElement | null; if (b?.dataset.b === 'ok') bridge.call('saveDialog', { dwg: true }); if (b || e.target === dlg) dlg.remove(); });
+  document.body.append(dlg);
+}
+
+export class LayerRail {
+  el = h(`<div class="card" style="flex:1 1 55%"><div class="card-h"><span class="ic">${I.layers()}</span><span class="t">LAYERS</span><span class="m"></span></div><div class="scroll body"></div><div class="newlayer"><input placeholder="새 레이어 이름" maxlength="60"><button class="pill h26" data-a="add">${I.plus(11)} NEW</button></div></div>`);
+  body = this.el.querySelector('.body') as HTMLElement; input = this.el.querySelector('input') as HTMLInputElement;
+  dark = false; counts = new Map<string, number>();
+  render(S: any, doc: Doc | null) {
+    this.counts.clear(); if (doc) for (const e of doc.ents.values()) this.counts.set(e.l.toLowerCase(), (this.counts.get(e.l.toLowerCase()) ?? 0) + 1);
+    const layers: any[] = S.layers ?? []; (this.el.querySelector('.m') as HTMLElement).textContent = layers.length ? `${layers.length} · current ${S.currentLayer}` : '';
+    this.body.innerHTML = layers.length ? layers.map(l => `<div class="lrow${l.name === S.currentLayer ? ' on' : ''}${l.off || l.frozen ? ' off' : ''}" data-l="${esc(l.name)}" title="${esc(l.name)} · ${esc(l.lt)}"><span class="sw" style="background:${rgbCss(aciRgb(l.color, this.dark))}"></span><span class="n">${esc(l.name)}</span><span class="m">${this.counts.get(l.name.toLowerCase()) ?? 0}</span>
+      <button class="ib${l.off ? '' : ' on'}" data-t="off" title="${l.off ? 'On' : 'Off'}">${l.off ? I.eyeOff() : I.eye()}</button><button class="ib${l.frozen ? ' on' : ''}" data-t="frozen" title="Freeze / thaw">${I.snow()}</button><button class="ib${l.locked ? ' on' : ''}" data-t="locked" title="Lock / unlock">${l.locked ? I.lock() : I.unlock()}</button></div>`).join('') : `<div class="empty">열린 도면이 없다.</div>`;
+  }
+  constructor() {
+    this.body.addEventListener('click', e => {
+      const t = e.target as HTMLElement; const row = t.closest('[data-l]') as HTMLElement | null; if (!row) return; const name = row.dataset.l!;
+      const tb = (t.closest('[data-t]') as HTMLElement | null)?.dataset.t;
+      if (tb) { const on = tb === 'off' ? !row.classList.contains('off') || row.querySelector('[data-t=off]')!.classList.contains('on') : !row.querySelector(`[data-t=${tb}]`)!.classList.contains('on'); const args: any = { name }; if (tb === 'off') args.off = row.querySelector('[data-t=off]')!.classList.contains('on'); else args[tb] = on; bridge.call('layer.set', args); return; }
+      bridge.call('setLayer', { layer: name });
+    });
+    const add = () => { const n = this.input.value.trim(); if (!n) return; bridge.call('layer.add', { name: n, color: 7, current: true }); this.input.value = ''; };
+    this.el.querySelector('[data-a=add]')!.addEventListener('click', add); this.input.addEventListener('keydown', e => { if (e.key === 'Enter') add(); e.stopPropagation(); });
+  }
+}
+
+export class PropsRail {
+  el = h(`<div class="card" style="flex:1 1 45%"><div class="card-h"><span class="ic">${I.sliders()}</span><span class="t">PROPERTIES</span><span class="m"></span></div><div class="scroll body"></div></div>`);
+  body = this.el.querySelector('.body') as HTMLElement; ids: string[] = []; doc: Doc | null = null;
+  render(S: any, doc: Doc | null, ids: string[]) {
+    this.ids = ids; this.doc = doc; (this.el.querySelector('.m') as HTMLElement).textContent = ids.length ? `${ids.length} selected` : '';
+    if (!doc || !ids.length) { this.body.innerHTML = `<div class="empty">객체를 선택하면 속성이 보인다.<br>클릭 · 창(→) · 교차(←) 선택, 텍스트 더블클릭 = 편집.</div>`; return; }
+    const types = new Map<string, number>(); const layersSel = new Map<string, number>(); let single: Ent | null = ids.length === 1 ? doc.ents.get(ids[0]) ?? null : null;
+    for (const id of ids) { const e = doc.ents.get(id); if (!e) continue; types.set(typeName(e), (types.get(typeName(e)) ?? 0) + 1); layersSel.set(e.l, (layersSel.get(e.l) ?? 0) + 1); }
+    const layerOpts = (S.layers ?? []).map((l: any) => `<option value="${esc(l.name)}"${layersSel.size === 1 && layersSel.has(l.name) ? ' selected' : ''}>${esc(l.name)}</option>`).join('');
+    let detail = '';
+    if (single) {
+      const p = single.p ?? [];
+      if (single.t === 'L') detail = `<div class="mono">P1 ${fmtNum(p[0])}, ${fmtNum(p[1])}<br>P2 ${fmtNum(p[2])}, ${fmtNum(p[3])}<br>LEN ${fmtNum(Math.hypot(p[2] - p[0], p[3] - p[1]))}</div>`;
+      else if (single.t === 'C') detail = `<div class="mono">CENTER ${fmtNum(p[0])}, ${fmtNum(p[1])}<br>RADIUS ${fmtNum(p[2])}</div>`;
+      else if (single.t === 'A') detail = `<div class="mono">CENTER ${fmtNum(p[0])}, ${fmtNum(p[1])}<br>RADIUS ${fmtNum(p[2])}<br>ANGLES ${fmtNum(p[3], 2)}° → ${fmtNum(p[4], 2)}°</div>`;
+      else if (single.t === 'P') detail = `<div class="mono">VERTICES ${p.length / 3}${single.cl ? ' · closed' : ''}${single.spline ? ' · spline' : ''}</div>`;
+      else if (single.t === 'I') detail = `<div class="mono">BLOCK ${esc(single.blk)}<br>AT ${fmtNum(p[0])}, ${fmtNum(p[1])}<br>SCALE ${fmtNum(p[2], 3)} × ${fmtNum(p[3], 3)} · ROT ${fmtNum(p[4], 2)}°</div>`;
+      else if (single.t === 'T') detail = `<div class="f"><label>TEXT</label><textarea data-f="text">${esc(single.s)}</textarea></div><div class="mono">H ${fmtNum(single.ht ?? 0, 3)} · ROT ${fmtNum(single.rot ?? 0, 2)}° · ${esc(single.st)} (${esc(single.font ?? '')})</div><button class="pill h26" data-a="apply">APPLY</button>`;
+      else if (single.t === 'M') detail = `<div class="f"><label>MTEXT (plain)</label><textarea data-f="mtext">${esc((single.lines ?? []).map(l => l.map(r => r.t).join('')).join('\n'))}</textarea></div><div class="mono">H ${fmtNum(single.ht ?? 0, 3)} · W ${fmtNum(single.w ?? 0, 2)} · ${esc(single.st)}</div><button class="pill h26" data-a="apply">APPLY</button>`;
+      else if (single.t === 'D') detail = `<div class="mono">DIMENSION kind ${single.kind} · ${single.meas != null ? fmtNum(single.meas, 3) : ''}<br>${esc(single.s || '<>')}</div>`;
+      else if (single.t === 'H') detail = `<div class="mono">HATCH ${esc(single.pat)} ${single.solid ? 'solid' : ''} · ${(single.loops ?? []).length} loops</div>`;
+    }
+    this.body.innerHTML = `<div class="props"><div class="sum">${ids.length}<small>object${ids.length > 1 ? 's' : ''}</small></div><div class="types">${Array.from(types).map(([k, v]) => `<span class="chip">${esc(k)} ${v}</span>`).join('')}</div>
+      <div class="f"><label>LAYER</label><select data-f="layer">${layersSel.size > 1 ? '<option value="">(varies)</option>' : ''}${layerOpts}</select></div>${detail}</div>`;
+  }
+  constructor() {
+    this.body.addEventListener('change', e => { const t = e.target as HTMLSelectElement; if (t.dataset.f === 'layer' && t.value) bridge.call('edit.layer', { ids: this.ids, layer: t.value }); });
+    this.body.addEventListener('click', e => {
+      const a = ((e.target as HTMLElement).closest('[data-a]') as HTMLElement | null)?.dataset.a; if (a !== 'apply' || this.ids.length !== 1) return;
+      const ta = this.body.querySelector('textarea') as HTMLTextAreaElement | null; if (!ta) return;
+      bridge.call('edit.text', { id: this.ids[0], text: ta.value, plain: ta.dataset.f === 'mtext' });
+    });
+    this.body.addEventListener('keydown', e => e.stopPropagation());
+  }
+}
+export function typeName(e: Ent) { return ({ L: 'LINE', C: 'CIRCLE', A: 'ARC', E: 'ELLIPSE', P: e.spline ? 'SPLINE' : e.heavy ? 'POLYLINE' : 'LWPOLYLINE', T: e.attr ? 'ATTRIB' : 'TEXT', M: 'MTEXT', I: 'INSERT', H: 'HATCH', D: 'DIMENSION', S: 'SOLID', PT: 'POINT', X: e.name ?? 'UNKNOWN' } as Record<string, string>)[e.t] ?? e.t; }
+
+export class CommandBar {
+  el = h(`<div class="cmdbar"><div class="cmd-hist"></div><div class="cmd-line"><span class="ic">${I.terminal()}</span><span class="pr">Command:</span><input spellcheck="false" autocomplete="off" placeholder="L · PL · C · M · CO · E · S · O · MI · RO · DLI · Z · U"><span class="hint">Enter = repeat · Esc = cancel · F3 = snap</span></div></div>`);
+  hist = this.el.querySelector('.cmd-hist') as HTMLElement; input = this.el.querySelector('input') as HTMLInputElement; pr = this.el.querySelector('.pr') as HTMLElement;
+  lines: string[] = []; onSubmit: ((text: string) => void) | null = null; onEscape: (() => void) | null = null;
+  constructor() {
+    this.input.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { const v = this.input.value; this.input.value = ''; this.onSubmit?.(v); e.preventDefault(); }
+      else if (e.key === 'Escape') { this.input.value = ''; this.onEscape?.(); e.preventDefault(); }
+    });
+  }
+  prompt(text: string) { this.pr.textContent = text; }
+  add(line: string) { this.lines.push(line); if (this.lines.length > 3) this.lines.shift(); this.hist.textContent = this.lines.join('\n'); }
+}

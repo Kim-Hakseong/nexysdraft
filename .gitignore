@@ -1,0 +1,9 @@
+samples/user/
+work/
+app/dist/
+config/dev.json
+app/web/node_modules/
+app/**/bin/
+app/**/obj/
+app/web/dist/
+*.user

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>NexysDraft — mockup (DESIGN v3 light)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500&display=swap">
+<style>body{margin:0} button{font-family:inherit} .ic{display:inline-flex;width:15px;height:15px;border:1.6px solid currentColor;border-radius:3px;opacity:.7}</style>
+</head>
+<body>
+<!-- NexysDraft 목업 A (라이트). Nexys VIEW DESIGN v3 토큰: bg #ECEAE5 / panel #F7F6F3 / panel-alt #EFEDE8 / border #DAD7D0 / border-strong #B9B5AC / text #17181A / muted #5F5E5A / faint #8F8C85 / accent #17181A / accent2 #E8601C.
+     구조: 헤더 52 → 메인(파일 레일 260 · 캔버스 카드 · 레이어+속성 레일 300, 간격 12, 여백 12 16) → 명령줄 카드 → 푸터 24. 그림자·그라데이션 없음, 강조는 panel-alt 배경+굵기. -->
+<div style="min-height:900px;height:900px;width:1440px;display:flex;flex-direction:column;background:#ECEAE5;font-family:Inter,'Noto Sans KR',system-ui,sans-serif;color:#17181A;-webkit-font-smoothing:antialiased;font-size:12px;box-sizing:border-box">
+
+<header style="height:52px;flex:0 0 52px;display:flex;align-items:center;padding:0 16px;gap:16px;border-bottom:1px solid #DAD7D0;background:#F7F6F3">
+  <div style="display:flex;align-items:center;gap:10px;min-width:200px">
+    <div style="width:22px;height:22px;border-radius:50%;background:#17181A;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700">N</div>
+    <div style="display:flex;flex-direction:column;line-height:1.1"><b style="font-size:13px;font-weight:600">NexysDraft</b><small style="font-size:10px;color:#8F8C85;letter-spacing:.08em">0.1.0 DRAFT1 · LIBREDWG 0.14</small></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:2px;flex:1">
+    <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;background:transparent;color:#5F5E5A;font-size:11px;font-weight:600;letter-spacing:.05em;border-radius:999px"><span class="ic"></span>OPEN</button>
+    <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;background:transparent;color:#5F5E5A;font-size:11px;font-weight:600;letter-spacing:.05em;border-radius:999px"><span class="ic"></span>SAVE</button>
+    <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;background:transparent;color:#5F5E5A;font-size:11px;font-weight:600;letter-spacing:.05em;border-radius:999px"><span class="ic"></span>DWG</button>
+    <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;background:transparent;color:#5F5E5A;font-size:11px;font-weight:600;letter-spacing:.05em;border-radius:999px"><span class="ic"></span>PDF</button>
+    <div style="width:1px;height:18px;background:#B9B5AC;margin:0 4px"></div>
+    <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;background:transparent;color:#5F5E5A;font-size:11px;font-weight:600;letter-spacing:.05em;border-radius:999px;opacity:.4"><span class="ic"></span>UNDO</button>
+    <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;background:transparent;color:#5F5E5A;font-size:11px;font-weight:600;letter-spacing:.05em;border-radius:999px;opacity:.4"><span class="ic"></span>REDO</button>
+    <div style="width:1px;height:18px;background:#B9B5AC;margin:0 4px"></div>
+    <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;background:transparent;color:#5F5E5A;font-size:11px;font-weight:600;letter-spacing:.05em;border-radius:999px"><span class="ic"></span>THEME</button>
+  </div>
+  <button style="display:inline-flex;align-items:center;height:30px;padding:0 8px;border:0;background:transparent;color:#5F5E5A;border-radius:999px"><span class="ic" style="border-radius:50%"></span></button>
+  <div style="display:flex;align-items:center;gap:8px;padding:0 12px;height:30px;border-radius:999px;background:#EFEDE8;border:1px solid #DAD7D0"><span style="width:8px;height:8px;border-radius:50%;background:#2E9E5B;box-shadow:0 0 0 3px rgba(46,158,91,.18)"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.04em">READY</span></div>
+</header>
+
+<main style="flex:1;display:flex;gap:12px;padding:12px 16px 0 16px;min-height:0">
+  <aside style="width:260px;flex:0 0 260px;display:flex;flex-direction:column;background:#F7F6F3;border:1px solid #DAD7D0;border-radius:10px;overflow:hidden">
+    <div style="height:36px;flex:0 0 36px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid #DAD7D0"><span class="ic" style="width:14px;height:14px"></span><span style="font-size:11px;font-weight:600;letter-spacing:.08em">FILE</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8F8C85">1,213 ents · 15 layers</span></div>
+    <div style="display:flex;gap:6px;padding:10px 12px;flex-wrap:wrap">
+      <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 14px;border-radius:999px;border:1px solid #17181A;background:#17181A;color:#fff;font-size:11px;font-weight:600;letter-spacing:.05em">OPEN</button>
+      <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 14px;border-radius:999px;border:1px solid #B9B5AC;background:transparent;color:#17181A;font-size:11px;font-weight:600;letter-spacing:.05em">SAVE</button>
+      <button style="display:inline-flex;align-items:center;height:30px;padding:0 14px;border-radius:999px;border:1px solid #B9B5AC;background:transparent;font-size:11px;font-weight:600;letter-spacing:.05em">DXF…</button>
+      <button style="display:inline-flex;align-items:center;height:30px;padding:0 14px;border-radius:999px;border:1px solid #B9B5AC;background:transparent;font-size:11px;font-weight:600;letter-spacing:.05em">DWG…</button>
+      <button style="display:inline-flex;align-items:center;height:30px;padding:0 14px;border-radius:999px;border:1px solid #B9B5AC;background:transparent;font-size:11px;font-weight:600;letter-spacing:.05em">PDF</button>
+    </div>
+    <div style="margin:0 12px 10px 12px;border:1px solid #DAD7D0;border-radius:8px;background:#EFEDE8;padding:10px 12px">
+      <div style="font-size:12px;font-weight:600">u01_pid_2504.dwg</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px"><span style="display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;border:1px solid #B9B5AC;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5F5E5A">DWG</span><span style="display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;border:1px solid #B9B5AC;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5F5E5A">AC1015</span><span style="display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;border:1px solid #B9B5AC;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5F5E5A">ANSI_949</span><span style="display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;border:1px solid #B9B5AC;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5F5E5A">205 KB</span></div>
+      <div style="font-family:'Instrument Serif',serif;font-size:28px;line-height:1;margin-top:8px">1,213<small style="font-family:Inter,sans-serif;font-size:11px;color:#5F5E5A;margin-left:6px">entities</small></div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin-top:8px;font-size:11px"><span style="color:#8F8C85;letter-spacing:.04em">LAYERS</span><span style="font-family:'JetBrains Mono',monospace;text-align:right">15</span><span style="color:#8F8C85;letter-spacing:.04em">BLOCKS</span><span style="font-family:'JetBrains Mono',monospace;text-align:right">10</span><span style="color:#8F8C85;letter-spacing:.04em">OPEN</span><span style="font-family:'JetBrains Mono',monospace;text-align:right">203 ms</span><span style="color:#8F8C85;letter-spacing:.04em">LIBREDWG</span><span style="font-family:'JetBrains Mono',monospace;text-align:right">112 ms</span></div>
+    </div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#8F8C85;padding:10px 12px 4px 12px">ENTITY TYPES</div>
+    <div style="display:flex;align-items:center;height:24px;padding:0 12px;font-size:11px"><span style="flex:1">LINE</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">780</span></div>
+    <div style="display:flex;align-items:center;height:24px;padding:0 12px;font-size:11px"><span style="flex:1">MTEXT</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">124</span></div>
+    <div style="display:flex;align-items:center;height:24px;padding:0 12px;font-size:11px"><span style="flex:1">ARC</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">114</span></div>
+    <div style="display:flex;align-items:center;height:24px;padding:0 12px;font-size:11px"><span style="flex:1">LWPOLYLINE</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">55</span></div>
+    <div style="display:flex;align-items:center;height:24px;padding:0 12px;font-size:11px"><span style="flex:1">HATCH</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">33</span></div>
+    <div style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#8F8C85;padding:10px 12px 4px 12px">CONVERTER NOTES</div>
+    <div style="padding:4px 12px;font-size:11px;color:#E08A1E;line-height:1.4">Warning: Unstable Class object 501 MATERIAL</div>
+  </aside>
+
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div style="flex:1;display:flex;flex-direction:column;background:#F7F6F3;border:1px solid #DAD7D0;border-radius:10px;overflow:hidden;position:relative">
+      <div style="display:flex;align-items:center;gap:2px;padding:0 8px;height:36px;border-bottom:1px solid #DAD7D0">
+        <button style="display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 7px;border:0;border-radius:999px;background:#17181A;color:#fff;font-size:10px;font-weight:600;letter-spacing:.05em"><span class="ic" style="border-color:#fff"></span>SELECT</button>
+        <button style="display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A;font-size:10px;font-weight:600;letter-spacing:.05em"><span class="ic"></span>LINE</button>
+        <button style="display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A;font-size:10px;font-weight:600;letter-spacing:.05em"><span class="ic"></span>PLINE</button>
+        <button style="display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A;font-size:10px;font-weight:600;letter-spacing:.05em"><span class="ic"></span>CIRCLE</button>
+        <button style="display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A;font-size:10px;font-weight:600;letter-spacing:.05em"><span class="ic"></span>DIM</button>
+        <div style="width:1px;height:18px;background:#B9B5AC;margin:0 4px"></div>
+        <button style="display:inline-flex;align-items:center;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A"><span class="ic"></span></button>
+        <button style="display:inline-flex;align-items:center;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A"><span class="ic"></span></button>
+        <button style="display:inline-flex;align-items:center;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A"><span class="ic"></span></button>
+        <button style="display:inline-flex;align-items:center;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A"><span class="ic"></span></button>
+        <button style="display:inline-flex;align-items:center;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A"><span class="ic"></span></button>
+        <button style="display:inline-flex;align-items:center;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A"><span class="ic"></span></button>
+        <button style="display:inline-flex;align-items:center;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A"><span class="ic"></span></button>
+        <div style="width:1px;height:18px;background:#B9B5AC;margin:0 4px"></div>
+        <button style="display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 7px;border:0;border-radius:999px;background:transparent;color:#5F5E5A;font-size:10px;font-weight:600;letter-spacing:.05em"><span class="ic"></span>FIT</button>
+        <button style="height:24px;padding:0 8px;font-size:10px;border:1px solid #B9B5AC;background:#EFEDE8;color:#17181A;border-radius:999px;font-weight:600;letter-spacing:.05em">SNAP</button>
+      </div>
+      <div style="position:relative;flex:1;background:#FBFAF8;overflow:hidden">
+        <svg width="100%" height="100%" viewBox="0 0 820 700" style="position:absolute;inset:0" preserveAspectRatio="none"><rect x="30" y="80" width="760" height="540" fill="none" stroke="#17181A" stroke-width="1"/><rect x="40" y="90" width="740" height="520" fill="none" stroke="#00D1D1" stroke-width="1"/><rect x="140" y="200" width="400" height="260" fill="none" stroke="#17181A"/><path d="M160 260 L300 260 L300 330 L420 330" fill="none" stroke="#2E9E5B"/><circle cx="470" cy="300" r="18" fill="none" stroke="#C91A73"/><path d="M560 500 L740 500 L740 600 L560 600 Z M560 520 L740 520 M560 540 L740 540" fill="none" stroke="#17181A" stroke-width=".8"/><text x="590" y="585" font-family="Malgun Gothic" font-size="11" fill="#17181A">(주)넥시스테크 · 백색아노다이징</text><path d="M30 60 L30 100 M10 80 L50 80" stroke="rgba(23,24,26,.3)"/></svg>
+        <div style="position:absolute;right:10px;bottom:8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5F5E5A;background:#F7F6F3;border:1px solid #DAD7D0;border-radius:999px;padding:3px 10px">1290.5, 448.2  END</div>
+      </div>
+    </div>
+  </div>
+
+  <aside style="width:300px;flex:0 0 300px;display:flex;flex-direction:column;gap:12px;min-height:0">
+    <div style="flex:1 1 55%;display:flex;flex-direction:column;background:#F7F6F3;border:1px solid #DAD7D0;border-radius:10px;overflow:hidden">
+      <div style="height:36px;flex:0 0 36px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid #DAD7D0"><span class="ic" style="width:14px;height:14px"></span><span style="font-size:11px;font-weight:600;letter-spacing:.08em">LAYERS</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8F8C85">15 · current 0</span></div>
+      <div style="flex:1;overflow:hidden">
+        <div style="display:flex;align-items:center;height:26px;padding:0 8px 0 12px;gap:6px;font-size:11px;background:#EFEDE8;font-weight:700"><span style="width:10px;height:10px;border-radius:2px;border:1px solid #B9B5AC;background:#17181A"></span><span style="flex:1">0</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">190</span><span class="ic" style="width:13px;height:13px"></span><span class="ic" style="width:13px;height:13px"></span><span class="ic" style="width:13px;height:13px"></span></div>
+        <div style="display:flex;align-items:center;height:26px;padding:0 8px 0 12px;gap:6px;font-size:11px"><span style="width:10px;height:10px;border-radius:2px;border:1px solid #B9B5AC;background:#17181A"></span><span style="flex:1">DEFPOINTS</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">1</span><span class="ic" style="width:13px;height:13px"></span><span class="ic" style="width:13px;height:13px"></span><span class="ic" style="width:13px;height:13px"></span></div>
+        <div style="display:flex;align-items:center;height:26px;padding:0 8px 0 12px;gap:6px;font-size:11px"><span style="width:10px;height:10px;border-radius:2px;border:1px solid #B9B5AC;background:#00A0A0"></span><span style="flex:1">D</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">20</span><span class="ic" style="width:13px;height:13px"></span><span class="ic" style="width:13px;height:13px"></span><span class="ic" style="width:13px;height:13px"></span></div>
+        <div style="display:flex;align-items:center;height:26px;padding:0 8px 0 12px;gap:6px;font-size:11px;color:#8F8C85"><span style="width:10px;height:10px;border-radius:2px;border:1px solid #B9B5AC;background:#17181A"></span><span style="flex:1">제목(ISO)</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">0</span><span class="ic" style="width:13px;height:13px"></span><span class="ic" style="width:13px;height:13px"></span><span class="ic" style="width:13px;height:13px"></span></div>
+      </div>
+      <div style="display:flex;gap:6px;padding:8px 12px;border-top:1px solid #DAD7D0"><input placeholder="새 레이어 이름" style="flex:1;height:26px;border:1px solid #B9B5AC;border-radius:6px;background:#F7F6F3;padding:0 8px;font-size:11px;font-family:inherit"><button style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;border:1px solid #B9B5AC;background:transparent;font-size:10px;font-weight:600;letter-spacing:.05em">+ NEW</button></div>
+    </div>
+    <div style="flex:1 1 45%;display:flex;flex-direction:column;background:#F7F6F3;border:1px solid #DAD7D0;border-radius:10px;overflow:hidden">
+      <div style="height:36px;flex:0 0 36px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid #DAD7D0"><span class="ic" style="width:14px;height:14px"></span><span style="font-size:11px;font-weight:600;letter-spacing:.08em">PROPERTIES</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8F8C85">1 selected</span></div>
+      <div style="padding:8px 12px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-family:'Instrument Serif',serif;font-size:28px;line-height:1">1<small style="font-family:Inter,sans-serif;font-size:11px;color:#5F5E5A;margin-left:6px">object</small></div>
+        <div style="display:flex;gap:4px"><span style="display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;border:1px solid #B9B5AC;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5F5E5A">TEXT 1</span></div>
+        <div style="display:flex;flex-direction:column;gap:3px"><label style="font-size:10px;letter-spacing:.06em;color:#8F8C85;font-weight:600">LAYER</label><select style="height:26px;border:1px solid #B9B5AC;border-radius:6px;background:#F7F6F3;padding:0 8px;font-size:11px;font-family:inherit"><option>TXT</option></select></div>
+        <div style="display:flex;flex-direction:column;gap:3px"><label style="font-size:10px;letter-spacing:.06em;color:#8F8C85;font-weight:600">TEXT</label><textarea style="height:72px;border:1px solid #B9B5AC;border-radius:6px;background:#F7F6F3;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical">백색아노다이징</textarea></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5F5E5A;line-height:1.6">H 2.5 · ROT 0° · Standard (malgun)</div>
+        <button style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;border:1px solid #B9B5AC;background:transparent;font-size:10px;font-weight:600;letter-spacing:.05em;align-self:flex-start">APPLY</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div style="margin:12px 16px 0 16px;display:flex;flex-direction:column;background:#F7F6F3;border:1px solid #DAD7D0;border-radius:10px;overflow:hidden">
+  <div style="padding:6px 14px 0 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8F8C85;line-height:1.5;white-space:pre-wrap">Loaded 1213 entities (21 ms page, first frame 55 ms)
+&gt; m
+MOVE 4 by 0,200</div>
+  <div style="display:flex;align-items:center;height:34px;padding:0 14px;gap:10px"><span class="ic" style="width:14px;height:14px"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500">Command:</span><input placeholder="L · PL · C · M · CO · E · S · O · MI · RO · DLI · Z · U" style="flex:1;border:0;background:transparent;font-family:'JetBrains Mono',monospace;font-size:12px;outline:none;height:30px"><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8F8C85">Enter = repeat · Esc = cancel · F3 = snap</span></div>
+</div>
+
+<footer style="height:24px;flex:0 0 24px;display:flex;align-items:center;gap:12px;padding:0 16px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5F5E5A"><span style="width:6px;height:6px;border-radius:50%;background:#2E9E5B"></span><span style="flex:1">Opened u01_pid_2504.dwg — 1,213 entities, 15 layers, AC1015, ANSI_949 (203 ms, LibreDWG 112 ms)</span><span>frame 2.1 ms · 7,344 segs · 132 texts</span></footer>
+</div>
+<script src="../../app/web/public/probe.js"></script>
+</body>
+</html>

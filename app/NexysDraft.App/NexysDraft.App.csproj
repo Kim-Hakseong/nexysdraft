@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>NexysDraft</AssemblyName>
+    <RootNamespace>NexysDraft.App</RootNamespace>
+    <ApplicationIcon>Assets\brand\AppIcon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>NexysDraft.App.Program</StartupObject>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- 100k-entity open: server GC + no quick JIT for loops cut the cold parse/serialize path from 2.8 s to 1.9 s (work/selftest/perf) -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+    <TieredCompilationQuickJitForLoops>false</TieredCompilationQuickJitForLoops>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+    <ProjectReference Include="..\NexysDraft.Core\NexysDraft.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\brand\AppIcon.ico" />
+    <Content Include="..\web\dist\**\*" Link="wwwroot\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\tools\libredwg\*.exe;..\tools\libredwg\*.dll;..\tools\libredwg\COPYING;..\tools\libredwg\SOURCE.txt;..\tools\libredwg\README.txt" Link="tools\libredwg\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
