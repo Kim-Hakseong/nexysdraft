@@ -47,14 +47,14 @@ public class OdaGateTests
         return (final, err, sw.Elapsed.TotalMilliseconds);
     }
 
-    static Dictionary<string, int> Counts(Document d) => Compare.Flatten(d, true).Where(e => e is not Unknown).GroupBy(e => e.DxfName).ToDictionary(g => g.Key, g => g.Count());
-    static string CountsText(Dictionary<string, int> c) => string.Join(" ", c.OrderBy(k => k.Key).Select(k => $"{k.Key}:{k.Value}"));
+    internal static Dictionary<string, int> Counts(Document d) => Compare.Flatten(d, true).Where(e => e is not Unknown).GroupBy(e => e.DxfName).ToDictionary(g => g.Key, g => g.Count());
+    internal static string CountsText(Dictionary<string, int> c) => string.Join(" ", c.OrderBy(k => k.Key).Select(k => $"{k.Key}:{k.Value}"));
     /// <summary>Korean strings normalized to letters/digits only (ODA trims MTEXT line whitespace and rewrites stacked-fraction codes).</summary>
-    static List<string> Korean(Document d) => Compare.Texts(d).Select(t => new string(t.text.Where(ch => char.IsLetter(ch)).ToArray())).Where(t => t.Any(ch => ch is >= '가' and <= '힣')).OrderBy(t => t, StringComparer.Ordinal).ToList();
+    internal static List<string> Korean(Document d) => Compare.Texts(d).Select(t => new string(t.text.Where(ch => char.IsLetter(ch)).ToArray())).Where(t => t.Any(ch => ch is >= '가' and <= '힣')).OrderBy(t => t, StringComparer.Ordinal).ToList();
     /// <summary>ODA adds the Defpoints layer when a drawing has dimensions: not a difference.</summary>
     static int LayerCount(Document d) => d.Layers.Count(l => !l.Name.Equals("Defpoints", StringComparison.OrdinalIgnoreCase));
     /// <summary>Layer names (minus Defpoints, case-insensitive) — the set must survive, a count may differ by what ODA adds.</summary>
-    static bool LayersSame(Document a, Document b) { var sa = a.Layers.Select(l => l.Name.ToUpperInvariant()).Where(n => n != "DEFPOINTS").ToHashSet(); var sb = b.Layers.Select(l => l.Name.ToUpperInvariant()).Where(n => n != "DEFPOINTS").ToHashSet(); return sa.IsSubsetOf(sb); }
+    internal static bool LayersSame(Document a, Document b) { var sa = a.Layers.Select(l => l.Name.ToUpperInvariant()).Where(n => n != "DEFPOINTS").ToHashSet(); var sb = b.Layers.Select(l => l.Name.ToUpperInvariant()).Where(n => n != "DEFPOINTS").ToHashSet(); return sa.IsSubsetOf(sb); }
 
     /// <summary>Entity signature list (type + rounded key coordinates) to find what vanished.</summary>
     static HashSet<string> Sigs(Document d) => Compare.Flatten(d, true).Select(e => (e.DxfName, Compare.Sig(e))).Where(x => x.Item2 != null).Select(x => x.DxfName + ":" + string.Join(",", x.Item2!.Take(4).Select(v => Math.Round(v, 3).ToString(System.Globalization.CultureInfo.InvariantCulture)))).ToHashSet();
@@ -138,7 +138,7 @@ public class OdaGateTests
         Assert.True(fail == 0, string.Join("\n", lines));
     }
 
-    static string Dxf(string dwg)
+    internal static string Dxf(string dwg)
     {
         string dir = Samples.WorkDir("dxf"); string dxf = Path.Combine(dir, Path.GetFileNameWithoutExtension(dwg) + ".dxf");
         if (!File.Exists(dxf) || File.GetLastWriteTimeUtc(dxf) < File.GetLastWriteTimeUtc(dwg)) { var r = LibreDwg.DwgToDxf(dwg, dxf); Assert.True(r.Ok, "dwg2dxf failed: " + r.Stderr); }

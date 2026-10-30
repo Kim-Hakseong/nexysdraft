@@ -88,3 +88,45 @@
 - 용지 자동: 모델 플롯 설정 → 최근접 ISO, 없으면 A3. u01·u03·u04·u05·u07 A3 가로, u02·u06 A4 가로. 추출률 99.25~100 %, u04 2쪽, u05 10쪽(work/gates/g3_pdf.txt).
 - 사용자 도면의 용지상 글자 높이 중앙값 0.28~1.74 mm — "≥1.5 mm" 와 "A3" 를 함께 만족할 수 없다(blockers #18).
 - MTEXT 파서 결함: 절대 `\H4;` 뒤의 상대 `\H1.5x;`가 절대 표시를 지워 기본 높이의 6배로 그렸다(g02 "큰 글자"). 수정.
+
+## 2026-10-30 draft4
+
+### nanoCAD 실측 (사용자, d3_user_check)
+- u01·u07 .nexys.dwg: 오류 없음, 한글 정상. selftest_saved.dwg 25/25(blockers #11 해소).
+- u04 .nexys.dwg: 오류 없음, 두 시트 정상, 한글 "???"(글꼴 호환 ON).
+- u04 .nexys.dxf: "This version of file format is not supported". 원본 AC1032 그대로 저장한 것이 원인이고, nanoCAD 5는 AC1027까지만 연다.
+
+### DWG의 ACAD xdata (H0, 확정)
+- LibreDWG dxf2dwg(master 33bfac15)는 DXF의 `1001 ACAD` xdata APPID 참조를 DWG에 **항상 핸들 0x12**로 쓴다.
+  - 근거: `dwgread -O JSON`의 STYLE eed handle `[5,1,18]`. u04(ACAD = 0x20), u01·u07(ACAD = 0x26)에서 같았다. APPID 표 순서, ACAD만 남기기, ACAD 핸들 0xFFFF0 모두 0x12였다.
+  - ACAD가 아닌 앱 이름은 0으로 쓴다(u04 266개 → ODA `_APP0`).
+  - 예외: 생성 도면(매트릭스)에서 APPID 표를 STYLE 앞에 두면 실제 핸들로 풀렸다. u04에서는 효과가 없었다.
+- draft3 DWG(u01·u04·u07)의 STYLE 패밀리 xdata는 모두 없는 객체를 가리켰다(ODA: `1001 _APP12`).
+- 수정: R2000 라이터가 ACAD APPID에 핸들 12를 준다. 12가 이미 쓰이면 경고를 남기고 예전대로 쓴다. 이후 u04 DWG의 Standard·돋움·굴림은 ODA에서 `1001 ACAD`로 읽힌다(work/gates/h0_u04_styles.txt).
+- draft3에서 이 결함을 못 본 이유: `tools/oda.py`가 `x.dwg`와 `x.dxf`의 결과를 같은 `x.oda.dxf`로 써서 DWG 결과가 덮어쓰였다. 이제 `x.dwg.oda.dxf`로 쓴다.
+
+### u04 글꼴 (H0)
+- TEXT는 모형 516개(블록 포함 974개)이고, 모형의 한글 TEXT 38개는 Standard 31개, 돋움 7개다. MTEXT는 모형에 1개, 인라인 `\f`는 0개다.
+  - 치환 대상은 Standard·돋움·굴림 3개로 맞다(원본 `Gulim.ttf`·`Dotum.ttf`는 PC에 없음, Windows에는 gulim.ttc). 치환 누락은 없다.
+- draft3가 실제로 쓴 형식은 **B**(그룹 3 비움 + xdata `Gulim`/`Dotum`, 1071 = 33074)이고, 지시서의 A(`\U+` 한글 패밀리)가 아니다.
+- u01 'PDF Arial'(그룹 3 비움 + `Arial`, 336)도 draft3 DWG에서 xdata가 끊겨 있었는데 nanoCAD에서 한글이 보였다. 그래서 u04 "???"가 끊긴 xdata 탓인지는 **UNVERIFIED**이고, 매트릭스 확인으로 판정한다.
+- 기본 치환을 C(그룹 3 `gulim.ttc` + xdata `Gulim`)로 바꿨다. 한글 패밀리 이름을 가진 스타일도 치환 대상에 넣고, 글꼴 문자열은 ASCII만 쓴다(docs/font_matrix.md).
+- 매트릭스 DWG를 LibreDWG dwg2dxf로 읽으면 D·E에 `ACAD malgun 34` xdata가 하나 더 붙는다. ODA로 읽으면 쓴 그대로다. dwg2dxf 쪽 산물이다.
+
+### DXF 캐럿 (H0)
+- DXF 문자열의 `^X`는 제어 문자 부호다. u04의 SHX 한글(스타일 SHS, ses+shs, 이름 없는 블록 안 30개 중 17개에 `^`)은 LibreDWG dwg2dxf가 `^*`처럼 부호 없이 내보낸다.
+  - 우리가 그것을 그대로 쓰면 ODA는 U+FFEA 같은 문자로 읽었다(d3 DXF).
+  - 이제 쓰기에서 `^` → `^ `, 읽기에서 `^ ` → `^`로 처리한다. ODA 재읽기에서 30/30이 같았다.
+  - 이 텍스트는 이름 없는 블록 안에 있어 R2000 저장에서는 원래 빠진다.
+
+### DXF 버전 (H1)
+- 기본 DXF 저장: 원본 > AC1027이면 R2000 모델 라이터, 아니면 원본 유지. 사용자 도면 7개 중 u04·u05가 AC1032 → AC1015로 저장된다.
+- 7/7: $ACADVER ≤ AC1027, ODA 오류 0, 모형 엔티티 수·레이어·글자 수·한글·페이퍼 수가 같다(work/gates/h1_dxf_version.txt).
+
+### IMAGE 제외 DWG (H2)
+- u06(IMAGE 1개, 핸들 5F)을 IMAGE를 빼고 DWG로 저장했다. dxf2dwg 245 ms, ODA 오류 0, 나머지 모형 엔티티 수와 한글 16/16이 같다(work/gates/h2_u06_noimage.txt).
+
+### 10만 엔티티 열기 (H2)
+- 관문을 ≤2 s로 바꿨다. 이번 측정은 다른 프로그램 부하(CPU 52 %)에서 2.26~3.78 s였다.
+- 같은 조건에서 v0.3.0 배포본은 2.08~3.72 s였다. 열기 경로에서 바뀐 코드는 캐럿 처리 한 줄뿐이다(문자열 값 67만 개에 짧은 IndexOf, 10~20 ms로 추정). 그래서 회귀가 아니라 측정 환경 탓이다.
+- draft3의 1.86 s는 부하가 낮을 때 잰 값이다.

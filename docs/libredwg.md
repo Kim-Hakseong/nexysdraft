@@ -64,3 +64,9 @@
 - 리더 결함(draft1): HATCH 루프를 파싱만 하고 붙이지 않아 파일에서 읽은 해치는 전부 경계 0개였다(nanoCAD "해치 미표시"의 절반, ODA HATCH N/0). draft2에서 수정.
 - ODA는 DIMENSION의 `*D` 블록을 자기 식으로 재생성하고(LINE 18·MTEXT 4·POINT 12), 치수가 있으면 Defpoints 레이어를 만든다 — 관문 비교에서 제외.
 - ODA는 MTEXT 줄 끝 공백을 지우고 `\S1^2;`를 `\S1<U+FFF2>;`로 다시 쓴다 — 한글 비교는 글자·숫자만 남겨 비교.
+
+## draft4 (2026-10-30) — xdata APPID
+
+| # | 현상 | 근거 | 우회 |
+|---|---|---|---|
+| 13 | dxf2dwg(master 33bfac15)가 `1001 ACAD` xdata의 APPID 참조를 DWG에 항상 핸들 0x12로 쓴다. ACAD 외 앱 이름은 0 | dwgread JSON eed handle `[5,1,18]` / `[..,0]`, ODA `_APP12` / `_APP0` (u01·u04·u07, 표 순서·핸들을 바꿔도 같음) | R2000 라이터가 ACAD APPID에 핸들 12를 준다. 12가 쓰이면 경고. ACAD 외 xdata는 끊긴 채 남음(읽기 오류 아님) |

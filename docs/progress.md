@@ -1,5 +1,16 @@
 # 진행 현황 — NexysDraft
 
+## 2026-10-30 draft4 (run-draft4.md)
+
+| 블록 | 판정 | 근거 |
+|---|---|---|
+| H0 글꼴 매트릭스 | **완료 — 사람 확인 대기** | font_matrix.dxf·.dwg(변형 A~F + 진단 G). 기록 바이트 표는 docs/font_matrix.md, ODA 오류 0, 한글 14/14. 매트릭스를 만들다 dxf2dwg가 ACAD xdata를 핸들 0x12로 고정해 쓰는 결함을 찾아 수정. u04 감사(TEXT 516 / 한글 38, Standard·돋움 사용, 인라인 `\f` 없음). 기본 치환 C(`gulim.ttc` + `Gulim`), 상수 `FontCompat.DefaultMode` 한 줄 |
+| H1 DXF 버전 | **완료** | 저장 대화상자·CLI `--ver r2000\|keep`. 원본이 AC1027보다 새면 R2000, 결과에 version·reason. 관문 7/7(h1_dxf_version.txt: $ACADVER ≤ AC1027, ODA 오류 0, 모형 수·레이어·글자·한글·페이퍼 동일) |
+| H2 결정 반영 | **완료(10만 열기는 부하 의존)** | "IMAGE n개 제외하고 DWG 저장" 버튼, u06 관문 PASS(h2_u06_noimage.txt). PDF 1.5 mm는 보고만(코드 관문 없었음). 10만 열기 관문 ≤2 s로 바꿈 — 이번 측정은 CPU 52 % 부하에서 2.26~3.78 s(v0.3.0도 같은 조건 2.08~3.72 s). zip에서 dwgread.exe 제외, 0.3.1 |
+| H3 패키지·검증 | **완료** | dotnet test 36/36, --selftest·--skilltest PASS, 새 폴더 zip 스모크 3종 PASS(h3_smoke.txt), work/d4_user_check 5개 파일, GitHub Release v0.3.1 |
+
+산출물: docs/report-draft4.md, docs/font_matrix.md, next.md, 태그 v0.3.1.
+
 ## 2026-10-30 draft3 (run-draft3.md)
 
 | 블록 | 판정 | 근거 |

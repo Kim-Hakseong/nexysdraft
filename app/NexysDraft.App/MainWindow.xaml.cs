@@ -75,7 +75,7 @@ public partial class MainWindow : Window
                     if (dlg.ShowDialog(this) == true) await Engine.OpenAsync(dlg.FileName);
                     return null;
                 }
-            case "saveDialog": if (args.TryGetProperty("fontCompat", out var fc) && (fc.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)) Engine.FontCompat = fc.GetBoolean(); return await SaveWithDialog(Bridge.B(args, "dwg"));
+            case "saveDialog": if (args.TryGetProperty("fontCompat", out var fc) && (fc.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)) Engine.FontCompat = fc.GetBoolean(); if (Bridge.S(args, "dxfVer") is { Length: > 0 } dv) Engine.DxfVersion = dv; return await SaveWithDialog(Bridge.B(args, "dwg"), Bridge.B(args, "noImage", false));
             case "save": { if (Engine.Doc == null) return false; if (Engine.Doc.Path.EndsWith(".dxf", StringComparison.OrdinalIgnoreCase) || Engine.Doc.Path.EndsWith(".dwg", StringComparison.OrdinalIgnoreCase)) return await Engine.SaveAsync(Engine.Doc.Path); return await SaveWithDialog(false); }
             case "exportPdfDialog":
                 {
@@ -93,12 +93,12 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Native save dialog, then a background save (no UI wait: DWG saves run minutes for large drawings).</summary>
-    async Task<bool> SaveWithDialog(bool dwg)
+    async Task<bool> SaveWithDialog(bool dwg, bool noImage = false)
     {
         if (Engine.Doc == null) return false;
         var dlg = new SaveFileDialog { Filter = dwg ? "DWG (R2000, LibreDWG)|*.dwg|DXF|*.dxf" : "DXF|*.dxf|DWG (R2000, LibreDWG)|*.dwg", FileName = Path.GetFileNameWithoutExtension(Engine.Doc.Path == "" ? "untitled" : Engine.Doc.Path) + (dwg ? ".dwg" : ".dxf") };
         if (dlg.ShowDialog(this) != true) return false;
-        return await Engine.SaveAsync(dlg.FileName);
+        return await Engine.SaveAsync(dlg.FileName, null, noImage && dlg.FileName.EndsWith(".dwg", StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task CaptureAsync(string path)

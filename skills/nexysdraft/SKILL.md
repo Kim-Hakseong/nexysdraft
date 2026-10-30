@@ -17,7 +17,7 @@ Portable: `app/dist/NexysDraft.exe` + `tools/libredwg/` next to it (DWG read/wri
 |---|---|
 | `new` | empty drawing (layer 0, DASHED, Standard = malgun.ttf) |
 | `open PATH.dwg|.dxf` | open (DWG via LibreDWG) |
-| `save PATH.dxf` / `save PATH.dwg` | DXF keeps the original version and untouched bytes, pure ASCII (`\U+XXXX`); DWG = R2000 via dxf2dwg (slow for files > 1 MB, minutes) |
+| `save PATH.dxf [--ver r2000\|keep]` / `save PATH.dwg [--no-image]` | DXF: originals up to AC1027 keep their version and untouched bytes; newer originals (AC1032) are written as R2000 so nanoCAD 5 opens them (`--ver` forces either); pure ASCII (`\U+XXXX`). DWG = R2000 via dxf2dwg (about 1 s per 5 MB); `--no-image` leaves raster IMAGE entities out. The result reports `version` and `reason` |
 | `pdf PATH.pdf` | searchable PDF, one page per detected sheet (+ `__001.pdf` … per sheet), Malgun Gothic subset |
 | `select all|none|window X0,Y0 X1,Y1|crossing X0,Y0 X1,Y1|handles H…|layer NAME|type LINE` | selection for the edit commands |
 | `layer new NAME [COLOR]`, `layer current NAME`, `layer set NAME on|off|frozen|thawed|locked|unlocked|COLOR` | layers (`current` creates when missing) |

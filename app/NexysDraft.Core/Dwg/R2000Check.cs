@@ -17,6 +17,9 @@ public sealed class R2000CheckResult
     /// <summary>"dwg" when the drawing passes the pre-check, else "dxf" (plan B forces "dxf").</summary>
     public string Recommended { get; set; } = "dwg";
     public bool PlanB { get; set; }
+    /// <summary>Raster IMAGE is the only blocking reason: the dialog offers "save DWG without the n IMAGE entities" (draft4 H2).</summary>
+    public bool ImageOnly => Items.Any(i => i.Blocking) && Items.Where(i => i.Blocking).All(i => i.Kind == "image");
+    public int ImageCount => Items.Where(i => i.Kind == "image").Sum(i => i.Count);
     public IEnumerable<string> Reasons => Items.Where(i => i.Blocking || i.RecommendDxf).Select(i => $"{i.Kind} ×{i.Count}: {i.Detail}");
 }
 

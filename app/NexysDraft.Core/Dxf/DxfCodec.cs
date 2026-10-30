@@ -43,15 +43,20 @@ public static class DxfCodec
 
     /// <summary>Encode for writing: the file is pure ASCII — every non-ASCII character becomes \U+XXXX (astral characters as two surrogate
     /// escapes, AutoCAD's convention). nanoCAD shows "??" for raw code-page bytes in AC1015/AC1018/AC1024 DXF (user check, draft2) while
-    /// every reader (AutoCAD, ODA, LibreDWG, our own) resolves \U+. The target encoding no longer matters for the bytes.</summary>
+    /// every reader (AutoCAD, ODA, LibreDWG, our own) resolves \U+. The target encoding no longer matters for the bytes.
+    /// A literal caret is written as "^ " (DXF control-character encoding: "^X" is a control code — dxf2dwg turned u04's SHX-coded
+    /// "^*`%|(" into U+FFEA, draft4 H0; ODA writes "^ " for the same text).</summary>
     public static byte[] Encode(string s, Encoding target)
     {
-        bool ascii = true; foreach (var c in s) if (c >= 0x80) { ascii = false; break; }
-        if (ascii) return Encoding.ASCII.GetBytes(s);
+        bool ascii = true, caret = false; foreach (var c in s) { if (c >= 0x80) { ascii = false; break; } if (c == '^') caret = true; }
+        if (ascii && !caret) return Encoding.ASCII.GetBytes(s);
         var sb = new StringBuilder(s.Length + 16);
-        foreach (var c in s) { if (c < 0x80) sb.Append(c); else sb.Append("\\U+").Append(((int)c).ToString("X4")); }
+        foreach (var c in s) { if (c == '^') sb.Append("^ "); else if (c < 0x80) sb.Append(c); else sb.Append("\\U+").Append(((int)c).ToString("X4")); }
         return Encoding.ASCII.GetBytes(sb.ToString());
     }
+
+    /// <summary>Read side of the caret rule: "^ " → "^". Other "^X" sequences are kept as written (LibreDWG dwg2dxf writes carets unencoded).</summary>
+    public static string Uncaret(string s) => s.IndexOf("^ ", StringComparison.Ordinal) < 0 ? s : s.Replace("^ ", "^");
 
     /// <summary>Resolve \U+XXXX (unicode) and \M+nXXXX (MBCS: n = 1 cp932, 2 cp950, 3 cp949, 4 cp936, 5 cp1361) escapes.</summary>
     public static string Unescape(string s)

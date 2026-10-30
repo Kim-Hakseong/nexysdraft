@@ -18,6 +18,7 @@ public sealed class DxfWriter
     public static bool FullObjects { get; set; }
     readonly bool _fullObjects = FullObjects;
     Dictionary<string, FontFix>? _fontFixes;
+    bool _dropImages;
     /// <summary>R2000 mode: hatch loops as tessellated polyline loops and dimension blocks written explicitly (dxf2dwg 0.14 drops edge-type hatch boundaries — docs/libredwg.md).</summary>
     public static bool HatchAsPolylineLoops { get; set; } = true;
     public List<string> Warnings { get; } = new();
@@ -31,9 +32,9 @@ public sealed class DxfWriter
         _enc = _year >= 2007 ? new UTF8Encoding(false) : DxfCodec.CodePageEncoding(doc.CodePage);
     }
 
-    public static List<string> Write(Document doc, string path, Mode mode, IReadOnlyList<FontFix>? fontFixes = null)
+    public static List<string> Write(Document doc, string path, Mode mode, IReadOnlyList<FontFix>? fontFixes = null, bool dropImages = false)
     {
-        var w = new DxfWriter(doc, mode) { _fontFixes = fontFixes?.ToDictionary(f => f.Style, StringComparer.OrdinalIgnoreCase) };
+        var w = new DxfWriter(doc, mode) { _fontFixes = fontFixes?.ToDictionary(f => f.Style, StringComparer.OrdinalIgnoreCase), _dropImages = dropImages };
         var bytes = w.Build();
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllBytes(path, bytes);
@@ -55,8 +56,22 @@ public sealed class DxfWriter
 
     byte[] Build()
     {
-        if (_mode == Mode.R2000) BuildR2000(); else BuildPreserve();
+        if (_mode == Mode.R2000)
+        {
+            _acadHandle = AcadXdataHandle; BuildR2000();
+            if (Count(_ms.ToArray(), "\r\n  5\r\n" + AcadXdataHandle + "\r\n") + Count(_ms.ToArray(), "\r\n105\r\n" + AcadXdataHandle + "\r\n") > 1) { _acadHandle = null; _ms = new MemoryStream(); BuildR2000(); Warnings.Add("handle 12 is taken: xdata of the ACAD application (text style families) may not survive dxf2dwg"); }
+        }
+        else BuildPreserve();
         return _ms.ToArray();
+    }
+    /// <summary>The handle LibreDWG dxf2dwg writes for every "1001 ACAD" xdata application reference (measured, draft4 H0).</summary>
+    public const string AcadXdataHandle = "12";
+    string? _acadHandle;
+    static int Count(byte[] hay, string needle)
+    {
+        var n = Encoding.ASCII.GetBytes(needle); int c = 0;
+        for (int i = hay.AsSpan().IndexOf(n); i >= 0; ) { c++; int j = hay.AsSpan(i + 1).IndexOf(n); i = j < 0 ? -1 : i + 1 + j; }
+        return c;
     }
 
     // ------------------------------------------------------------------ preserve
@@ -153,13 +168,17 @@ public sealed class DxfWriter
         W(0, "ENDTAB");
         W(0, "TABLE"); W(2, "VIEW"); W(5, _tView); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, 0); W(0, "ENDTAB");
         W(0, "TABLE"); W(2, "UCS"); W(5, _tUcs); W(330, "0"); W(100, "AcDbSymbolTable"); W(70, 0); W(0, "ENDTAB");
-        // APPID
+        // APPID — the ACAD entry gets handle 12 when that handle is free (see Build): dxf2dwg writes every "1001 ACAD" xdata reference as
+        // handle 0x12, whatever the ACAD APPID's own handle is (draft4 H0: u04's STYLE xdata → 0x12 while ACAD was 0x20, so ODA reads "_APP12"
+        // and nanoCAD loses the font family — Korean "???").
         W(0, "TABLE"); W(2, "APPID"); W(5, _tAppid); W(330, "0"); W(100, "AcDbSymbolTable");
         var ap = _doc.RawTables.FirstOrDefault(t => t.Name.Equals("APPID", StringComparison.OrdinalIgnoreCase));
         var appids = ap?.Entries ?? new List<List<Group>>();
         W(70, appids.Count + 1);
-        if (!appids.Any(e => e.Any(g => g.Code == 2 && g.Value == "ACAD"))) { W(0, "APPID"); W(5, _doc.NewHandle()); W(330, _tAppid); W(100, "AcDbSymbolTableRecord"); W(100, "AcDbRegAppTableRecord"); W(2, "ACAD"); W(70, 0); }
-        foreach (var e in appids) Raw(e);
+        if (!appids.Any(e => e.Any(g => g.Code == 2 && g.Value == "ACAD"))) { W(0, "APPID"); W(5, _acadHandle ?? _doc.NewHandle()); W(330, _tAppid); W(100, "AcDbSymbolTableRecord"); W(100, "AcDbRegAppTableRecord"); W(2, "ACAD"); W(70, 0); }
+        foreach (var e in appids)
+            if (_acadHandle != null && e.Any(g => g.Code == 2 && g.Value == "ACAD")) Raw(e.Select(g => g.Code == 5 ? new Group(5, _acadHandle) : g));
+            else Raw(e);
         W(0, "ENDTAB");
         // DIMSTYLE
         W(0, "TABLE"); W(2, "DIMSTYLE"); W(5, _tDimstyle); W(330, "0"); W(100, "AcDbSymbolTable");
@@ -331,6 +350,7 @@ public sealed class DxfWriter
     void WriteEntity(Entity e, string owner)
     {
         if (_mode == Mode.R2000 && !R2000Loss.R2000Entities.Contains(e.DxfName)) return;   // counted by R2000Loss.Detect
+        if (_dropImages && e.DxfName == "IMAGE") return;   // "save DWG without the n IMAGE entities" (draft4 H2)
         if (_mode == Mode.R2000 && e is Insert ins0 && (ins0.Block.Length == 0 || !_doc.Blocks.ContainsKey(ins0.Block))) return;   // unresolved block reference — counted by R2000Loss.Detect
         if (_mode == Mode.Preserve && e.Raw != null && !e.Dirty)
         {

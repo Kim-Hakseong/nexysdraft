@@ -107,7 +107,7 @@ input::placeholder { color: var(--faint); }
 .lrow .ib:hover { background: var(--border); color: var(--text); }
 .lrow .ib svg { width: 13px; height: 13px; }
 .newlayer { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--border); }
-.field .in, .newlayer input, .props input, .props select, .props textarea { height: 26px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--panel); padding: 0 8px; font-size: 11px; min-width: 0; }
+.field .in, .newlayer input, .props input, .props select, .props textarea, .save-check select { height: 26px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--panel); padding: 0 8px; font-size: 11px; min-width: 0; }
 .newlayer input { flex: 1; }
 .props { padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
 .props .f { display: flex; flex-direction: column; gap: 3px; }

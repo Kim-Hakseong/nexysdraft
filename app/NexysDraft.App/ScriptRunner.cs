@@ -13,7 +13,7 @@ namespace NexysDraft.App;
 /// <c>NexysDraft.exe --script job.txt [--out dir] [--json]</c>: line-oriented commands without a window. Each line: a command and its
 /// arguments (coordinates as x,y). Results and errors (line number, reason) go to result.json in --out (default: the job file's folder) and,
 /// with --json, to stdout. Exit code 0 when every line succeeded, 1 otherwise, 2 when the job file could not be read.
-/// Commands: new | open PATH | save PATH(.dxf|.dwg) | pdf PATH | select all|none|window X0,Y0 X1,Y1|crossing …|handles H1 H2 … | layer new NAME [COLOR] |
+/// Commands: new | open PATH | save PATH(.dxf|.dwg) [--ver r2000|keep] [--no-image] [--no-fontfix] | pdf PATH | select all|none|window X0,Y0 X1,Y1|crossing …|handles H1 H2 … | layer new NAME [COLOR] |
 /// layer current NAME | layer set NAME on|off|frozen|thawed|locked|unlocked | l X0,Y0 X1,Y1 [X2,Y2 …] | pl [c] X,Y … | c CX,CY R | dli X0,Y0 X1,Y1 DX,DY [angle] |
 /// m DX,DY | co DX,DY | e | ro CX,CY DEG | mi X0,Y0 X1,Y1 [erase] | o H DIST SX,SY | s X0,Y0 X1,Y1 DX,DY | text H STRING | replace OLD NEW | undo | redo |
 /// query entities|layers|extents|texts | echo TEXT. Lines starting with # are comments.
@@ -67,13 +67,15 @@ public static class ScriptRunner
             case "save":
                 {
                     bool noFix = a.RemoveAll(x => x.Equals("--no-fontfix", StringComparison.OrdinalIgnoreCase)) > 0; e.FontCompat = !noFix;
-                    string p = Path.GetFullPath(string.Join(" ", a)); Doc(); if (!e.SaveAsync(p).GetAwaiter().GetResult()) throw new IOException(e.StatusText);
-                    return new { path = p, status = e.StatusText, fontFixes = e.LastFontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, oldBigFont = f.OldBigFont, newFont = f.NewFamilyKo, xdataFamily = f.NewFamily, koreanTexts = f.KoreanTexts }).ToList() };
+                    bool noImage = a.RemoveAll(x => x.Equals("--no-image", StringComparison.OrdinalIgnoreCase)) > 0;
+                    string? ver = null; int vi = a.FindIndex(x => x.Equals("--ver", StringComparison.OrdinalIgnoreCase)); if (vi >= 0) { if (vi + 1 >= a.Count) throw new ArgumentException("save PATH [--ver r2000|keep] [--no-image] [--no-fontfix]"); ver = a[vi + 1]; a.RemoveRange(vi, 2); }
+                    string p = Path.GetFullPath(string.Join(" ", a)); Doc(); if (!e.SaveAsync(p, ver, noImage).GetAwaiter().GetResult()) throw new IOException(e.StatusText);
+                    return new { path = p, status = e.StatusText, format = e.LastSave.Format, version = e.LastSave.Version, reason = e.LastSave.Reason, droppedImages = e.LastSave.DroppedImages, fontFixes = e.LastFontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, oldBigFont = f.OldBigFont, newFont = f.NewFamilyKo, newFile = f.NewFile, xdataFamily = f.NewFamily, mode = f.Mode.ToString(), koreanTexts = f.KoreanTexts }).ToList() };
                 }
             case "check":
                 {
                     var r = Core.Dwg.R2000Check.Run(Doc(), !a.Contains("--no-fontfix"));
-                    return new { dwgOk = r.DwgOk, recommended = r.Recommended, planB = r.PlanB, estimateSeconds = r.EstimateSeconds, r2000DxfBytes = r.R2000DxfBytes, items = r.Items.Select(i => new { i.Kind, i.Count, i.Detail, i.Blocking, i.RecommendDxf, handles = i.Handles }).ToList(), fontFixes = r.FontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, newFont = f.NewFamilyKo }).ToList() };
+                    return new { dwgOk = r.DwgOk, recommended = r.Recommended, planB = r.PlanB, estimateSeconds = r.EstimateSeconds, r2000DxfBytes = r.R2000DxfBytes, items = r.Items.Select(i => new { i.Kind, i.Count, i.Detail, i.Blocking, i.RecommendDxf, handles = i.Handles }).ToList(), fontFixes = r.FontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, newFont = f.NewFamily, newFile = f.NewFile, mode = f.Mode.ToString() }).ToList(), imageOnly = r.ImageOnly, imageCount = r.ImageCount, dxfDefault = Core.Dxf.DxfSave.Choose(Doc(), Core.Dxf.DxfSave.Ver.Auto).reason };
                 }
             case "pdf": { string p = Path.GetFullPath(string.Join(" ", a)); Doc(); var r = e.ExportPdfAsync(p).GetAwaiter().GetResult() ?? throw new IOException(e.StatusText); var lp = e.LastPdf!; return new { path = p, pages = lp.Pages, sheets = lp.Sheets.Count(s => s.Label != "rest"), detected = lp.SheetsDetected, texts = lp.Texts, ms = lp.Ms, paper = lp.PageInfos.Select(pi => new { pi.Label, pi.Paper, pi.WidthMm, pi.HeightMm, pi.Basis, pi.Texts, minTextMm = Math.Round(pi.MinTextMm, 2), p10TextMm = Math.Round(pi.P10TextMm, 2), medianTextMm = Math.Round(pi.MedianTextMm, 2) }).ToList() }; }
             case "select":

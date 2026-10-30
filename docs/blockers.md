@@ -32,3 +32,15 @@
 | 16 | G1 | 글꼴 호환 규칙을 글자 그대로 적용하면 u01의 스타일도 바뀐다(관문 "u01 STYLE 변경 0"과 충돌) | work/gates/g1_fonts.txt | 치환 대상을 "한글 TEXT/ATTRIB 또는 인라인 \f 없는 한글 MTEXT가 실제로 쓰는 스타일"로 좁힘 → u01 0건, 나머지 PC에 없는 글꼴 참조 0 |
 | 17 | G1 | run-draft3의 "u01 '굴림' 스타일" 은 u01 STYLE 테이블에 없다(u01 한글은 MTEXT 인라인 `\f굴림`) | u01 DXF STYLE 테이블 | 같은 PDF Arial 형식(그룹 3/4 비움 + ACAD xdata 1000 패밀리·1071)을 복사 |
 | 18 | G3 | "용지상 TEXT ≥1.5 mm" 와 "u01·u05·u07 = A3" 를 동시에 만족할 수 없다: A3에 맞추면 사용자 도면 글자 중앙값 0.28~1.74 mm(원 도면이 A3 플롯 기준이라도 작은 주석 글자가 많음) | work/gates/g3_pdf.txt | 용지 A3 관문을 우선. 글자 크기는 측정값만 보고(§결정 필요). CLI 새 도면은 2.5 mm 자동 |
+
+## draft4 (2026-10-30)
+
+| # | 블록 | 블로커 | 판단 근거 | 대체 경로 / 결과 |
+|---|---|---|---|---|
+| 11 → 해결 | 사용자 | nanoCAD 24/25 | 사용자 확인: selftest_saved.dwg 25/25 | 해소 |
+| 18 → 결정 | G3 | PDF 글자 ≥1.5 mm vs A3 | draft3 결정: 플롯 설정/A3 우선 | 1.5 mm 관문 폐기, 중앙값만 보고. CLI 새 도면 2.5 mm 유지 |
+| 19 | H0 | dxf2dwg가 `1001 ACAD` xdata를 항상 핸들 0x12로 쓴다. ACAD 외 앱 xdata는 0(끊김) | dwgread JSON eed handle, work/gates/h0_u04_styles.txt | ACAD APPID에 핸들 12를 준다(12가 쓰이면 경고). ACAD 외 xdata 266개(u04)는 끊긴 채 남음 — 읽기 오류는 아님. 업스트림 이슈 후보 |
+| 20 | H0 | u04 한글 "???"의 원인을 nanoCAD 없이 확정할 수 없다(u01은 같은 끊긴 xdata로도 한글이 보였다) | docs/font_matrix.md | 매트릭스 A~G를 사용자가 nanoCAD 5로 확인. 기본은 C로 잠정, 상수 한 줄로 교체 |
+| 21 | H0 | 지시서의 "A = 현재 방식"과 달리 draft3 코드는 B(ASCII `Gulim`)를 썼다 | FontCompat.MapFamily(draft3), d3 DWG의 ODA 읽기 | A와 B를 둘 다 매트릭스에 넣음 |
+| 22 | H2 | 10만 열기 ≤2 s: 이번 측정 2.26~3.78 s(CPU 52 % 부하) | work/selftest/d4_perf*, v0.3.0 A/B 2.08~3.72 s | 같은 조건의 기준 빌드와 차이 없음 → 회귀 아님. 부하가 낮을 때 다시 잴 것(draft3 1.86 s) |
+| 23 | H3 | `app\dist`(사용자 draft1 창, pid 46024 실행 중)에 tools·wwwroot가 없었다. draft3 마지막 패키징 시도가 다시 지운 것으로 보임 | ls app/dist | package.ps1이 실행 중이거나 잠긴 배포본은 아예 건드리지 않게 바꿈. tools\libredwg만 다시 복사. 창을 닫은 뒤 package.ps1을 다시 돌리거나 zip 사용 |

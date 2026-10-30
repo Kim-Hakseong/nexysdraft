@@ -42,7 +42,7 @@ def convert(src, to='DXF', ver='ACAD2018', out_dir=None, timeout=600):
         return ('ERR', None, ms, msg or 'no output')
     dest = pathlib.Path(out_dir) if out_dir else src.parent
     dest.mkdir(parents=True, exist_ok=True)
-    final = dest / (src.stem + '.oda.' + to.lower())
+    final = dest / (src.name + '.oda.' + to.lower())   # keep the source extension: x.dwg and x.dxf no longer overwrite each other (draft4)
     shutil.copy2(outs[0], final)
     shutil.rmtree(work, ignore_errors=True)
     return ('OK' if not msg else 'WARN', final, ms, msg)

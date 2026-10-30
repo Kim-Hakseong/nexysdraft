@@ -27,27 +27,31 @@ export class FileRail {
   }
 }
 
-/** Save dialog (draft3 G2): R2000 pre-check verdict, reasons with handles (double-click = zoom to them), font compatibility checkbox (remembered).
- *  Default button: DWG when the pre-check passes (and not plan B), else DXF. */
+/** Save dialog (draft3 G2, draft4 H1/H2): R2000 pre-check verdict, reasons with handles (double-click = zoom to them), font compatibility checkbox
+ *  (remembered), DXF version (original / R2000 — R2000 by default when the original is newer than AC1027), and "save DWG without the n IMAGE"
+ *  when IMAGE is the only blocking reason. Default button: DWG when the pre-check passes (and not plan B), else DXF. */
 export async function showLossThenSave(preferDwg = true) {
   const r: any = await bridge.call('check');
   if (!r) return;
   const dwgDefault = r.recommended === 'dwg' && preferDwg;
   const fc = (window as any).nxState?.fontCompat !== false;
+  const dxfVer = r.dxf?.dflt ?? 'keep';
   const rows = (r.items as any[]).map((i, k) => `<tr data-k="${k}" title="더블클릭: 해당 객체로 줌"><td>${i.blocking || i.recommendDxf ? '<b>' + esc(i.kind) + '</b>' : esc(i.kind)} ×${i.count}</td><td>${esc(i.detail)}${i.handles?.length ? `<br><span class="chip">${esc(i.handles.slice(0, 6).join(' · '))}</span>` : ''}</td></tr>`).join('');
   const fixes = (r.fontFixes as any[]).map(f => `<tr><td>${esc(f.style)}</td><td>${esc(f.oldFont || '(없음)')} → ${esc(f.newFont)}</td></tr>`).join('');
   const why = !r.dwgOk ? '아래 사유로 DWG(R2000, LibreDWG) 저장은 다른 CAD에서 열리지 않을 수 있습니다.'
     : r.recommended === 'dxf' && !r.planB ? 'DWG는 열리지만 동적 블록의 매개변수가 빠집니다.' : r.planB ? 'DWG 저장은 beta입니다.' : 'R2000 사전 점검 통과.';
   const dlg = h(`<div class="modal-bg save-check"><div class="modal"><h3>${r.recommended === 'dwg' ? 'DWG 저장 가능' : 'DXF 권장'}</h3>
-    <p>${why}${r.recommended === 'dxf' ? ' DXF는 원본 그대로 저장됩니다.' : ''} 예상 DWG 저장 시간 ${Math.max(1, Math.round(r.estimateSeconds))} s.</p>
+    <p>${why}${r.recommended === 'dxf' ? (dxfVer === 'r2000' ? ' DXF는 R2000으로 저장됩니다.' : ' DXF는 원본 그대로 저장됩니다.') : ''}${r.imageOnly ? ` IMAGE ${r.imageCount}개를 빼면 DWG로도 저장할 수 있습니다.` : ''} 예상 DWG 저장 시간 ${Math.max(1, Math.round(r.estimateSeconds))} s.</p>
     ${rows ? `<table class="reasons">${rows}</table>` : ''}
     <label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" data-f="fc" ${fc ? 'checked' : ''}> nanoCAD 글꼴 호환 (PC에 없는 글꼴을 쓰는 한글 스타일 ${r.fontFixes.length}개 치환)</label>
     ${fixes ? `<table>${fixes}</table>` : ''}
-    <div class="btns"><button class="pill" data-b="cancel">취소</button><button class="pill${dwgDefault ? '' : ' primary'}" data-b="dxf">DXF로 저장</button><button class="pill${dwgDefault ? ' primary' : ''}" data-b="dwg">DWG로 저장${r.planB || !r.dwgOk ? ' (beta)' : ''}</button></div></div></div>`);
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px">DXF 버전 <select data-f="ver"><option value="keep"${dxfVer === 'keep' ? ' selected' : ''}>원본 유지 (${esc(r.dxf?.source ?? '')})</option><option value="r2000"${dxfVer === 'r2000' ? ' selected' : ''}>R2000 (nanoCAD 호환)</option></select>${r.dxf?.tooNew ? `<span>원본이 ${esc(r.dxf.limit)}보다 새 버전이라 R2000 기본</span>` : ''}</label>
+    <div class="btns"><button class="pill" data-b="cancel">취소</button><button class="pill${dwgDefault ? '' : ' primary'}" data-b="dxf">DXF로 저장</button>${r.imageOnly ? `<button class="pill" data-b="dwg-noimage">IMAGE ${r.imageCount}개 제외하고 DWG 저장</button>` : ''}<button class="pill${dwgDefault ? ' primary' : ''}" data-b="dwg">DWG로 저장${r.planB || !r.dwgOk ? ' (beta)' : ''}</button></div></div></div>`);
   dlg.addEventListener('click', e => {
     const b = (e.target as HTMLElement).closest('[data-b]') as HTMLElement | null; if (!b && e.target !== dlg) return;
     const on = (dlg.querySelector('[data-f=fc]') as HTMLInputElement).checked;
-    if (b?.dataset.b === 'dxf' || b?.dataset.b === 'dwg') { bridge.call('setFontCompat', { on }); bridge.call('saveDialog', { dwg: b.dataset.b === 'dwg', fontCompat: on }); }
+    const ver = (dlg.querySelector('[data-f=ver]') as HTMLSelectElement).value;
+    if (b?.dataset.b === 'dxf' || b?.dataset.b === 'dwg' || b?.dataset.b === 'dwg-noimage') { bridge.call('setFontCompat', { on }); bridge.call('saveDialog', { dwg: b.dataset.b !== 'dxf', noImage: b.dataset.b === 'dwg-noimage', dxfVer: ver, fontCompat: on }); }
     dlg.remove();
   });
   dlg.addEventListener('dblclick', e => { const tr = (e.target as HTMLElement).closest('[data-k]') as HTMLElement | null; if (!tr) return; const it = r.items[+tr.dataset.k!]; if (it?.handles?.length) { document.dispatchEvent(new CustomEvent('nx-zoom-handles', { detail: it.handles })); dlg.remove(); } });

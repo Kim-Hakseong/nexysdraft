@@ -20,6 +20,11 @@ public sealed class Engine
     /// <summary>nanoCAD font compatibility on save (default ON, remembered in layout.json).</summary>
     public bool FontCompat { get; set; } = true;
     public List<FontFix> LastFontFixes { get; } = new();
+    /// <summary>DXF version on save: auto | r2000 | keep (save dialog choice, draft4 H1).</summary>
+    public string DxfVersion { get; set; } = "auto";
+    /// <summary>What the last save wrote and why (status line, result.json).</summary>
+    public sealed class SaveInfo { public string Format { get; set; } = ""; public string Version { get; set; } = ""; public string Reason { get; set; } = ""; public List<string> DroppedImages { get; set; } = new(); }
+    public SaveInfo LastSave { get; private set; } = new();
     public List<string> Selection { get; } = new();
     public List<string> Recent { get; } = new();
     public const int RecentMax = 10;
@@ -97,7 +102,9 @@ public sealed class Engine
     public static double EstimateDwgSeconds(long dxfBytes) { double mb = dxfBytes / 1048576.0; return 1 + 12 * mb * mb; }
 
     /// <summary>Save as DXF (same version, verbatim for untouched parts, pure ASCII) or DWG (R2000 DXF → dxf2dwg in the background; status shows elapsed / estimate; cancellable).</summary>
-    public async Task<bool> SaveAsync(string path)
+    /// <param name="dxfVer">DXF only: auto (R2000 when the original is newer than AC1027, else the original version), r2000 or keep; null = <see cref="DxfVersion"/>.</param>
+    /// <param name="dropImages">DWG only: leave the raster IMAGE entities out (the save dialog's "without IMAGE" choice, draft4 H2).</param>
+    public async Task<bool> SaveAsync(string path, string? dxfVer = null, bool dropImages = false)
     {
         if (Doc == null) return false;
         if (Saving) { SetStatus("A save is already running", "busy"); return false; }
@@ -105,12 +112,14 @@ public sealed class Engine
         {
             SetStatus("Saving " + Path.GetFileName(path) + " …", "busy"); var sw = Stopwatch.StartNew();
             bool dwg = path.EndsWith(".dwg", StringComparison.OrdinalIgnoreCase);
+            LastSave = new SaveInfo();
             if (dwg)
             {
                 string tmp = Path.Combine(Path.GetTempPath(), "NexysDraft", "save", Path.GetFileNameWithoutExtension(path) + ".dxf"); Directory.CreateDirectory(Path.GetDirectoryName(tmp)!);
                 var loss = R2000Loss.Detect(Doc); var docRef = Doc;
                 var fixes = FontCompat ? Core.Dxf.FontCompat.Plan(docRef) : new List<FontFix>(); LastFontFixes.Clear(); LastFontFixes.AddRange(fixes);
-                var w = await Task.Run(() => DxfWriter.Write(docRef, tmp, DxfWriter.Mode.R2000, fixes));
+                LastSave = new SaveInfo { Format = "dwg", Version = "AC1015", Reason = "DWG is always R2000 (LibreDWG dxf2dwg)", DroppedImages = dropImages ? Doc.Entities.Where(e => e.DxfName == "IMAGE").Select(e => e.Handle).ToList() : new() };
+                var w = await Task.Run(() => DxfWriter.Write(docRef, tmp, DxfWriter.Mode.R2000, fixes, dropImages));
                 SaveEstimate = R2000Check.EstimateSeconds(new FileInfo(tmp).Length); Saving = true; _saveCts = new CancellationTokenSource(); var ct = _saveCts.Token;
                 var ticker = Task.Run(async () => { while (!ct.IsCancellationRequested && Saving) { SaveElapsed = sw.Elapsed.TotalSeconds; SetStatus($"Saving DWG via LibreDWG dxf2dwg … {SaveElapsed:F0} s / ~{SaveEstimate:F0} s (cancel in the status bar)", "busy"); try { await Task.Delay(500, ct); } catch { } } });
                 var r = await Task.Run(() => LibreDwg.DxfToDwg(tmp, path, "r2000", 3600000, ct));
@@ -118,14 +127,16 @@ public sealed class Engine
                 if (ct.IsCancellationRequested && !r.Ok) { SetStatus($"DWG save cancelled after {sw.Elapsed.TotalSeconds:F0} s", "idle"); StateChanged?.Invoke(); return false; }
                 if (!r.Ok) { SetStatus("DXF → DWG failed: " + string.Join(" | ", LibreDwg.Summarize(r.Stderr).Take(2)), "error"); StateChanged?.Invoke(); return false; }
                 Doc.Dirty = false; Doc.Path = path; SourceDwg = path;
-                SetStatus($"Saved {Path.GetFileName(path)} (R2000 via LibreDWG, {(LastFontFixes.Count > 0 ? $"font compat {LastFontFixes.Count} style(s), " : "")}{r.Ms / 1000:F1} s{(SaveEstimate > 0 ? $", estimate was {SaveEstimate:F0} s" : "")}){(loss.Count > 0 ? $" — {loss.Sum(l => l.Count)} item(s) not carried: " + string.Join(", ", loss.Take(3).Select(l => l.Kind)) : "")}{(w.Count > 0 ? "; " + w[0] : "")}");
+                SetStatus($"Saved {Path.GetFileName(path)} (R2000 via LibreDWG, {(LastFontFixes.Count > 0 ? $"font compat {LastFontFixes.Count} style(s), " : "")}{r.Ms / 1000:F1} s{(SaveEstimate > 0 ? $", estimate was {SaveEstimate:F0} s" : "")}){(LastSave.DroppedImages.Count > 0 ? $" — {LastSave.DroppedImages.Count} IMAGE left out: " + string.Join(" ", LastSave.DroppedImages.Take(6)) : "")}{(loss.Count > 0 ? $" — {loss.Sum(l => l.Count)} item(s) not carried: " + string.Join(", ", loss.Take(3).Select(l => l.Kind)) : "")}{(w.Count > 0 ? "; " + w[0] : "")}");
             }
             else
             {
                 var docRef = Doc; var fixes = FontCompat ? Core.Dxf.FontCompat.Plan(docRef) : new List<FontFix>(); LastFontFixes.Clear(); LastFontFixes.AddRange(fixes);
-                await Task.Run(() => DxfWriter.Write(docRef, path, DxfWriter.Mode.Preserve, fixes));
+                var (mode, reason) = DxfSave.Choose(docRef, DxfSave.Parse(dxfVer ?? DxfVersion));
+                LastSave = new SaveInfo { Format = "dxf", Version = mode == DxfWriter.Mode.R2000 ? "AC1015" : Doc.Version, Reason = reason };
+                await Task.Run(() => DxfWriter.Write(docRef, path, mode, fixes));
                 Doc.Dirty = false; Doc.Path = path; SourceDwg = null;
-                SetStatus($"Saved {Path.GetFileName(path)} ({Doc.Version}, ASCII, {sw.Elapsed.TotalMilliseconds:F0} ms){(LastFontFixes.Count > 0 ? $" — font compat: {LastFontFixes.Count} style(s) → " + string.Join(", ", LastFontFixes.Select(f => $"{f.Style}: {f.OldFont} → {f.NewFamilyKo}")) : "")}");
+                SetStatus($"Saved {Path.GetFileName(path)} ({LastSave.Version}: {reason}, ASCII, {sw.Elapsed.TotalMilliseconds:F0} ms){(LastFontFixes.Count > 0 ? $" — font compat: {LastFontFixes.Count} style(s) → " + string.Join(", ", LastFontFixes.Select(f => $"{f.Style}: {f.OldFont} → {f.NewFamily} {f.NewFile}")) : "")}");
             }
             AddRecent(path);
             StateChanged?.Invoke(); TitleChanged?.Invoke(); return true;
