@@ -150,3 +150,8 @@
 - F10과 Alt 단독은 WebView2 WPF 컨트롤이 셸의 `PreviewKeyDown`으로 다시 올려 준다(Key.System, SystemKey F10/LeftAlt). 셸에서 가로채 F10을 `hostkey`로 페이지에 넘기자 SendInput 실제 키 입력에서 F10 → POLAR 전환, 이어진 Z가 명령줄로 들어갔다. Alt 단독 뒤의 Z도 들어갔다(host_keys_f10_alt_sendinput, 셸 전달 2회). 대조군(가로채기 없는 빌드)은 돌리지 않았다.
 - Windows는 셀프테스트 프로세스가 전경을 가져가는 것을 막는다. 전경 스레드에 `AttachThreadInput`으로 잠깐 붙어서 `SetForegroundWindow`를 하자 전경을 얻었다.
 - 우클릭 시간 감지는 놓을 때(pointerup) 누른 시간으로 정한다. 250 ms 미만이면 Enter, 그 이상이면 메뉴다.
+
+## 2026-10-31 draft5c
+- Nexys 제품군 헤더 로고: diadem(Nexys VIEW)·nexys-view·nexys-bus 모두 `app/web/public/brand/Logo.png`(MD5 2e4a3722773dd9268311033e3ce05b79)를 18 px 높이로 쓰고, 다크 테마는 `brightness(1.15)`다. AppIcon.ico(b2a3abd9…)·AppIcon.png(91d77b77…)도 세 제품과 NexysDraft가 같다.
+- 차이: VIEW 헤더는 로고 + 버전 줄뿐이고, NexysBus는 로고 + 굵은 제품명 + 버전 줄이다. NexysDraft는 지시서 예시에 따라 Bus 방식(제품명 줄 있음)으로 했다.
+- 로고 영역 픽셀 상관: VIEW 대비 라이트·다크 모두 1.00, 이전 "N" 원 헤더는 0.21(work/gates/d5c_header_logo.txt).

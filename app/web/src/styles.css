@@ -29,8 +29,11 @@ input::placeholder { color: var(--faint); }
 
 /* ---------- header (52px) ---------- */
 .hdr { height: 52px; flex: 0 0 52px; display: flex; align-items: center; padding: 0 16px; gap: 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
-.hdr-brand { display: flex; align-items: center; gap: 10px; min-width: 200px; }
-.hdr-logo { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; }
+/* header brand = Nexys product family (Nexys VIEW / NexysBus app/web/src/styles.css): brand/Logo.png wordmark at 18 px, dark theme brightness 1.15 */
+.hdr-brand { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+.hdr-logo { height: 22px; display: flex; align-items: center; cursor: pointer; }
+.hdr-logo img { height: 18px; width: auto; display: block; image-rendering: auto; }
+:root[data-theme="dark"] .hdr-logo img { filter: brightness(1.15); }
 .hdr-name { display: flex; flex-direction: column; line-height: 1.1; }
 .hdr-name b { font-size: 13px; font-weight: 600; color: var(--text); }
 .hdr-name small { font-size: 10px; color: var(--faint); letter-spacing: 0.08em; }

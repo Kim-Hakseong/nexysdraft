@@ -108,7 +108,26 @@ def probe_compare(app_json, mock_json, name):
     print(f'- structure differences: {len(onlyA) + len(onlyB) + len(oba) + len(obb)} (rules + boxes)')
     print()
 
+def logo_compare(a_path, b_path, out_png, box=(8, 6, 168, 46), strip_h=52, label_a='Nexys VIEW', label_b='NexysDraft'):
+    """draft5c: header logo gate. Pearson correlation of the grayscale pixels inside `box` (logo area, page px) plus the per-channel
+    correlation and mean |Δ|; writes a side-by-side header strip (A over B) to out_png."""
+    a = load(a_path); b = load(b_path)
+    A = np.asarray(a.crop(box), dtype=np.float32); B = np.asarray(b.crop(box), dtype=np.float32)
+    g = corr(A.mean(axis=2).ravel(), B.mean(axis=2).ravel())
+    ch = [corr(A[:, :, i].ravel(), B[:, :, i].ravel()) for i in range(3)]
+    mean = float(np.abs(A - B).mean())
+    sheet = Image.new('RGB', (1440, strip_h * 2 + 8), (255, 255, 255))
+    sheet.paste(a.crop((0, 0, 1440, strip_h)), (0, 0)); sheet.paste(b.crop((0, 0, 1440, strip_h)), (0, strip_h + 8))
+    sheet.save(out_png)
+    return {'box': list(box), 'gray_corr': g, 'rgb_corr': ch, 'mean_abs_diff': mean, 'a': label_a, 'b': label_b, 'strip': out_png}
+
 def main():
+    if '--logo' in sys.argv:
+        # pixel_diff.py --logo A.png B.png out_strip.png [x0,y0,x1,y1]
+        i = sys.argv.index('--logo'); r = sys.argv[i + 1:]
+        box = tuple(int(v) for v in r[3].split(',')) if len(r) > 3 else (8, 6, 168, 46)
+        res = logo_compare(r[0], r[1], r[2], box)
+        print(json.dumps(res, ensure_ascii=False)); return
     if '--probe' in sys.argv:
         i = sys.argv.index('--probe'); probe_compare(sys.argv[i + 1], sys.argv[i + 2], sys.argv[sys.argv.index('--name') + 1] if '--name' in sys.argv else 'probe'); return
     args = [x for x in sys.argv[1:] if not x.startswith('--')]

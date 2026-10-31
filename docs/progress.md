@@ -1,5 +1,15 @@
 # 진행 현황 — NexysDraft
 
+## 2026-10-31 draft5c (run-draft5c.md) → v0.4.2
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 헤더 로고 = Nexys 제품군 Logo.png | **완료** | 로고 영역 상관 라이트 1.00 · 다크 1.00(대조군 0.21), docs/screens/50·51 |
+| 창·작업표시줄 아이콘 원본 확인 | **완료(변경 없음)** | AppIcon.ico/png MD5가 VIEW·Bus와 같음 |
+| 테스트·셀프테스트·zip 스모크 | **완료** | 37/37, PASS 40, i4c_smoke.txt |
+
+산출물: docs/report-draft5c.md, 태그 v0.4.2.
+
 ## 2026-10-31 draft5b (run-draft5b.md) → v0.4.1
 
 | 항목 | 판정 | 근거 |
