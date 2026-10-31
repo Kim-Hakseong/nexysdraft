@@ -119,16 +119,20 @@ export class PropsRail {
 export function typeName(e: Ent) { return ({ L: 'LINE', C: 'CIRCLE', A: 'ARC', E: 'ELLIPSE', P: e.spline ? 'SPLINE' : e.heavy ? 'POLYLINE' : 'LWPOLYLINE', T: e.attr ? 'ATTRIB' : 'TEXT', M: 'MTEXT', I: 'INSERT', H: 'HATCH', D: 'DIMENSION', S: 'SOLID', PT: 'POINT', X: e.name ?? 'UNKNOWN' } as Record<string, string>)[e.t] ?? e.t; }
 
 export class CommandBar {
-  el = h(`<div class="cmdbar"><div class="cmd-hist"></div><div class="cmd-line"><span class="ic">${I.terminal()}</span><span class="pr">Command:</span><input spellcheck="false" autocomplete="off" placeholder="L · PL · C · M · CO · E · S · O · MI · RO · DLI · Z · U"><span class="hint">Enter = repeat · Esc = cancel · F3 = snap</span></div></div>`);
+  el = h(`<div class="cmdbar"><div class="cmd-hist"></div><div class="cmd-line"><span class="ic">${I.terminal()}</span><span class="pr">Command:</span><input spellcheck="false" autocomplete="off" placeholder="L · PL · C · M · CO · E · S · O · MI · RO · DLI · Z · DI · ID · U"><span class="hint">Enter/Space = 확정·반복 · Esc = 취소 · F3 OSNAP · F8 ORTHO · F10 POLAR · Shift = 임시 직교</span></div></div>`);
   hist = this.el.querySelector('.cmd-hist') as HTMLElement; input = this.el.querySelector('input') as HTMLInputElement; pr = this.el.querySelector('.pr') as HTMLElement;
   lines: string[] = []; onSubmit: ((text: string) => void) | null = null; onEscape: (() => void) | null = null;
   constructor() {
     this.input.addEventListener('keydown', e => {
+      if (/^F\d+$/.test(e.key) || e.ctrlKey || e.key === 'Shift') return;   // F3/F7–F10, Ctrl+S/Z/… and Shift (temporary ortho) keep working while typing
       e.stopPropagation();
+      if (e.key === ' ' && !this.input.value.includes('"')) { const v = this.input.value; this.input.value = ''; this.onSubmit?.(v); e.preventDefault(); return; }   // AutoCAD: Space = Enter
       if (e.key === 'Enter') { const v = this.input.value; this.input.value = ''; this.onSubmit?.(v); e.preventDefault(); }
       else if (e.key === 'Escape') { this.input.value = ''; this.onEscape?.(); e.preventDefault(); }
     });
   }
   prompt(text: string) { this.pr.textContent = text; }
-  add(line: string) { this.lines.push(line); if (this.lines.length > 3) this.lines.shift(); this.hist.textContent = this.lines.join('\n'); }
+  /** Full history (last 300 lines); the bar shows the last three. */
+  log: string[] = [];
+  add(line: string) { this.log.push(line); if (this.log.length > 300) this.log.shift(); this.lines.push(line); if (this.lines.length > 3) this.lines.shift(); this.hist.textContent = this.lines.join('\n'); }
 }

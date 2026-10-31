@@ -179,8 +179,103 @@ public static class SelfTest
         await JS(w, "await nx.test.key('Escape'); return true;");
         e.Theme = "dark"; e.Touch(); await Shot(w, "08_dark");
         e.Theme = "light"; e.Touch();
+        await KeysAsync(w);
+        await CanvasThemeAsync(w);
         G("memory_ws_mb", Process.GetCurrentProcess().WorkingSet64 / 1048576.0, "MB", "<=600");
         G("ui_stalls_300ms", Diag.StallCount, "", "<=0");
+    }
+
+    // ================================================================== draft5 I1: AutoCAD keys and input, driven by real key / pointer events on the page
+    static async Task KeysAsync(MainWindow w)
+    {
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(200); nx.test.view.zoomExtents(); nx.test.closeModal(); await nx.test.settle(); return true;");
+        var d = e.Doc!;
+        static double AngleErr(Core.Model.Line l) { double a = Math.Atan2(l.P1.Y - l.P0.Y, l.P1.X - l.P0.X) * 180 / Math.PI; double m = ((a % 90) + 90) % 90; return Math.Min(m, 90 - m); }
+        // (a) Shift held while picking the second point → temporary ortho: 10 lines, 5 mostly horizontal and 5 mostly vertical
+        var js = new System.Text.StringBuilder();
+        for (int i = 0; i < 10; i++) { double x0 = -500 + i * 60, y0 = -200 + (i % 3) * 40; double x1 = i % 2 == 0 ? x0 + 45 : x0 + 9, y1 = i % 2 == 0 ? y0 + 7 : y0 + 50; js.Append($"await nx.test.cmd('l'); await nx.test.clickWorld({x0}, {y0}); await nx.test.clickWorld({x1}, {y1}, {{ shift: true }}); await nx.test.key('Escape'); "); }
+        await JS(w, js + "return true;"); await Task.Delay(200);
+        var la = d.Entities.OfType<Core.Model.Line>().ToList();
+        double errA = la.Count == 0 ? double.NaN : la.Max(AngleErr);
+        GB("keys_a_shift_ortho_10_lines", la.Count == 10 && errA <= 1e-9, $"lines {la.Count}, max angle error {errA:E2}° (0/90 ±1e-9)");
+        // (b) F8 ortho on, same picks without Shift
+        var m0 = await JS(w, "await nx.test.key('F8'); return nx.test.modes();");
+        js.Clear(); for (int i = 0; i < 10; i++) { double x0 = -500 + i * 60, y0 = 150 + (i % 3) * 40; double x1 = i % 2 == 0 ? x0 + 45 : x0 + 9, y1 = i % 2 == 0 ? y0 - 7 : y0 + 50; js.Append($"await nx.test.cmd('l'); await nx.test.clickWorld({x0}, {y0}); await nx.test.clickWorld({x1}, {y1}); await nx.test.key('Escape'); "); }
+        await JS(w, js + "return true;"); await Task.Delay(200);
+        var m1 = await JS(w, "await nx.test.key('F8'); return nx.test.modes();");
+        var lb = d.Entities.OfType<Core.Model.Line>().Skip(la.Count).ToList(); double errB = lb.Count == 0 ? double.NaN : lb.Max(AngleErr);
+        bool pillOn = m0.GetProperty("pills").EnumerateArray().Any(p => p.GetString() == "ortho:true");
+        GB("keys_b_f8_ortho_10_lines", lb.Count == 10 && errB <= 1e-9 && m0.GetProperty("ortho").GetBoolean() && !m1.GetProperty("ortho").GetBoolean() && pillOn, $"lines {lb.Count}, max angle error {errB:E2}°, F8 → ortho {m0.GetProperty("ortho").GetBoolean()} (pill {pillOn}) → F8 → {m1.GetProperty("ortho").GetBoolean()}");
+        // (c) polar coordinate entry @100<45 from 0,0
+        int nl = d.Entities.OfType<Core.Model.Line>().Count();
+        await JS(w, "await nx.test.cmd('l'); await nx.test.cmd('0,0'); await nx.test.cmd('@100<45'); await nx.test.key('Escape'); return true;"); await Task.Delay(150);
+        var lc = d.Entities.OfType<Core.Model.Line>().Skip(nl).FirstOrDefault();
+        GB("keys_c_polar_entry_100_45", lc != null && Math.Abs(lc.P0.X) < 1e-9 && Math.Abs(lc.P0.Y) < 1e-9 && Math.Abs(lc.P1.X - 70.7107) < 1e-4 && Math.Abs(lc.P1.Y - 70.7107) < 1e-4, lc == null ? "no line" : $"({lc.P0.X},{lc.P0.Y}) → ({lc.P1.X:F6},{lc.P1.Y:F6})");
+        // direct distance entry along the ortho direction (Shift ortho from (300,-250) toward +x, then "80")
+        await JS(w, "await nx.test.cmd('l'); await nx.test.cmd('300,-250'); await nx.test.hoverWorld(360, -244); nx.test.view.shiftDown = true; await nx.test.cmd('80'); nx.test.view.shiftDown = false; await nx.test.key('Escape'); return true;"); await Task.Delay(150);
+        var ld = d.Entities.OfType<Core.Model.Line>().LastOrDefault();
+        GB("keys_direct_distance_ortho", ld != null && Math.Abs(ld.P1.X - 380) < 1e-9 && Math.Abs(ld.P1.Y + 250) < 1e-9, ld == null ? "no line" : $"→ ({ld.P1.X:F6},{ld.P1.Y:F6}) expected (380,-250)");
+        // (d) Space repeats the last command: three circles
+        int nc = d.Entities.OfType<Core.Model.Circle>().Count();
+        await JS(w, "await nx.test.cmd('c'); await nx.test.clickWorld(150, -300); await nx.test.cmd('10'); await nx.test.key(' '); await nx.test.clickWorld(210, -300); await nx.test.cmd('10'); await nx.test.key(' '); await nx.test.clickWorld(270, -300); await nx.test.cmd('10'); return true;"); await Task.Delay(200);
+        int nc2 = d.Entities.OfType<Core.Model.Circle>().Count();
+        GB("keys_d_space_repeat_3_circles", nc2 - nc == 3, $"circles {nc} → {nc2}");
+        // (e) Esc in the middle of LINE (one point) and of MOVE (base point picked) → no entity added or moved
+        int n0 = d.Entities.Count; var before = Snapshot(d);
+        await JS(w, "await nx.test.cmd('l'); await nx.test.clickWorld(-100, 300); await nx.test.key('Escape'); await nx.test.pick(150, -300); await nx.test.cmd('m'); await nx.test.clickWorld(150, -300); await nx.test.key('Escape'); await nx.test.key('Escape'); return true;"); await Task.Delay(200);
+        var mE = await JS(w, "return nx.test.modes();");
+        GB("keys_e_esc_cancels", d.Entities.Count == n0 && Snapshot(d).SequenceEqual(before) && mE.GetProperty("tool").GetString() == "select", $"entities {n0} → {d.Entities.Count}, unchanged {Snapshot(d).SequenceEqual(before)}, tool {mE.GetProperty("tool").GetString()}");
+        // (f) wheel double-click = zoom extents
+        var vf = await JS(w, "nx.test.view.zoomAt(200, 200, 6); await nx.test.settle(); return await nx.test.middleDouble();");
+        var ve = await JS(w, "await nx.test.zoomExtents(); return { cx: nx.test.view.view.cx, cy: nx.test.view.view.cy, scale: nx.test.view.view.scale };");
+        bool same = Math.Abs(vf.GetProperty("scale").GetDouble() - ve.GetProperty("scale").GetDouble()) <= 1e-9 * ve.GetProperty("scale").GetDouble() && Math.Abs(vf.GetProperty("cx").GetDouble() - ve.GetProperty("cx").GetDouble()) < 1e-9 && Math.Abs(vf.GetProperty("cy").GetDouble() - ve.GetProperty("cy").GetDouble()) < 1e-9;
+        GB("keys_f_wheel_doubleclick_extents", same, $"after double-click {vf.GetRawText()} · extents {ve.GetRawText()}");
+        // DI / ID print to the command line only
+        int nm = d.Entities.Count;
+        var hist = await JS(w, "await nx.test.cmd('di'); await nx.test.cmd('0,0'); await nx.test.cmd('30,40'); await nx.test.cmd('id'); await nx.test.cmd('12.5,-3'); return nx.test.history();");
+        string hs = string.Join(" | ", hist.EnumerateArray().Select(x => x.GetString()));
+        GB("keys_dist_id_command_line", hs.Contains("Distance = 50") && hs.Contains("X = 12.5") && d.Entities.Count == nm, hs);
+        await JS(w, "await nx.test.cmd('z'); await nx.test.cmd('e'); return true;");
+        await Shot(w, "09_keys_modes");
+    }
+
+    // ================================================================== draft5 I2: drawing-area background independent of the app theme
+    static async Task CanvasThemeAsync(MainWindow w)
+    {
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); return true;");
+        e.Edit(ed => ed.Add(new Core.Model.Solid { P0 = new Core.Model.V3(0, 0), P1 = new Core.Model.V3(100, 0), P2 = new Core.Model.V3(0, 100), P3 = new Core.Model.V3(100, 100) }, "0", "Solid colour 7"));
+        e.Edit(ed => ed.Add(new Core.Model.Line { P0 = new Core.Model.V3(-60, -20), P1 = new Core.Model.V3(160, -20) }, "0", "Line colour 7"));
+        await JS(w, "await nx.test.settle(150); await nx.test.zoomExtents(); return true;");
+        foreach (var app in new[] { "light", "dark" })
+            foreach (var cv in new[] { "light", "dark" })
+            {
+                e.Theme = app; e.CanvasTheme = cv; e.Touch(); await JS(w, "await nx.test.settle(150); await nx.test.zoomExtents(); return true;");
+                string name = $"10_app-{app}_canvas-{cv}"; await Shot(w, name);
+                var at = await JS(w, "return nx.test.screenOf(50, 50);");
+                double dpr = at.GetProperty("dpr").GetDouble();
+                var fg = Pixel(Path.Combine(OutDir, name + ".png"), at.GetProperty("x").GetDouble() * dpr, at.GetProperty("y").GetDouble() * dpr);
+                var bg = Pixel(Path.Combine(OutDir, name + ".png"), at.GetProperty("bgx").GetDouble() * dpr, at.GetProperty("bgy").GetDouble() * dpr);
+                double cr = Contrast(fg, bg); bool canvasDark = at.GetProperty("dark").GetBoolean();
+                GB($"canvas_{app}_{cv}_colour7_contrast", cr >= 4.5 && canvasDark == (cv == "dark"), $"colour-7 SOLID #{fg:X6} on background #{bg:X6}: {cr:F2}:1 (≥ 4.5), canvas dark {canvasDark}");
+            }
+        e.CanvasTheme = "auto"; e.Theme = "light"; e.Touch();
+        var auto = await JS(w, "await nx.test.settle(100); return nx.test.screenOf(0, 0);");
+        GB("canvas_auto_follows_app", !auto.GetProperty("dark").GetBoolean(), "auto + app light → canvas light");
+    }
+    static int Pixel(string png, double x, double y)
+    {
+        using var fs = File.OpenRead(png); var dec = new System.Windows.Media.Imaging.PngBitmapDecoder(fs, System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+        var src = new System.Windows.Media.Imaging.FormatConvertedBitmap(dec.Frames[0], System.Windows.Media.PixelFormats.Bgra32, null, 0);
+        int px = Math.Clamp((int)Math.Round(x), 0, src.PixelWidth - 1), py = Math.Clamp((int)Math.Round(y), 0, src.PixelHeight - 1);
+        var buf = new byte[4]; src.CopyPixels(new Int32Rect(px, py, 1, 1), buf, 4, 0);
+        return (buf[2] << 16) | (buf[1] << 8) | buf[0];
+    }
+    /// <summary>WCAG contrast ratio of two sRGB colours.</summary>
+    static double Contrast(int a, int b)
+    {
+        static double Lin(int c) { double s = c / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); }
+        static double L(int c) => 0.2126 * Lin(c >> 16) + 0.7152 * Lin((c >> 8) & 255) + 0.0722 * Lin(c & 255);
+        double la = L(a), lb = L(b); return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
     }
     static double[] Sig(Core.Model.Entity e) => e switch { Core.Model.Line l => new[] { l.P0.X, l.P0.Y, l.P1.X, l.P1.Y }, Core.Model.Circle c => new[] { c.Center.X, c.Center.Y, c.Radius }, Core.Model.Arc a => new[] { a.Center.X, a.Center.Y, a.Radius, a.StartDeg, a.EndDeg }, Core.Model.Text t => new[] { t.Pos.X, t.Pos.Y, t.Height }, Core.Model.MText m => new[] { m.Pos.X, m.Pos.Y }, Core.Model.Insert i => new[] { i.Pos.X, i.Pos.Y, i.SX, i.Rotation }, Core.Model.LwPolyline p => p.Vertices.SelectMany(v => new[] { v.X, v.Y }).ToArray(), Core.Model.Dimension dm => new[] { dm.P13.X, dm.P13.Y, dm.P14.X, dm.P14.Y }, Core.Model.Hatch h => new[] { (double)h.Loops.Count }, _ => Array.Empty<double>() };
     static List<string> Snapshot(Core.Model.Document d) => d.Entities.Where(x => !x.PaperSpace && x is not Core.Model.Unknown).Select(x => x.DxfName + ":" + string.Join(",", Sig(x).Select(v => Math.Round(v, 6).ToString(System.Globalization.CultureInfo.InvariantCulture)))).OrderBy(s => s).ToList();

@@ -24,6 +24,12 @@ export function installTests(ctx: { view: CanvasView; cmd: any; getDoc: () => Do
     async zoomSteps(n: number) { return frames(n, () => v.zoomAt(v.view.w / 2, v.view.h / 2, 1.05)); },
     async dragPan(px: number) { const r = rect(); const cx = r.width / 2, cy = r.height / 2; const out: number[] = []; ptr('pointerdown', cx, cy, { button: 1, buttons: 4 }); for (let i = 1; i <= 10; i++) { ptr('pointermove', cx + px * i / 10, cy + px * i / 20, { buttons: 4 }); const t0 = performance.now(); v.drawNow(); v.needDraw = false; out.push(performance.now() - t0); await nextFrame(); } ptr('pointerup', cx + px, cy + px / 2, { button: 1, buttons: 0 }); return out; },
     clickWorld, dragWorld,
+    /** Wheel (middle button) double-click on the canvas centre — AutoCAD zoom extents. */
+    async middleDouble() { const r = rect(); const cx = r.width / 2, cy = r.height / 2; for (let i = 0; i < 2; i++) { ptr('pointerdown', cx, cy, { button: 1, buttons: 4 }); ptr('pointerup', cx, cy, { button: 1, buttons: 0 }); await new Promise(res => setTimeout(res, 60)); } await settle(30); return { cx: v.view.cx, cy: v.view.cy, scale: v.view.scale }; },
+    modes() { return { ortho: v.orthoOn, polar: v.polarOn, polarInc: v.polarInc, grid: v.gridOn, snap: v.gridSnapOn, osnap: v.snapOn, tool: v.tool, lastTool: v.lastTool, pills: Array.from(document.querySelectorAll('.ftr .modes button')).map(b => (b as HTMLElement).dataset.mode + ':' + b.classList.contains('on')) }; },
+    /** Page CSS pixel of a world point (for pixel sampling in a capture), plus the device pixel ratio and an empty background probe point. */
+    screenOf(x: number, y: number) { const r = rect(); const [sx, sy] = w2s(v.view, x, y); return { x: r.left + sx, y: r.top + sy, bgx: r.left + 30, bgy: r.top + r.height / 2, dpr: window.devicePixelRatio || 1, dark: v.dark }; },
+    history() { return ctx.cmd.log.slice(-40); },
     async cmd(text: string) { ctx.cmd.input.value = text; ctx.cmd.input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await settle(30); return v.tool; },
     async key(key: string, opts: any = {}) { document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ctrlKey: !!opts.ctrl, shiftKey: !!opts.shift })); await settle(30); },
     async selectWindow(x0: number, y0: number, x1: number, y1: number) { v.cancel(); await dragWorld(x0, y0, x1, y1); return Array.from(v.selection); },

@@ -1,8 +1,8 @@
 # Build the portable release zip: dist\release\NexysDraft-v<ver>-win64.zip
 #   NexysDraft.exe (self-contained single file) + wwwroot\ + tools\libredwg\ (dwg2dxf, dxf2dwg, libiconv, COPYING, SOURCE.txt, build script;
 #   dwgread.exe stays in the repository for development only — draft3 decision) + skills\*\SKILL.md + README.md (Korean, 1 page) + LICENSES.md
-# Usage (PowerShell, repository root):  powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 0.3.1
-param([string]$Version = "0.3.1")
+# Usage (PowerShell, repository root):  powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 0.4.0
+param([string]$Version = "0.4.0", [switch]$RefreshDist)   # -RefreshDist: also replace app\dist (off by default — draft5: never touch a deployed copy unasked)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"; $dotnet = "$env:DOTNET_ROOT\dotnet.exe"
@@ -17,7 +17,9 @@ $distExe = "$root\app\dist\NexysDraft.exe"
 $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and ($_.Path -ieq $distExe) })
 $locked = $false
 if (Test-Path $distExe) { try { $fs = [System.IO.File]::Open($distExe, 'Open', 'ReadWrite', 'None'); $fs.Close() } catch { $locked = $true } }
-if ($running.Count -gt 0 -or $locked) {
+if (-not $RefreshDist) {
+    Write-Host "app\dist left as it is (pass -RefreshDist to replace it) — the release zip is built from $dist"
+} elseif ($running.Count -gt 0 -or $locked) {
     Write-Warning "app\dist not refreshed: NexysDraft is running from it (pid $($running.Id -join ', ')) or its exe is locked — the release zip is built from $dist"
 } else {
     Get-ChildItem "$root\app\dist" -Exclude release | Remove-Item -Recurse -Force
@@ -36,6 +38,8 @@ New-Item -ItemType Directory -Force "$stage\skills\nexysdraft", "$stage\skills\c
 Copy-Item "$root\skills\nexysdraft\SKILL.md" "$stage\skills\nexysdraft\"
 Copy-Item "$root\skills\cad-headless\SKILL.md" "$stage\skills\cad-headless\"
 Copy-Item "$root\packaging\README.md", "$root\packaging\LICENSES.md" $stage
+New-Item -ItemType Directory -Force "$stage\docs" | Out-Null
+Copy-Item "$root\docs\keys.md", "$root\docs\pdf-output.md" "$stage\docs\"
 if (Test-Path "$stage\tools\libredwg\dwgread.exe") { throw "dwgread.exe must not be in the release" }
 $zip = "$root\app\dist\release\NexysDraft-v$Version-win64.zip"; if (Test-Path $zip) { Remove-Item $zip }
 Compress-Archive -Path "$stage\*" -DestinationPath $zip

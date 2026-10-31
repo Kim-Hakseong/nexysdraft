@@ -125,7 +125,7 @@ input::placeholder { color: var(--faint); }
 .canvas-wrap .ov { pointer-events: none; }
 .drop-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--faint); font-size: 12px; letter-spacing: 0.04em; pointer-events: none; }
 .drop-hint b { font-family: var(--serif); font-size: 28px; font-weight: 400; color: var(--muted); display: block; text-align: center; margin-bottom: 8px; }
-.coord { position: absolute; right: 10px; bottom: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; pointer-events: none; }
+.coord { position: absolute; right: 10px; bottom: 8px; font-family: var(--mono); font-size: 11px; color: var(--canvas-coord); background: var(--canvas-coord-bg); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; pointer-events: none; }
 .toolbar { display: flex; align-items: center; gap: 2px; padding: 0 8px; height: 36px; border-bottom: 1px solid var(--border); }
 .toolbar .tool { height: 28px; padding: 0 7px; gap: 4px; font-size: 10px; }
 .toolbar .tool.edit span { display: none; }   /* edit group: icon only (tooltip carries the name) — the 1440 px center column holds all 12 tools */
@@ -165,3 +165,27 @@ input::placeholder { color: var(--faint); }
 .modal td:first-child { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
 .modal table.reasons tr { cursor: zoom-in; }
 .modal table.reasons tr:hover td { background: var(--panel-alt); }
+
+/* draft5 I2: the drawing area has its own light / dark background, independent of the app theme (Nexys VIEW chart-area approach).
+   .canvas-wrap carries cv-light or cv-dark; every overlay colour (selection, snap marker, crosshair, grips, window / crossing box, tracking ray, grid) is a token here. */
+.canvas-wrap.cv-light {
+  --canvas-bg: #FBFAF8; --canvas-grid: #C9C5BC; --canvas-cursor: #E8601C; --canvas-sel: #E8601C; --canvas-snap: #2E9E5B;
+  --canvas-crosshair: rgba(23,24,26,0.3); --canvas-grip: #17181A; --canvas-track: #2E9E5B;
+  --canvas-window: #2F6FD6; --canvas-window-fill: rgba(47,111,214,0.08); --canvas-crossing: #2E9E5B; --canvas-crossing-fill: rgba(46,158,91,0.08);
+  --canvas-coord: #5F5E5A; --canvas-coord-bg: rgba(251,250,248,0.85);
+}
+.canvas-wrap.cv-dark {
+  --canvas-bg: #121416; --canvas-grid: #3A3F46; --canvas-cursor: #FFFFFF; --canvas-sel: #FFB380; --canvas-snap: #4CFF4C;
+  --canvas-crosshair: rgba(255,255,255,0.35); --canvas-grip: #FFFFFF; --canvas-track: #4CFF4C;
+  --canvas-window: #6FA3FF; --canvas-window-fill: rgba(111,163,255,0.10); --canvas-crossing: #4CFF4C; --canvas-crossing-fill: rgba(76,255,76,0.08);
+  --canvas-coord: #9A9DA3; --canvas-coord-bg: rgba(18,20,22,0.85);
+}
+/* right-click menu (setting RIGHTCLICK menu) */
+.ctxmenu { position: absolute; z-index: 20; display: flex; flex-direction: column; min-width: 160px; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+.ctxmenu button { text-align: left; height: 26px; padding: 0 10px; border: 0; background: transparent; color: var(--text); font: 12px var(--sans); border-radius: 6px; cursor: pointer; }
+.ctxmenu button:hover { background: var(--panel-alt); font-weight: 600; }
+/* status-bar drafting mode pills (nanoCAD-style SNAP GRID ORTHO POLAR OSNAP): on = panel-alt background + weight, no coloured border */
+.ftr .modes { display: inline-flex; gap: 2px; }
+.ftr .modes button { height: 18px; padding: 0 7px; font: 600 9px var(--mono); letter-spacing: 0.06em; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--faint); cursor: pointer; }
+.ftr .modes button.on { background: var(--panel-alt); color: var(--text); font-weight: 700; border-color: var(--border-strong); }
+.toolbar .cvtheme { margin-left: auto; }

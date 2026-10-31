@@ -16,6 +16,8 @@ public sealed class Engine
     public Document? Doc { get; private set; }
     public Editor? Editor { get; private set; }
     public string Theme { get; set; } = "light";
+    /// <summary>Drawing-area background: auto (follows <see cref="Theme"/>) | light | dark (draft5 I2, remembered in layout.json).</summary>
+    public string CanvasTheme { get; set; } = "auto";
     public string CurrentLayer { get; set; } = "0";
     /// <summary>nanoCAD font compatibility on save (default ON, remembered in layout.json).</summary>
     public bool FontCompat { get; set; } = true;
@@ -46,7 +48,7 @@ public sealed class Engine
     public object State() => new
     {
         app = new { name = AppInfo.Name, versionText = AppInfo.VersionText, libredwg = LibreDwg.Available ? LibreDwg.Version : null },
-        theme = Theme, status = new { text = StatusText, led = Led, saving = Saving },
+        theme = Theme, canvasTheme = CanvasTheme, status = new { text = StatusText, led = Led, saving = Saving },
         fontCompat = FontCompat,
         file = Doc == null ? null : new { path = Doc.Path, name = Doc.Path == "" ? "untitled.dxf" : Path.GetFileName(Doc.Path), version = Doc.Version, codepage = Doc.CodePage, dirty = Doc.Dirty, sourceDwg = SourceDwg, openMs = OpenMs, convertMs = ConvertMs, entities = Doc.Entities.Count, blocks = Doc.Blocks.Count, unknown = Doc.UnknownCount, warnings = OpenWarnings, counts = Doc.TypeCounts, size = File.Exists(Doc.Path) ? new FileInfo(Doc.Path).Length : 0 },
         layers = Doc?.Layers.Select(l => new { name = l.Name, color = l.Color, tc = l.TrueColor, off = l.Off, frozen = l.Frozen, locked = l.Locked, lt = l.Linetype, count = 0 }).ToList(),
@@ -165,21 +167,23 @@ public sealed class Engine
         return txt;
     }
 
-    public async Task<string?> ExportPdfAsync(string pdfPath, bool perSheet = true)
+    /// <param name="merged">name.pdf with every sheet as a page</param><param name="sheets">name__001.pdf … one file per detected sheet</param><param name="overview">name__overview.pdf, the whole model space on one page</param>
+    public async Task<string?> ExportPdfAsync(string pdfPath, bool merged = true, bool sheets = true, bool overview = true)
     {
         if (Doc == null) return null;
         try
         {
             AutoSizeText();
-            SetStatus("Exporting PDF …", "busy"); var docRef = Doc;
-            var res = await Task.Run(() => DrawingPdf.Export(docRef, pdfPath));
-            int files = 0;
-            if (perSheet && res.SheetsDetected) files = await Task.Run(() => DrawingPdf.ExportPerSheet(docRef, pdfPath, res));
-            LastPdf = res;
-            SetStatus($"PDF saved: {pdfPath} ({res.Pages} page(s) {string.Join("/", res.PageInfos.Select(p => p.Paper).Distinct())}{(res.SheetsDetected ? $", {res.Sheets.Count(s => s.Label != "rest")} sheets detected, {files} per-sheet files" : "")}, {res.Texts} texts, {res.Ms:F0} ms)"); return pdfPath;
+            SetStatus("Exporting PDF …", "busy"); var docRef = Doc; var sw = Stopwatch.StartNew();
+            var (res, files) = await Task.Run(() => DrawingPdf.ExportSet(docRef, pdfPath, merged, sheets, overview));
+            LastPdf = res; LastPdfFiles.Clear(); LastPdfFiles.AddRange(files);
+            string list = string.Join(", ", files.Select(f => $"{Path.GetFileName(f.Path)} ({f.Pages} p, {f.Paper})"));
+            SetStatus($"PDF: {files.Count} file(s), {files.Sum(f => f.Pages)} page(s) — {list}{(res != null ? $" · {res.Texts} texts" : "")} · {sw.Elapsed.TotalMilliseconds:F0} ms");
+            return files.Count > 0 ? files[0].Path : null;
         }
         catch (Exception ex) { Diag.Trace("pdf failed " + ex); SetStatus("PDF export failed: " + ex.Message, "error"); return null; }
     }
+    public List<DrawingPdf.OutFile> LastPdfFiles { get; } = new();
     public DrawingPdf.Result? LastPdf { get; private set; }
 
     // ------------------------------------------------------------------ editing

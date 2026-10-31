@@ -31,7 +31,10 @@ export function aciRgb(aci: number, dark: boolean): number {
   aci = Math.abs(aci) | 0;
   if (aci === 7 || aci === 0 || aci === 256) return dark ? 0xFFFFFF : 0x17181A;
   let c = ACI[aci] ?? 0x808080;
-  if (!dark) { const r = c >> 16, g = (c >> 8) & 255, b = c & 255; const lum = 0.299 * r + 0.587 * g + 0.114 * b; if (lum > 200) c = ((r * 0.55) << 16) | ((g * 0.55) << 8) | (b * 0.55 | 0); }
+  const r = c >> 16, g = (c >> 8) & 255, b = c & 255; const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  if (!dark) { if (lum > 200) c = ((r * 0.55) << 16) | ((g * 0.55) << 8) | (b * 0.55 | 0); }
+  // dark background: lightness floor — black-ish colours (ACI 8, 250–251, dark shades) are lifted toward grey so they stay visible (draft5 I2)
+  else if (Math.max(r, g, b) < 110) { const k = 110 - Math.max(r, g, b); const f = (x: number) => Math.min(255, Math.round(x + k)); c = (f(r) << 16) | (f(g) << 8) | f(b); }
   return c;
 }
 export const rgbCss = (c: number) => `rgb(${c >> 16},${(c >> 8) & 255},${c & 255})`;

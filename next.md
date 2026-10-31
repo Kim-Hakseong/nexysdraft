@@ -1,14 +1,16 @@
-# next — NexysDraft 다음 런 후보 (draft4 종료 시점, 2026-10-30)
+# next — NexysDraft 다음 런 후보 (draft5 종료 시점, 2026-10-31)
 
-## 사용자 확인이 먼저 (docs/report-draft4.md §사용자 확인)
-1. nanoCAD 5로 work/d4_user_check/font_matrix.dwg·.dxf를 열어 한글이 보이는 변형 문자(A~G) → `FontCompat.DefaultMode` 한 줄을 바꾸고 v0.3.2.
-2. u04_hthp_pfd.nexys.dwg·.dxf(R2000) 열림·한글, u06_panel.noimage.dwg 열림.
+## 사용자 확인이 먼저
+- docs/report-draft5.md §사용자 확인: Shift 직교·F8·`@100<45`·직접 거리·휠 조작 체감, 실제 키보드 F10, BG 배경 전환.
+- draft4에서 남은 것: nanoCAD 5 font_matrix 변형 문자(A~G) → `FontCompat.DefaultMode` 한 줄, u04·u06 저장본 열림.
+
+## §결정 필요 (report-draft5)
+- 우클릭 기본(Enter vs 메뉴), 창 선택 색(파랑), 시트 1개 도면의 개별·개요 PDF 생략 여부, RE = REDRAW vs REGEN.
+
+## 백로그 (run-draft5 명시)
+- 트림·연장·필렛·배열(TR·EX·F·AR), SC·CHA, 동적 입력(커서 옆 좌표), 레이아웃 탭, 블록 삽입 UI.
+- 이전 백로그: 동적 블록 → 정적 변환, 자체 DWG R2000 라이터, 설치판(Inno Setup), 바이너리 전송(10만 열기), 측정 도구 확장.
 
 ## 기술 부채·관찰
-- dxf2dwg가 ACAD 외 앱 xdata를 핸들 0으로 쓴다(u04 266개, ODA `_APP0`). R2000 저장에서 이 xdata를 뺄지, 업스트림 이슈(ACAD 0x12 고정·이름 해석 실패)를 낼지 결정.
-- 10만 열기: 부하가 낮을 때 v0.3.0과 번갈아 다시 잴 것(이번 2.26~3.78 s, CPU 52 %). 바이너리 전송은 백로그.
-- app/dist 갱신: 사용자 draft1 창(pid 46024)을 닫은 뒤 `powershell -File tools\package.ps1`.
-- D1 DWG 왕복: u07 POLYLINE 2개 좌표 비교 오차 0.1(UNVERIFIED). dwg2dxf master가 u04에서 "Invalid LWPOLYLINE.widths ×4"를 낸다.
-
-## 백로그 (run-draft3 명시)
-- 레이아웃 탭 UI, 동적 블록 → 정적 변환, 자체 DWG R2000 라이터(플랜 C), 설치판(Inno Setup·.dwg 연결), OCR 옵션, 바이너리 전송, 측정 도구, 트림·필렛.
+- dxf2dwg가 ACAD 외 앱 xdata를 핸들 0으로 쓴다(u04 266개). 10만 열기는 부하가 낮을 때 다시 잴 것.
+- app\dist는 사용자 draft1 창(pid 46024)이 쓰고 있었다 — 갱신은 `package.ps1 -RefreshDist`로, 창을 닫은 뒤에.

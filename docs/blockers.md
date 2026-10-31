@@ -44,3 +44,11 @@
 | 21 | H0 | 지시서의 "A = 현재 방식"과 달리 draft3 코드는 B(ASCII `Gulim`)를 썼다 | FontCompat.MapFamily(draft3), d3 DWG의 ODA 읽기 | A와 B를 둘 다 매트릭스에 넣음 |
 | 22 | H2 | 10만 열기 ≤2 s: 이번 측정 2.26~3.78 s(CPU 52 % 부하) | work/selftest/d4_perf*, v0.3.0 A/B 2.08~3.72 s | 같은 조건의 기준 빌드와 차이 없음 → 회귀 아님. 부하가 낮을 때 다시 잴 것(draft3 1.86 s) |
 | 23 | H3 | `app\dist`(사용자 draft1 창, pid 46024 실행 중)에 tools·wwwroot가 없었다. draft3 마지막 패키징 시도가 다시 지운 것으로 보임 | ls app/dist | package.ps1이 실행 중이거나 잠긴 배포본은 아예 건드리지 않게 바꿈. tools\libredwg만 다시 복사. 창을 닫은 뒤 package.ps1을 다시 돌리거나 zip 사용 |
+
+## draft5 (2026-10-31)
+
+| # | 블록 | 블로커 | 판단 근거 | 대체 경로 / 결과 |
+|---|---|---|---|---|
+| 24 | I3 | 지시서의 "u05 시트 10개"와 달리 감지 시트는 9개 + 나머지 1쪽 | work/gates/i3_pdf_set.txt | 개별 파일을 "합본의 쪽마다"로 정의(`__rest.pdf`) → 12개 |
+| 25 | I1 | 실제 키보드의 F10(Windows 메뉴 키)이 WebView2에 그대로 전달되는지 검사하지 못함 — 셀프테스트는 DOM 이벤트 | 셀프테스트 방식 | §사용자 확인 4. 막히면 POLAR 알약·`POLAR` 명령으로 대체 |
+| 26 | I4 | 지시: 실행 중인 배포본·app\dist를 건드리지 않음 | run-draft5 전제 | package.ps1의 app\dist 갱신을 `-RefreshDist` 옵션으로만. 이번 런은 갱신하지 않음 |

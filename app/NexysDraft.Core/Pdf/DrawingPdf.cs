@@ -65,16 +65,8 @@ public static class DrawingPdf
         var sw = System.Diagnostics.Stopwatch.StartNew();
         fontPath ??= TrueTypeFont.FindSystemFont() ?? throw new FileNotFoundException("no TrueType font (malgun.ttf) found");
         var font = TrueTypeFont.Load(fontPath); var pdf = new PdfWriter(font);
-        var sheets = SheetDetector.Detect(doc, out bool detected); var infos = new List<PageInfo>();
-        var pageSheets = new List<Sheet>(sheets);
-        var ents = doc.Entities.Where(e => !e.PaperSpace && e is not Unknown && Visible(doc, e)).ToList();
-        if (detected)
-        {
-            // content outside every sheet → a rest page
-            var rest = new List<Entity>();
-            foreach (var e in ents) { var b = Bounds.Of(e, doc, 0); if (b == null) continue; double cx = (b.Value.x0 + b.Value.x1) / 2, cy = (b.Value.y0 + b.Value.y1) / 2; if (!sheets.Any(s => s.Contains(cx, cy))) rest.Add(e); }
-            if (rest.Count > 0) { double x0 = double.MaxValue, y0 = double.MaxValue, x1 = double.MinValue, y1 = double.MinValue; foreach (var e in rest) { var b = Bounds.Of(e, doc, 0)!.Value; x0 = Math.Min(x0, b.x0); y0 = Math.Min(y0, b.y0); x1 = Math.Max(x1, b.x1); y1 = Math.Max(y1, b.y1); } pageSheets.Add(new Sheet(x0, y0, x1, y1, "rest")); }
-        }
+        var infos = new List<PageInfo>(); var ents = doc.Entities.Where(e => !e.PaperSpace && e is not Unknown && Visible(doc, e)).ToList();
+        var pageSheets = PageSheets(doc, ents, out bool detected);
         int texts = 0;
         foreach (var sheet in pageSheets)
         {
@@ -84,6 +76,19 @@ public static class DrawingPdf
         var bytes = pdf.Build(Path.GetFileNameWithoutExtension(doc.Path));
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!); File.WriteAllBytes(path, bytes);
         return new Result(path, pageSheets.Count, pageSheets, detected, sw.Elapsed.TotalMilliseconds, texts, fontPath) { PageInfos = infos };
+    }
+
+    /// <summary>The pages of the merged PDF: the detected sheets (or the whole drawing as one sheet), plus a "rest" page for content outside every sheet.</summary>
+    public static List<Sheet> PageSheets(Document doc, List<Entity> ents, out bool detected)
+    {
+        var sheets = SheetDetector.Detect(doc, out detected); var pageSheets = new List<Sheet>(sheets);
+        if (detected)
+        {
+            var rest = new List<Entity>();
+            foreach (var e in ents) { var b = Bounds.Of(e, doc, 0); if (b == null) continue; double cx = (b.Value.x0 + b.Value.x1) / 2, cy = (b.Value.y0 + b.Value.y1) / 2; if (!sheets.Any(s => s.Contains(cx, cy))) rest.Add(e); }
+            if (rest.Count > 0) { double x0 = double.MaxValue, y0 = double.MaxValue, x1 = double.MinValue, y1 = double.MinValue; foreach (var e in rest) { var b = Bounds.Of(e, doc, 0)!.Value; x0 = Math.Min(x0, b.x0); y0 = Math.Min(y0, b.y0); x1 = Math.Max(x1, b.x1); y1 = Math.Max(y1, b.y1); } pageSheets.Add(new Sheet(x0, y0, x1, y1, "rest")); }
+        }
+        return pageSheets;
     }
 
     static (Ctx ctx, PageInfo info) RenderSheet(Document doc, PdfWriter pdf, Sheet sheet, List<Entity> ents)
@@ -110,6 +115,33 @@ public static class DrawingPdf
         foreach (var s in res.Sheets) { if (s.Label == "rest") continue; ExportSheet(doc, Path.Combine(dir, stem + "__" + s.Label + ".pdf"), s, res.FontPath); n++; }
         return n;
     }
+    /// <summary>One file of a PDF export set: kind = merged (all sheet pages) | sheet (one sheet) | overview (whole model space on one page).</summary>
+    public sealed record OutFile(string Path, string Kind, int Pages, string Paper);
+
+    /// <summary>The PDF output set (draft5 I3, docs/pdf-output.md): <c>name.pdf</c> = every sheet as a page (+ a "rest" page for content
+    /// outside the sheets), <c>name__001.pdf …</c> = one file per page of name.pdf (<c>name__rest.pdf</c> for the rest page), <c>name__overview.pdf</c> = the whole model space on one page
+    /// (paper chosen like a sheet). Each part can be switched off; with no sheet detected the merged file is the extents page.</summary>
+    public static (Result? merged, List<OutFile> files) ExportSet(Document doc, string mainPath, bool merged = true, bool sheets = true, bool overview = true, string? fontPath = null)
+    {
+        var files = new List<OutFile>(); Result? res = null;
+        string dir = Path.GetDirectoryName(Path.GetFullPath(mainPath))!, stem = Path.GetFileNameWithoutExtension(mainPath);
+        Directory.CreateDirectory(dir);
+        fontPath ??= TrueTypeFont.FindSystemFont() ?? throw new FileNotFoundException("no TrueType font (malgun.ttf) found");
+        if (merged) { res = Export(doc, mainPath, fontPath); files.Add(new OutFile(Path.GetFullPath(mainPath), "merged", res.Pages, string.Join("/", res.PageInfos.Select(p => p.Paper).Distinct()))); }
+        if (sheets)
+        {
+            // one file per page of the merged PDF: sheets name__001 …, the content outside the sheets name__rest, an undetected drawing name__001
+            var list = res?.Sheets ?? PageSheets(doc, doc.Entities.Where(e => !e.PaperSpace && e is not Unknown && Visible(doc, e)).ToList(), out _);
+            foreach (var s in list) { string label = s.Label is { Length: > 0 } l ? l : "001"; string p = Path.Combine(dir, stem + "__" + label + ".pdf"); ExportSheet(doc, p, s, fontPath); files.Add(new OutFile(p, "sheet", 1, ChoosePaper(doc, s).name)); }
+        }
+        if (overview)
+        {
+            var b = Bounds.Of(doc);
+            if (b != null) { var s = new Sheet(b.Value.x0, b.Value.y0, b.Value.x1, b.Value.y1, "overview"); string p = Path.Combine(dir, stem + "__overview.pdf"); ExportSheet(doc, p, s, fontPath); files.Add(new OutFile(p, "overview", 1, ChoosePaper(doc, s).name)); }
+        }
+        return (res, files);
+    }
+
     static void ExportSheet(Document doc, string path, Sheet sheet, string fontPath)
     {
         var font = TrueTypeFont.Load(fontPath); var pdf = new PdfWriter(font);

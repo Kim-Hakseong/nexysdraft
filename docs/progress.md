@@ -1,5 +1,16 @@
 # 진행 현황 — NexysDraft
 
+## 2026-10-31 draft5 (run-draft5.md)
+
+| 블록 | 판정 | 근거 |
+|---|---|---|
+| I1 AutoCAD 조작 | **완료** | Shift 임시 직교·F8/F10/F3/F7/F9·상태줄 알약·명령줄(Space=Enter, 글자 입력 시 명령줄로, `@길이<각도`, 직접 거리)·휠 더블클릭·Z A/E/W/P·RE·LA·PR·DI·ID·우클릭 설정. 셀프테스트 (a)~(f) 전부 PASS(work/gates/i1_i2_selftest.txt), docs/keys.md |
+| I2 캔버스 테마 | **완료** | BG 버튼(AUTO/LIGHT/DARK, layout.json), 캔버스 토큰, 색 7 반전 + 어두운 배경 명도 하한. 4조합 캡처, 대비 17.03 / 18.46:1 |
+| I3 PDF 구성 | **완료** | 합본 + 쪽별 개별(`__rest`) + 개요, CLI `--merged/--sheets/--overview`, 상태줄·result.json 파일 목록. u05 12개·u01 3개(i3_pdf_set.txt), docs/pdf-output.md |
+| I4 패키지 | **완료** | test 37/37, selftest·skilltest PASS, zip 스모크 PASS(i4_smoke.txt), app\dist 손대지 않음, Release v0.4.0 |
+
+산출물: docs/report-draft5.md, docs/keys.md, docs/pdf-output.md, docs/screens/40~44, next.md, 태그 v0.4.0.
+
 ## 2026-10-30 draft4 (run-draft4.md)
 
 | 블록 | 판정 | 근거 |

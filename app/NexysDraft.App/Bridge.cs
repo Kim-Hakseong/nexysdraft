@@ -92,6 +92,7 @@ public sealed class Bridge
             case "check": { var ck = e.Check(); return ck == null ? null : new { dwgOk = ck.DwgOk, recommended = ck.Recommended, planB = ck.PlanB, estimateSeconds = ck.EstimateSeconds, items = ck.Items.Select(i => new { kind = i.Kind, count = i.Count, detail = i.Detail, blocking = i.Blocking, recommendDxf = i.RecommendDxf, handles = i.Handles }).ToList(), fontFixes = ck.FontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, newFont = f.NewFamily + (f.NewFile != "" && f.Mode == Core.Dxf.FontCompatMode.C ? " (" + f.NewFile + ")" : "") }).ToList(), imageOnly = ck.ImageOnly, imageCount = ck.ImageCount, dxf = new { source = e.Doc!.Version, tooNew = Core.Dxf.DxfSave.TooNew(e.Doc), dflt = Core.Dxf.DxfSave.TooNew(e.Doc) ? "r2000" : "keep", limit = Core.Dxf.DxfSave.NanoCadNewest } }; }
             case "setFontCompat": e.FontCompat = B(r, "on", true); e.Touch(); return null;
             case "setTheme": e.Theme = S(r, "theme", "light"); e.Touch(); return null;
+            case "setCanvasTheme": { var ct = S(r, "theme", "auto"); e.CanvasTheme = ct is "light" or "dark" ? ct : "auto"; e.Touch(); return null; }
             case "setLayer": e.CurrentLayer = S(r, "layer", "0"); e.Touch(); return null;
             case "select": e.SetSelection(SL(r, "ids")); return null;
             case "undo": return e.Undo();
