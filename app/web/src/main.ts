@@ -114,7 +114,7 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.key.toLowerCase() === 'a' && !typing) { e.preventDefault(); view.run('selectall'); return; }
   if (e.key === 'F1') { e.preventDefault(); showHelp(); return; }
   const fk: Record<string, 'osnap' | 'grid' | 'ortho' | 'snap' | 'polar'> = { F3: 'osnap', F7: 'grid', F8: 'ortho', F9: 'snap', F10: 'polar' };
-  if (fk[e.key]) { e.preventDefault(); view.toggleMode(fk[e.key]); return; }
+  if (fk[e.key]) { e.preventDefault(); if (e.key === 'F10') { hostF10(); return; } view.toggleMode(fk[e.key]); return; }
   if (e.key === 'Shift') { view.shiftDown = true; view.invalidate(); }
   if (typing) return;
   if (e.key === 'Escape') { view.key(e); renderToolbar(); return; }
@@ -124,6 +124,10 @@ document.addEventListener('keydown', e => {
   if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey && /[a-zA-Z0-9@.,<\-]/.test(e.key)) { cmd.input.focus(); }
 });
 
+// F10 / Alt: the WPF shell swallows them (Windows menu keys) and forwards F10 here as a 'hostkey' message; a page keydown for the same press is ignored (dedupe 150 ms)
+let lastF10 = 0;
+function hostF10() { const now = performance.now(); if (now - lastF10 < 150) return; lastF10 = now; view.toggleMode('polar'); }
+bridge.on('hostkey', m => { if (m.key === 'F10') hostF10(); });
 document.addEventListener('keyup', e => { if (e.key === 'Shift') { view.shiftDown = false; view.invalidate(); } });
 window.addEventListener('blur', () => { view.shiftDown = false; });
 
@@ -137,7 +141,7 @@ function showHelp() {
     <p><b>열기/저장</b> Ctrl+O 열기(DWG는 LibreDWG로 변환) · Ctrl+S 저장 · Ctrl+Shift+S 다른 이름으로(사전 점검) · Ctrl+P PDF(합본 + 시트별 + 개요).</p>
     <p><b>보기</b> 휠 = 커서 기준 줌, 휠 드래그/Alt+드래그 = 팬, <b>휠 더블클릭</b> = 전체 보기(Z E), Z P = 이전 보기. 툴바 BG = 도면 배경(AUTO/LIGHT/DARK).</p>
     <p><b>선택</b> 클릭, 왼→오 창(안에 든 것), 오→왼 교차(걸친 것), Shift = 추가/제거, Ctrl+A 전체, Del 삭제.</p>
-    <p><b>명령줄</b> 글자를 치면 바로 명령줄로 · Enter/Space = 확정·마지막 명령 반복 · Esc = 취소 · 우클릭 = 확정(RIGHTCLICK MENU로 메뉴) · <code>x,y</code> · <code>@dx,dy</code> · <code>@길이&lt;각도</code> · 숫자 = 직접 거리. L · PL · C · DLI · M · CO · RO · MI · O · S · E · U · Z(A/E/W/P) · RE · LA · PR · DI 거리 · ID 좌표.</p>
+    <p><b>명령줄</b> 글자를 치면 바로 명령줄로 · Enter/Space = 확정·마지막 명령 반복 · Esc = 취소 · 우클릭 짧게(&lt;250 ms) = 확정·반복, 길게 = 메뉴(RIGHTCLICK TIMED/ENTER/MENU) · <code>x,y</code> · <code>@dx,dy</code> · <code>@길이&lt;각도</code> · 숫자 = 직접 거리. L · PL · C · DLI · M · CO · RO · MI · O · S · E · U · Z(A/E/W/P) · RE 재생성 · R 다시 그리기 · LA · PR · DI 거리 · ID 좌표.</p>
     <p><b>그리기 보조</b> <b>Shift</b> 누르는 동안 임시 직교 · F8 직교 · F10 극좌표(90°, POLAR 45) · F3 객체 스냅(끝점 □ 중점 △ 중심 ○ 교차 × 사분점 ◇) · F7 그리드 · F9 그리드 스냅. 상태줄 알약으로도 전환. 전체 표: docs/keys.md. <b>텍스트</b> 더블클릭 = 편집.</p>
     <ul><li>MVP 제외: 트림·연장·필렛·동적 블록·해치 편집·3D·XREF 편집·플롯 스타일.</li><li>DWG 쓰기는 LibreDWG(소스 빌드) 한계로 R2000. 저장 전 사전 점검(읽기 가능 여부·DXF 권장 사유)을 보여준다.</li></ul>
     <div class="btns"><button class="pill primary" data-b="ok">CLOSE</button></div></div></div>`);

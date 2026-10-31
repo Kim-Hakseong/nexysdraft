@@ -1,6 +1,8 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
@@ -23,6 +25,10 @@ public partial class MainWindow : Window
         Title = $"{AppInfo.Name} {AppInfo.VersionText}";
         try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/brand/AppIcon.ico"), BitmapCreateOptions.None, BitmapCacheOption.OnLoad); } catch { }
         Loaded += async (_, _) => await InitAsync();
+        // draft5b: F10 and a lone Alt are Windows menu keys (WM_SYSKEYDOWN → Key.System). Left alone they put the window into menu mode and the next key is eaten.
+        // The WebView2 control re-raises them here as accelerator keys; we swallow them and forward F10 to the page (polar tracking).
+        PreviewKeyDown += OnMenuKey; PreviewKeyUp += OnMenuKey;
+        SourceInitialized += (_, _) => (PresentationSource.FromVisual(this) as HwndSource)?.AddHook(WndProc);
         Closing += (_, e) =>
         {
             if (Engine.Doc?.Dirty == true && !SelfTest.Enabled)
@@ -60,6 +66,28 @@ public partial class MainWindow : Window
             Boot.Text = "WebView2 runtime not available: " + ex.Message + "\nInstall the Evergreen WebView2 Runtime (https://developer.microsoft.com/microsoft-edge/webview2/) or place a Fixed Version runtime in the WebView2Runtime folder next to NexysDraft.exe, then start again.";
             _ready.TrySetException(ex);
         }
+    }
+
+    /// <summary>F10 presses forwarded to the page (self-test counter).</summary>
+    public int HostF10Count { get; private set; }
+    /// <summary>True for the keys Windows uses to enter menu mode: F10 (any Shift / Ctrl) and Alt pressed alone.</summary>
+    public static bool IsMenuKey(Key key, Key systemKey) => key == Key.F10 || (key == Key.System && systemKey is Key.F10 or Key.LeftAlt or Key.RightAlt);
+    void OnMenuKey(object sender, KeyEventArgs e)
+    {
+        if (!IsMenuKey(e.Key, e.SystemKey)) return;
+        e.Handled = true;
+        if (e.RoutedEvent == Keyboard.PreviewKeyDownEvent && (e.Key == Key.F10 || e.SystemKey == Key.F10) && !e.IsRepeat)
+        {
+            HostF10Count++;
+            Bridge?.Post(new { ev = "hostkey", key = "F10", shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0 });
+        }
+    }
+    const int WM_SYSCOMMAND = 0x0112, SC_KEYMENU = 0xF100;
+    /// <summary>Belt and braces: a keyboard menu activation (SC_KEYMENU with no mnemonic character, i.e. F10 or Alt alone) is dropped. Alt+Space (lParam ' ') still opens the system menu.</summary>
+    IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_SYSCOMMAND && ((int)wParam.ToInt64() & 0xFFF0) == SC_KEYMENU && lParam == IntPtr.Zero) handled = true;
+        return IntPtr.Zero;
     }
 
     public const string OpenFilter = "Drawings|*.dwg;*.dxf|DWG|*.dwg|DXF|*.dxf|All|*.*";

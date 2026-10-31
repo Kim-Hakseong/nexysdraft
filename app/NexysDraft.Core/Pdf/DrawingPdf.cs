@@ -120,14 +120,17 @@ public static class DrawingPdf
 
     /// <summary>The PDF output set (draft5 I3, docs/pdf-output.md): <c>name.pdf</c> = every sheet as a page (+ a "rest" page for content
     /// outside the sheets), <c>name__001.pdf …</c> = one file per page of name.pdf (<c>name__rest.pdf</c> for the rest page), <c>name__overview.pdf</c> = the whole model space on one page
-    /// (paper chosen like a sheet). Each part can be switched off; with no sheet detected the merged file is the extents page.</summary>
-    public static (Result? merged, List<OutFile> files) ExportSet(Document doc, string mainPath, bool merged = true, bool sheets = true, bool overview = true, string? fontPath = null)
+    /// (paper chosen like a sheet). Each part can be switched off; with no sheet detected the merged file is the extents page.
+    /// <paramref name="collapseSingle"/> (draft5b): when the merged PDF has a single page (one sheet and no rest, or no sheet detected) the per-page and
+    /// overview files would repeat it, so only the merged file is written. Callers that name the parts explicitly (CLI flags) pass false.</summary>
+    public static (Result? merged, List<OutFile> files) ExportSet(Document doc, string mainPath, bool merged = true, bool sheets = true, bool overview = true, string? fontPath = null, bool collapseSingle = false)
     {
         var files = new List<OutFile>(); Result? res = null;
         string dir = Path.GetDirectoryName(Path.GetFullPath(mainPath))!, stem = Path.GetFileNameWithoutExtension(mainPath);
         Directory.CreateDirectory(dir);
         fontPath ??= TrueTypeFont.FindSystemFont() ?? throw new FileNotFoundException("no TrueType font (malgun.ttf) found");
         if (merged) { res = Export(doc, mainPath, fontPath); files.Add(new OutFile(Path.GetFullPath(mainPath), "merged", res.Pages, string.Join("/", res.PageInfos.Select(p => p.Paper).Distinct()))); }
+        if (collapseSingle && res != null && res.Pages == 1) { sheets = false; overview = false; }
         if (sheets)
         {
             // one file per page of the merged PDF: sheets name__001 …, the content outside the sheets name__rest, an undetected drawing name__001

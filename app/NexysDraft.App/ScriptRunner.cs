@@ -79,12 +79,12 @@ public static class ScriptRunner
                 }
             case "pdf":
                 {
-                    // pdf PATH [--merged] [--sheets] [--overview]: no flag = all three (draft5 I3)
+                    // pdf PATH [--merged] [--sheets] [--overview]: no flag = all three (draft5 I3), collapsed to the merged file for a single-page drawing (draft5b); named flags are followed as given
                     bool fm = a.RemoveAll(x => x.Equals("--merged", StringComparison.OrdinalIgnoreCase)) > 0, fs = a.RemoveAll(x => x.Equals("--sheets", StringComparison.OrdinalIgnoreCase)) > 0, fo = a.RemoveAll(x => x.Equals("--overview", StringComparison.OrdinalIgnoreCase)) > 0;
-                    if (!fm && !fs && !fo) fm = fs = fo = true;
-                    string p = Path.GetFullPath(string.Join(" ", a)); Doc(); var r = e.ExportPdfAsync(p, fm, fs, fo).GetAwaiter().GetResult() ?? throw new IOException(e.StatusText); var lp = e.LastPdf;
+                    bool named = fm || fs || fo; if (!named) fm = fs = fo = true;
+                    string p = Path.GetFullPath(string.Join(" ", a)); Doc(); var r = e.ExportPdfAsync(p, fm, fs, fo, named).GetAwaiter().GetResult() ?? throw new IOException(e.StatusText); var lp = e.LastPdf;
                     var files = e.LastPdfFiles.Select(f => new { path = f.Path, kind = f.Kind, pages = f.Pages, paper = f.Paper }).ToList();
-                    return new { path = p, files, fileCount = files.Count, pages = lp?.Pages ?? 0, sheets = lp?.Sheets.Count(s => s.Label != "rest") ?? 0, detected = lp?.SheetsDetected ?? false, texts = lp?.Texts ?? 0, ms = lp?.Ms ?? 0, paper = lp?.PageInfos.Select(pi => new { pi.Label, pi.Paper, pi.WidthMm, pi.HeightMm, pi.Basis, pi.Texts, minTextMm = Math.Round(pi.MinTextMm, 2), p10TextMm = Math.Round(pi.P10TextMm, 2), medianTextMm = Math.Round(pi.MedianTextMm, 2) }).ToList() };
+                    return new { path = p, files, fileCount = files.Count, note = e.LastPdfNote, pages = lp?.Pages ?? 0, sheets = lp?.Sheets.Count(s => s.Label != "rest") ?? 0, detected = lp?.SheetsDetected ?? false, texts = lp?.Texts ?? 0, ms = lp?.Ms ?? 0, paper = lp?.PageInfos.Select(pi => new { pi.Label, pi.Paper, pi.WidthMm, pi.HeightMm, pi.Basis, pi.Texts, minTextMm = Math.Round(pi.MinTextMm, 2), p10TextMm = Math.Round(pi.P10TextMm, 2), medianTextMm = Math.Round(pi.MedianTextMm, 2) }).ToList() };
                 }
             case "select":
                 {

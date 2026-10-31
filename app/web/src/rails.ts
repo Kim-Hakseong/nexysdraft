@@ -119,7 +119,7 @@ export class PropsRail {
 export function typeName(e: Ent) { return ({ L: 'LINE', C: 'CIRCLE', A: 'ARC', E: 'ELLIPSE', P: e.spline ? 'SPLINE' : e.heavy ? 'POLYLINE' : 'LWPOLYLINE', T: e.attr ? 'ATTRIB' : 'TEXT', M: 'MTEXT', I: 'INSERT', H: 'HATCH', D: 'DIMENSION', S: 'SOLID', PT: 'POINT', X: e.name ?? 'UNKNOWN' } as Record<string, string>)[e.t] ?? e.t; }
 
 export class CommandBar {
-  el = h(`<div class="cmdbar"><div class="cmd-hist"></div><div class="cmd-line"><span class="ic">${I.terminal()}</span><span class="pr">Command:</span><input spellcheck="false" autocomplete="off" placeholder="L · PL · C · M · CO · E · S · O · MI · RO · DLI · Z · DI · ID · U"><span class="hint">Enter/Space = 확정·반복 · Esc = 취소 · F3 OSNAP · F8 ORTHO · F10 POLAR · Shift = 임시 직교</span></div></div>`);
+  el = h(`<div class="cmdbar"><div class="cmd-hist"></div><div class="cmd-line"><span class="ic">${I.terminal()}</span><span class="pr">Command:</span><input spellcheck="false" autocomplete="off" placeholder="L · PL · C · M · CO · E · S · O · MI · RO · DLI · Z · DI · ID · U"><span class="hint">Enter/Space·짧은 우클릭 = 확정·반복 · 긴 우클릭 = 메뉴 · Esc = 취소 · F3 OSNAP · F8 ORTHO · F10 POLAR · Shift = 임시 직교</span></div></div>`);
   hist = this.el.querySelector('.cmd-hist') as HTMLElement; input = this.el.querySelector('input') as HTMLInputElement; pr = this.el.querySelector('.pr') as HTMLElement;
   lines: string[] = []; onSubmit: ((text: string) => void) | null = null; onEscape: (() => void) | null = null;
   constructor() {

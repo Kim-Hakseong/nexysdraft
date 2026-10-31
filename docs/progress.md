@@ -1,5 +1,18 @@
 # 진행 현황 — NexysDraft
 
+## 2026-10-31 draft5b (run-draft5b.md) → v0.4.1
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 우클릭 시간 감지(TIMED 기본/ENTER/MENU) | **완료** | 셀프테스트 rightclick_timed_short_enter_long_menu PASS |
+| 선택 색(창 파랑·교차 초록, 캔버스 토큰) | **완료(draft5 그대로)** | styles.css cv-light/cv-dark 토큰 |
+| PDF 단일 쪽 → 합본만, CLI 플래그 우선 | **완료** | i3_pdf_set.txt: u05 12 · u01 1 · u01 플래그 지정 3 |
+| RE = REGEN, R = REDRAW | **완료** | alias_re_regen_r_redraw PASS, docs/keys.md |
+| F10·Alt 셸 가로채기 | **완료** | host_keys_f10_alt_sendinput PASS(SendInput 실제 키) |
+| 글꼴 매트릭스 사용자 확인 | **종료** | nanoCAD 5에서 A~G 모두 한글 → 모드 C 확정 |
+
+산출물: docs/report-draft5b.md, 태그 v0.4.1.
+
 ## 2026-10-31 draft5 (run-draft5.md)
 
 | 블록 | 판정 | 근거 |

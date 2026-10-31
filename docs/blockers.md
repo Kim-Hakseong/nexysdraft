@@ -52,3 +52,4 @@
 | 24 | I3 | 지시서의 "u05 시트 10개"와 달리 감지 시트는 9개 + 나머지 1쪽 | work/gates/i3_pdf_set.txt | 개별 파일을 "합본의 쪽마다"로 정의(`__rest.pdf`) → 12개 |
 | 25 | I1 | 실제 키보드의 F10(Windows 메뉴 키)이 WebView2에 그대로 전달되는지 검사하지 못함 — 셀프테스트는 DOM 이벤트 | 셀프테스트 방식 | §사용자 확인 4. 막히면 POLAR 알약·`POLAR` 명령으로 대체 |
 | 26 | I4 | 지시: 실행 중인 배포본·app\dist를 건드리지 않음 | run-draft5 전제 | package.ps1의 app\dist 갱신을 `-RefreshDist` 옵션으로만. 이번 런은 갱신하지 않음 |
+| 25 | I1 → draft5b | (해결) F10: 셸 가로채기 + SendInput 실제 키 셀프테스트 PASS | host_keys_f10_alt_sendinput | 사용자 키보드 체감만 §사용자 확인 |

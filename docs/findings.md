@@ -144,3 +144,9 @@
 ### PDF (I3)
 - u05의 합본은 10쪽이고, 시트는 9개다(나머지 1쪽 포함). u01은 시트가 감지되지 않아 도면 전체 1쪽이다.
 - 개별 파일을 "합본의 쪽마다 1개"로 정리하자 u05 12개, u01 3개가 됐다(work/gates/i3_pdf_set.txt). 나머지 쪽 파일(`__rest.pdf`)의 추출 글자는 12자다.
+
+## 2026-10-31 draft5b
+- 사용자 확인: nanoCAD 5에서 글꼴 매트릭스 DWG·DXF의 A~G가 모두 한글로 보였다. `FontCompat.DefaultMode` = C를 확정한다.
+- F10과 Alt 단독은 WebView2 WPF 컨트롤이 셸의 `PreviewKeyDown`으로 다시 올려 준다(Key.System, SystemKey F10/LeftAlt). 셸에서 가로채 F10을 `hostkey`로 페이지에 넘기자 SendInput 실제 키 입력에서 F10 → POLAR 전환, 이어진 Z가 명령줄로 들어갔다. Alt 단독 뒤의 Z도 들어갔다(host_keys_f10_alt_sendinput, 셸 전달 2회). 대조군(가로채기 없는 빌드)은 돌리지 않았다.
+- Windows는 셀프테스트 프로세스가 전경을 가져가는 것을 막는다. 전경 스레드에 `AttachThreadInput`으로 잠깐 붙어서 `SetForegroundWindow`를 하자 전경을 얻었다.
+- 우클릭 시간 감지는 놓을 때(pointerup) 누른 시간으로 정한다. 250 ms 미만이면 Enter, 그 이상이면 메뉴다.

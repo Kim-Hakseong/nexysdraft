@@ -18,7 +18,7 @@ Portable: `app/dist/NexysDraft.exe` + `tools/libredwg/` next to it (DWG read/wri
 | `new` | empty drawing (layer 0, DASHED, Standard = malgun.ttf) |
 | `open PATH.dwg|.dxf` | open (DWG via LibreDWG) |
 | `save PATH.dxf [--ver r2000\|keep]` / `save PATH.dwg [--no-image]` | DXF: originals up to AC1027 keep their version and untouched bytes; newer originals (AC1032) are written as R2000 so nanoCAD 5 opens them (`--ver` forces either); pure ASCII (`\U+XXXX`). DWG = R2000 via dxf2dwg (about 1 s per 5 MB); `--no-image` leaves raster IMAGE entities out. The result reports `version` and `reason` |
-| `pdf PATH.pdf [--merged] [--sheets] [--overview]` | searchable PDF set (Malgun Gothic subset): `PATH.pdf` one page per detected sheet (+ rest page), `PATH__001.pdf` … one file per page (`__rest.pdf`), `PATH__overview.pdf` whole model space on one page. No flag = all three; the result lists `files` (path, kind, pages, paper) |
+| `pdf PATH.pdf [--merged] [--sheets] [--overview]` | searchable PDF set (Malgun Gothic subset): `PATH.pdf` one page per detected sheet (+ rest page), `PATH__001.pdf` … one file per page (`__rest.pdf`), `PATH__overview.pdf` whole model space on one page. No flag = all three, except a single-page drawing gets the merged file only (`note: "single sheet — merged only"`); named flags are followed as given. The result lists `files` (path, kind, pages, paper) |
 | `select all|none|window X0,Y0 X1,Y1|crossing X0,Y0 X1,Y1|handles H…|layer NAME|type LINE` | selection for the edit commands |
 | `layer new NAME [COLOR]`, `layer current NAME`, `layer set NAME on|off|frozen|thawed|locked|unlocked|COLOR` | layers (`current` creates when missing) |
 | `l X0,Y0 X1,Y1 [X2,Y2 …]` | line(s) through the points on the current layer |

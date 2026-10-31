@@ -6,9 +6,11 @@ import { fmtNum, h, aciRgb, rgbCss } from './util';
 
 type Pt = [number, number];
 export interface ToolSpec { name: string; prompt: string }
-const ALIASES: Record<string, string> = { l: 'line', line: 'line', pl: 'pline', pline: 'pline', c: 'circle', circle: 'circle', m: 'move', move: 'move', co: 'copy', cp: 'copy', copy: 'copy', e: 'erase', erase: 'erase', del: 'erase', s: 'stretch', stretch: 'stretch', o: 'offset', offset: 'offset', mi: 'mirror', mirror: 'mirror', ro: 'rotate', rotate: 'rotate', z: 'zoom', zoom: 'zoom', ze: 'zoomext', dli: 'dim', dim: 'dim', dimlin: 'dim', dimlinear: 'dim', u: 'undo', undo: 'undo', redo: 'redo', la: 'layer', layer: 'layer', ed: 'text', text: 'text', ddedit: 'text', sel: 'select', select: 'select', esc: 'cancel', pan: 'pan', p: 'pan', regen: 'regen', re: 'redraw', redraw: 'redraw', r: 'redraw', open: 'open', new: 'new', save: 'save', saveas: 'saveas', qsave: 'save', export: 'exportdwg', pdf: 'pdf', plot: 'pdf', print: 'pdf', snap: 'snap', sn: 'snap', grid: 'grid', ortho: 'ortho', polar: 'polar', osnap: 'osnap', os: 'osnap', f3: 'osnap', all: 'selectall', pr: 'props', props: 'props', properties: 'props', di: 'dist', dist: 'dist', id: 'id', rightclick: 'rightclick' };
+const ALIASES: Record<string, string> = { l: 'line', line: 'line', pl: 'pline', pline: 'pline', c: 'circle', circle: 'circle', m: 'move', move: 'move', co: 'copy', cp: 'copy', copy: 'copy', e: 'erase', erase: 'erase', del: 'erase', s: 'stretch', stretch: 'stretch', o: 'offset', offset: 'offset', mi: 'mirror', mirror: 'mirror', ro: 'rotate', rotate: 'rotate', z: 'zoom', zoom: 'zoom', ze: 'zoomext', dli: 'dim', dim: 'dim', dimlin: 'dim', dimlinear: 'dim', u: 'undo', undo: 'undo', redo: 'redo', la: 'layer', layer: 'layer', ed: 'text', text: 'text', ddedit: 'text', sel: 'select', select: 'select', esc: 'cancel', pan: 'pan', p: 'pan', regen: 'regen', re: 'regen', redraw: 'redraw', r: 'redraw', open: 'open', new: 'new', save: 'save', saveas: 'saveas', qsave: 'save', export: 'exportdwg', pdf: 'pdf', plot: 'pdf', print: 'pdf', snap: 'snap', sn: 'snap', grid: 'grid', ortho: 'ortho', polar: 'polar', osnap: 'osnap', os: 'osnap', f3: 'osnap', all: 'selectall', pr: 'props', props: 'props', properties: 'props', di: 'dist', dist: 'dist', id: 'id', rightclick: 'rightclick' };
 /** Polar tracking increments F10 / POLAR cycles through (AutoCAD POLARANG; default 90°). */
 const POLAR_INCS = [90, 45];
+/** AutoCAD time-sensitive right-click duration (ms). */
+export const RIGHT_MS = 250;
 
 export class CanvasView {
   el: HTMLElement; wrap: HTMLElement; glc: HTMLCanvasElement; ovc: HTMLCanvasElement; coord: HTMLElement; hint: HTMLElement;
@@ -25,8 +27,9 @@ export class CanvasView {
   lastDist = 10; lastRadius = 10;
   /** Drafting modes (status-bar pills, AutoCAD keys): F8 ortho, F10 polar tracking, F7 grid display, F9 grid snap; Shift inverts ortho while held. */
   orthoOn = false; polarOn = false; polarInc = 90; gridOn = false; gridSnapOn = false; gridSpacing = 10; shiftDown = false;
-  /** Right click: 'enter' (confirm / repeat, AutoCAD "fast right click") or 'menu' (small context menu). */
-  rightClickMode: 'enter' | 'menu' = 'enter';
+  /** Right click (AutoCAD time-sensitive right-click): 'timed' = a click shorter than RIGHT_MS is Enter (confirm / repeat), a longer press opens the menu (default);
+   *  'enter' = always Enter; 'menu' = always the context menu. RIGHTCLICK TIMED|ENTER|MENU. */
+  rightClickMode: 'timed' | 'enter' | 'menu' = 'timed'; rightDownAt = 0; regenCount = 0;
   onModes: (() => void) | null = null; onFocusRail: ((which: 'layers' | 'props') => void) | null = null;
   viewStack: { cx: number; cy: number; scale: number }[] = []; lastWheelPush = 0; lastMiddleDown = 0; menuEl: HTMLElement | null = null;
 
@@ -39,7 +42,7 @@ export class CanvasView {
     this.rend = new Renderer(this.glc, this.ovc);
     new ResizeObserver(() => { this.resize(); }).observe(this.wrap);
     this.bind();
-    try { if (localStorage.getItem('nx.rightclick') === 'menu') this.rightClickMode = 'menu'; } catch { }
+    try { const rc = localStorage.getItem('nx.rightclick'); if (rc === 'menu' || rc === 'enter' || rc === 'timed') this.rightClickMode = rc; } catch { }
     const loop = () => { if (this.needDraw) { this.needDraw = false; this.drawNow(); } this.raf = requestAnimationFrame(loop); }; this.raf = requestAnimationFrame(loop);
   }
   resize() { const r = this.wrap.getBoundingClientRect(); this.view.w = Math.max(1, r.width); this.view.h = Math.max(1, r.height); this.view.dpr = window.devicePixelRatio || 1; this.invalidate(); }
@@ -77,7 +80,7 @@ export class CanvasView {
         this.lastMiddleDown = now; if (e.shiftKey) return; e.preventDefault();
       }
       if (e.button === 1 || (e.button === 0 && e.altKey) || (e.button === 0 && this.tool === 'pan')) { this.dragMode = 'pan'; this.panStart = { x: s[0], y: s[1], cx: this.view.cx, cy: this.view.cy }; w.setPointerCapture(e.pointerId); return; }
-      if (e.button === 2) { if (this.rightClickMode === 'menu') this.openMenu(s); else this.rightClick(); return; }
+      if (e.button === 2) { this.rightDownAt = performance.now(); try { w.setPointerCapture(e.pointerId); } catch { } return; }   // decided on release (time-sensitive right click)
       if (e.button !== 0) return;
       if (this.toolWantsPoint()) { this.point(this.effectivePoint(p, e.shiftKey), e.shiftKey); return; }
       // select tool / selection step: click pick or start box
@@ -92,6 +95,7 @@ export class CanvasView {
       this.invalidate();
     });
     w.addEventListener('pointerup', e => {
+      if (e.button === 2) { if (this.rightDownAt) { const held = performance.now() - this.rightDownAt; this.rightDownAt = 0; this.rightRelease(held, this.toScreen(e)); } return; }
       if (this.dragMode === 'pan') { this.dragMode = 'none'; this.panStart = null; return; }
       if (this.dragMode === 'box' && this.dragStart) {
         const p = this.toWorld(e); const d = Math.hypot(p[0] - this.dragStart[0], p[1] - this.dragStart[1]) * this.view.scale;
@@ -111,6 +115,13 @@ export class CanvasView {
   }
   /** Enter on an idle command line / right click with nothing running: repeat the last command (AutoCAD). */
   rightClick() { if (this.tool === 'select') this.run(this.lastTool); else this.enter(); }
+  /** Right button released after `held` ms: timed mode → < RIGHT_MS = Enter, otherwise the context menu. Returns what it did. */
+  rightRelease(held: number, s: Pt): 'enter' | 'menu' {
+    const menu = this.rightClickMode === 'menu' || (this.rightClickMode === 'timed' && held >= RIGHT_MS);
+    if (menu) this.openMenu(s); else this.rightClick();
+    this.lastRight = menu ? 'menu' : 'enter'; return this.lastRight;
+  }
+  lastRight: 'enter' | 'menu' | '' = '';
   openMenu(s: Pt) {
     this.closeMenu(); const idle = this.tool === 'select';
     const items: [string, string][] = idle ? [['repeat', `반복 ${this.lastTool.toUpperCase()}`], ['zoomext', '전체 보기 (Z E)'], ['zoomprev', '이전 보기 (Z P)'], ['selectall', '전체 선택 (Ctrl+A)']] : [['enter', '확정 (Enter)'], ['cancel', '취소 (Esc)'], ['zoomext', '전체 보기 (Z E)']];
@@ -201,7 +212,7 @@ export class CanvasView {
       case 'cancel': this.cancel(); return true;
       case 'zoomext': this.zoomExtents(); this.say('ZOOM Extents'); return true;
       case 'zoom': { const a = (arg ?? '').trim().toLowerCase(); if (a === '') { this.start('zoomopt'); return true; } return this.zoomOption(a); }
-      case 'regen': this.doc?.geom.clear(); if (this.doc) this.doc.ver++; this.invalidate(); return true;
+      case 'regen': { this.doc?.geom.clear(); if (this.doc) this.doc.ver++; this.rend.setDoc(this.doc); this.regenCount++; this.invalidate(); this.say('REGEN — geometry and render buffers rebuilt'); return true; }
       case 'redraw': this.invalidate(); this.say('REDRAW'); return true;
       case 'ortho': case 'polar': case 'grid': case 'snap': case 'osnap': {
         const a = (arg ?? '').trim().toLowerCase(); const n = parseFloat(a);
@@ -209,7 +220,7 @@ export class CanvasView {
         if ((name === 'grid' || name === 'snap') && n > 0) { this.gridSpacing = n; this.toggleMode(name, true); return true; }
         this.toggleMode(name, a === 'on' ? true : a === 'off' ? false : undefined); return true;
       }
-      case 'rightclick': { const a = (arg ?? '').trim().toLowerCase(); this.rightClickMode = a === 'menu' ? 'menu' : a === 'enter' ? 'enter' : this.rightClickMode === 'menu' ? 'enter' : 'menu'; try { localStorage.setItem('nx.rightclick', this.rightClickMode); } catch { } this.say(`Right click = ${this.rightClickMode === 'menu' ? 'menu' : 'Enter (confirm / repeat)'}`); return true; }
+      case 'rightclick': { const a = (arg ?? '').trim().toLowerCase(); const order = ['timed', 'enter', 'menu'] as const; this.rightClickMode = a.startsWith('t') ? 'timed' : a.startsWith('e') ? 'enter' : a.startsWith('m') ? 'menu' : order[(order.indexOf(this.rightClickMode) + 1) % 3]; try { localStorage.setItem('nx.rightclick', this.rightClickMode); } catch { } this.say(`Right click = ${this.rightClickMode === 'timed' ? `time-sensitive (< ${RIGHT_MS} ms Enter, longer = menu)` : this.rightClickMode === 'menu' ? 'menu' : 'Enter (confirm / repeat)'}`); return true; }
       case 'props': this.onFocusRail?.('props'); return true;
       case 'dist': case 'id': this.start(name); return true;
       case 'selectall': if (this.doc) { this.selection = new Set(this.doc.order.filter(h => this.doc!.visible(this.doc!.ents.get(h)!))); this.onSelectionChanged?.(); this.invalidate(); } return true;

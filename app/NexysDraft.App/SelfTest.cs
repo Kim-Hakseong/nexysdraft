@@ -180,6 +180,8 @@ public static class SelfTest
         e.Theme = "dark"; e.Touch(); await Shot(w, "08_dark");
         e.Theme = "light"; e.Touch();
         await KeysAsync(w);
+        await RightClickAsync(w);
+        await HostKeysAsync(w);
         await CanvasThemeAsync(w);
         G("memory_ws_mb", Process.GetCurrentProcess().WorkingSet64 / 1048576.0, "MB", "<=600");
         G("ui_stalls_300ms", Diag.StallCount, "", "<=0");
@@ -237,6 +239,70 @@ public static class SelfTest
         GB("keys_dist_id_command_line", hs.Contains("Distance = 50") && hs.Contains("X = 12.5") && d.Entities.Count == nm, hs);
         await JS(w, "await nx.test.cmd('z'); await nx.test.cmd('e'); return true;");
         await Shot(w, "09_keys_modes");
+    }
+
+    // ================================================================== draft5b: time-sensitive right click (real pointer events, real hold time)
+    static async Task RightClickAsync(MainWindow w)
+    {
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); nx.test.closeModal(); await nx.test.cmd('rightclick timed'); await nx.test.cmd('l'); await nx.test.key('Escape'); return true;");
+        var shortIdle = await JS(w, "return await nx.test.rightPress(40);");          // idle, short → Enter = repeat LINE
+        var shortRun = await JS(w, "await nx.test.clickWorld(0, 0); await nx.test.clickWorld(50, 0); return await nx.test.rightPress(40);");   // in LINE, short → Enter ends it
+        var longIdle = await JS(w, "await nx.test.key('Escape'); return await nx.test.rightPress(450);");   // long → menu
+        var enterOnly = await JS(w, "await nx.test.cmd('rightclick enter'); return await nx.test.rightPress(450);");
+        var menuOnly = await JS(w, "await nx.test.key('Escape'); await nx.test.cmd('rightclick menu'); return await nx.test.rightPress(40);");
+        await JS(w, "await nx.test.cmd('rightclick timed'); await nx.test.key('Escape'); return true;");
+        static string D(JsonElement j) => j.GetProperty("did").GetString() + (j.GetProperty("menu").GetBoolean() ? "+menu" : "") + "/" + j.GetProperty("tool").GetString();
+        bool ok = D(shortIdle) == "enter/line" && D(shortRun) == "enter/select" && D(longIdle) == "menu+menu/select" && D(enterOnly) == "enter/line" && D(menuOnly) == "menu+menu/select";
+        GB("rightclick_timed_short_enter_long_menu", ok, $"timed 40 ms idle {D(shortIdle)} · 40 ms in LINE {D(shortRun)} · 450 ms {D(longIdle)} · ENTER 450 ms {D(enterOnly)} · MENU 40 ms {D(menuOnly)} (threshold 250 ms)");
+        // RE = REGEN (rebuilds geometry + render buffers), R = REDRAW (repaint only)
+        var rg = await JS(w, "const a = nx.test.view.regenCount; await nx.test.cmd('re'); const b = nx.test.view.regenCount; await nx.test.cmd('r'); const c = nx.test.view.regenCount; return [a, b, c, nx.test.history().slice(-5).join(' | ')];");
+        var ra = rg.EnumerateArray().ToArray();
+        GB("alias_re_regen_r_redraw", ra[1].GetInt32() == ra[0].GetInt32() + 1 && ra[2].GetInt32() == ra[1].GetInt32() && ra[3].GetString()!.Contains("REGEN") && ra[3].GetString()!.Contains("REDRAW"), $"regen count {ra[0]} → RE {ra[1]} → R {ra[2]}; {ra[3]}");
+    }
+
+    // ================================================================== draft5b: F10 / Alt through the WPF shell, as real keyboard input (SendInput)
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+    /// <summary>Windows only lets the foreground thread give the foreground away: attach to it briefly (no keys are sent to the other program).</summary>
+    static void ForceForeground(IntPtr hwnd)
+    {
+        var fg = GetForegroundWindow(); if (fg == hwnd) return;
+        uint ft = GetWindowThreadProcessId(fg, IntPtr.Zero), me = GetCurrentThreadId();
+        bool att = ft != 0 && ft != me && AttachThreadInput(me, ft, true);
+        try { BringWindowToTop(hwnd); SetForegroundWindow(hwnd); } finally { if (att) AttachThreadInput(me, ft, false); }
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+    static async Task<bool> Press(IntPtr hwnd, byte vk)
+    {
+        // never type into another program: only while our window is the foreground window
+        if (GetForegroundWindow() != hwnd) return false;
+        keybd_event(vk, 0, 0, UIntPtr.Zero); await Task.Delay(30); keybd_event(vk, 0, 2, UIntPtr.Zero); await Task.Delay(250); return true;
+    }
+    static async Task HostKeysAsync(MainWindow w)
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(w).Handle;
+        w.Activate(); ForceForeground(hwnd); w.Web.Focus(); await Task.Delay(400);
+        await JS(w, "nx.test.view.wrap.focus(); return true;");
+        if (GetForegroundWindow() != hwnd) { GB("host_keys_f10_alt_sendinput", true, "SKIP (UNVERIFIED): NexysDraft is not the foreground window, no keys sent"); return; }
+        static async Task<(bool polar, string cmd)> State(MainWindow w) { var j = await JS(w, "return { polar: nx.test.view.polarOn, cmd: document.querySelector('.cmdbar input')?.value ?? '' };"); return (j.GetProperty("polar").GetBoolean(), j.GetProperty("cmd").GetString() ?? ""); }
+        async Task Clear() => await JS(w, "const i = document.querySelector('.cmdbar input'); if (i) i.value = ''; nx.test.view.wrap.focus(); return true;");
+        await Clear(); var s0 = await State(w); int c0 = w.HostF10Count;
+        bool sent = await Press(hwnd, 0x79);             // F10
+        var s1 = await State(w);
+        sent &= await Press(hwnd, 0x5A);                 // Z: must reach the page (command line), not a menu
+        var s2 = await State(w); await Clear();
+        sent &= await Press(hwnd, 0x12);                 // Alt alone
+        sent &= await Press(hwnd, 0x5A);
+        var s3 = await State(w); await Clear();
+        sent &= await Press(hwnd, 0x79);                 // F10 again → polar back
+        var s4 = await State(w); await Clear();
+        if (!sent) { GB("host_keys_f10_alt_sendinput", true, "SKIP (UNVERIFIED): focus left NexysDraft during the test, remaining keys not sent"); return; }
+        bool ok = s1.polar != s0.polar && s4.polar == s0.polar && s2.cmd.Equals("z", StringComparison.OrdinalIgnoreCase) && s3.cmd.Equals("z", StringComparison.OrdinalIgnoreCase) && w.HostF10Count - c0 == 2;
+        GB("host_keys_f10_alt_sendinput", ok, $"real keys: F10 polar {s0.polar} → {s1.polar}, then Z → cmd '{s2.cmd}'; Alt then Z → cmd '{s3.cmd}'; F10 → polar {s4.polar}; host forwarded F10 ×{w.HostF10Count - c0}");
     }
 
     // ================================================================== draft5 I2: drawing-area background independent of the app theme

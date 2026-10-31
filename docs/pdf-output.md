@@ -1,6 +1,8 @@
-# PDF 출력 구성 (draft5 I3)
+# PDF 출력 구성 (draft5 I3, v0.4.1 단일 쪽 규칙)
 
 PDF는 내장 작성기로 만든다(검색 가능한 실제 글자, 맑은 고딕 부분 글꼴). 기본으로 한 번에 파일 세 종류를 만든다.
+
+**쪽이 1개뿐인 도면**(감지된 시트 1개에 나머지 쪽 없음, 또는 시트가 감지되지 않은 도면)은 개별·개요 파일이 합본과 같으므로 **합본만** 만든다(v0.4.1). 상태줄에 `(single sheet — merged only)`가 붙고 result.json의 `note`도 같은 값이다.
 
 | 파일 | 내용 | 쪽수 |
 |---|---|---|
@@ -14,16 +16,18 @@ PDF는 내장 작성기로 만든다(검색 가능한 실제 글자, 맑은 고�
 ## 명령줄 (`--script`)
 
 ```
-pdf C:\out\a.pdf                     세 종류 모두 (기본)
+pdf C:\out\a.pdf                     세 종류 모두 (기본; 쪽이 1개면 합본만)
 pdf C:\out\a.pdf --merged            합본만
 pdf C:\out\a.pdf --sheets            시트별 개별 파일만
 pdf C:\out\a.pdf --overview          개요만
 pdf C:\out\a.pdf --merged --overview 골라서 조합
 ```
 
+플래그를 하나라도 주면 그대로 따른다. 쪽이 1개인 도면도 `--merged --sheets --overview`를 주면 세 파일을 만든다.
+
 `result.json`의 `files`에 파일마다 `path`, `kind`(merged · sheet · overview), `pages`, `paper`가 들어간다.
 
 ## 관문 (work/gates/i3_pdf_set.txt)
 
 - u05: 합본 10쪽(시트 9 + 나머지 1), 개별 10개, 개요 1개로 파일 12개다. 모든 파일에서 pdftotext로 글자가 추출된다.
-- u01: 시트 1개로 파일 3개다.
+- u01(시트 감지 안 됨, 1쪽): 기본은 합본만 1개다. 세 플래그를 모두 주면 3개다.
