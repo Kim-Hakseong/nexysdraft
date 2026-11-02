@@ -8,3 +8,9 @@ app/**/obj/
 app/web/dist/
 *.user
 __pycache__/
+# user-drawing captures never go into the repo (company names in title blocks)
+docs/screens/*u0[0-9]*
+docs/screens/*user*
+design/mockup/*.png
+docs/screens/00_mockup_draft.png
+docs/screens/09_pixel_diff_*.png
