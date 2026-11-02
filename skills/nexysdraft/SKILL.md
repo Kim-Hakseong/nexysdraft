@@ -24,6 +24,13 @@ Portable: `app/dist/NexysDraft.exe` + `tools/libredwg/` next to it (DWG read/wri
 | `l X0,Y0 X1,Y1 [X2,Y2 …]` | line(s) through the points on the current layer |
 | `pl [c] X,Y X,Y …` | polyline, `c` = closed |
 | `c CX,CY R` | circle |
+| `rec X0,Y0 X1,Y1` | rectangle (closed LWPOLYLINE) from two corners |
+| `a X1,Y1 X2,Y2 X3,Y3` | arc through three points (start, on the arc, end) |
+| `el X0,Y0 X1,Y1 HALF` | ellipse: one axis by its two ends, HALF = the other half axis |
+| `pol N CX,CY R [c]` | regular polygon, N sides, radius R inscribed (or `c` = circumscribed), bottom edge horizontal |
+| `po X,Y` | point |
+| `dt X,Y H TEXT` | single-line text, height H |
+| `mt X,Y W H TEXT` | MTEXT, top-left at X,Y, width W, height H (`\P` = new line) |
 | `dli X0,Y0 X1,Y1 DX,DY [ANGLE]` | linear dimension between two points, dimension line through DX,DY (angle 0 horizontal / 90 vertical, else automatic) |
 | `m DX,DY` · `co DX,DY` · `e` · `ro CX,CY DEG` · `mi X0,Y0 X1,Y1 [erase]` · `s X0,Y0 X1,Y1 DX,DY` | move / copy / erase / rotate / mirror / stretch the selection |
 | `o HANDLE DIST SX,SY` | offset one line/circle/arc/polyline towards the side point |

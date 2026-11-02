@@ -36,7 +36,7 @@ public static class SelfTest
             L($"page size {w.Web.ActualWidth}x{w.Web.ActualHeight} dpr {VisualTreeHelper.GetDpi(w).DpiScaleX} webview2 {w.RuntimeVersion}");
             if (Args[0] == "--shot") await ShotAsync(w); else if (Args[0] == "--perf") await PerfAsync(w); else if (Args[0] == "--stress") await StressAsync(w); else if (Args[0] == "--skilltest") await SkillTestAsync(w); else await FullAsync(w);
         }
-        catch (Exception ex) { L("FATAL " + ex); }
+        catch (Exception ex) { L("FATAL " + ex); GB("selftest_completed", false, "FATAL " + ex.GetType().Name + ": " + ex.Message); }   // a crashed run must not exit 0 (draft5d blockers #27)
         finally
         {
             File.WriteAllLines(Path.Combine(OutDir, "selftest.log"), Log); if (Gate.Count > 0) File.WriteAllLines(Path.Combine(OutDir, "gates.txt"), Gate);
@@ -181,6 +181,7 @@ public static class SelfTest
         e.Theme = "light"; e.Touch();
         await KeysAsync(w);
         await RightClickAsync(w);
+        await ShapesAsync(w);
         await HostKeysAsync(w);
         await CanvasThemeAsync(w);
         G("memory_ws_mb", Process.GetCurrentProcess().WorkingSet64 / 1048576.0, "MB", "<=600");
@@ -242,6 +243,56 @@ public static class SelfTest
     }
 
     // ================================================================== draft5b: time-sensitive right click (real pointer events, real hold time)
+    // ================================================================== draft5e: basic shapes through the real command line (typed points) and the toolbar
+    static async Task ShapesAsync(MainWindow w)
+    {
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); nx.test.closeModal(); return true;");
+        var d = e.Doc!;
+        static double Hy(double x, double y) => Math.Sqrt(x * x + y * y);
+        // RECTANG: first corner typed, other corner relative
+        await JS(w, "await nx.test.cmd('rec'); await nx.test.cmd('0,0'); await nx.test.cmd('@100,50'); return true;"); await Task.Delay(150);
+        var rect = d.Entities.OfType<Core.Model.LwPolyline>().LastOrDefault();
+        bool okRect = rect != null && rect.Closed && rect.Vertices.Count == 4 && rect.Vertices.Any(v => Math.Abs(v.X - 100) < 1e-9 && Math.Abs(v.Y - 50) < 1e-9) && rect.Vertices.Any(v => Math.Abs(v.X) < 1e-9 && Math.Abs(v.Y) < 1e-9);
+        GB("shape_rect", okRect, rect == null ? "no polyline" : "vertices " + string.Join(" ", rect.Vertices.Select(v => $"({v.X:G6},{v.Y:G6})")) + $" closed {rect.Closed}");
+        // ARC: start, point on arc, end
+        await JS(w, "await nx.test.cmd('a'); await nx.test.cmd('150,0'); await nx.test.cmd('175,25'); await nx.test.cmd('200,0'); return true;"); await Task.Delay(150);
+        var arc = d.Entities.OfType<Core.Model.Arc>().LastOrDefault();
+        GB("shape_arc_3point", arc != null && Math.Abs(arc.Center.X - 175) < 1e-9 && Math.Abs(arc.Center.Y) < 1e-9 && Math.Abs(arc.Radius - 25) < 1e-9 && Math.Abs(arc.StartDeg) < 1e-9 && Math.Abs(arc.EndDeg - 180) < 1e-9, arc == null ? "no arc" : $"centre ({arc.Center.X:G6},{arc.Center.Y:G6}) r {arc.Radius:G6} {arc.StartDeg:G6}° → {arc.EndDeg:G6}°");
+        // ELLIPSE: axis ends, other half axis as a value
+        await JS(w, "await nx.test.cmd('el'); await nx.test.cmd('0,100'); await nx.test.cmd('80,100'); await nx.test.cmd('20'); return true;"); await Task.Delay(150);
+        var el = d.Entities.OfType<Core.Model.Ellipse>().LastOrDefault();
+        GB("shape_ellipse", el != null && Math.Abs(el.Center.X - 40) < 1e-9 && Math.Abs(el.Center.Y - 100) < 1e-9 && Math.Abs(el.Ratio - 0.5) < 1e-9 && Math.Abs(Hy(el.Major.X, el.Major.Y) - 40) < 1e-9, el == null ? "no ellipse" : $"centre ({el.Center.X:G6},{el.Center.Y:G6}) major ({el.Major.X:G6},{el.Major.Y:G6}) ratio {el.Ratio:G6}");
+        // POLYGON: 6 sides, centre, radius typed (inscribed, bottom edge horizontal)
+        await JS(w, "await nx.test.cmd('pol'); await nx.test.cmd('6'); await nx.test.cmd('150,100'); await nx.test.cmd('25'); return true;"); await Task.Delay(150);
+        var pol = d.Entities.OfType<Core.Model.LwPolyline>().LastOrDefault();
+        bool okPol = pol != null && pol != rect && pol.Closed && pol.Vertices.Count == 6 && pol.Vertices.All(v => Math.Abs(Hy(v.X - 150, v.Y - 100) - 25) < 1e-6);
+        double minY = pol?.Vertices.Min(v => v.Y) ?? 0; int bottom = pol?.Vertices.Count(v => Math.Abs(v.Y - minY) < 1e-6) ?? 0;
+        GB("shape_polygon", okPol && bottom == 2, pol == null ? "no polygon" : $"{pol.Vertices.Count} vertices on r 25 {okPol}, bottom edge horizontal {bottom == 2}");
+        // POINT
+        await JS(w, "await nx.test.cmd('po'); await nx.test.cmd('250,0'); return true;"); await Task.Delay(150);
+        var pt = d.Entities.OfType<Core.Model.Point>().LastOrDefault();
+        GB("shape_point", pt != null && Math.Abs(pt.Pos.X - 250) < 1e-9 && Math.Abs(pt.Pos.Y) < 1e-9, pt == null ? "no point" : $"({pt.Pos.X:G6},{pt.Pos.Y:G6})");
+        // TEXT (DT): start point, height 5, default rotation (Enter), two lines with spaces and Korean, a Space keypress inside the text must not submit
+        var sp = await JS(w, "await nx.test.cmd('dt'); await nx.test.cmd('0,-30'); await nx.test.cmd('5'); await nx.test.cmd(''); const i = document.querySelector('.cmdbar input'); i.value = '한글'; i.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })); const kept = i.value; const tool = nx.test.view.tool; i.value = ''; return { kept, tool, focus: document.activeElement === i };");
+        await JS(w, "await nx.test.cmd('한글 텍스트 TEXT 1'); await nx.test.cmd('둘째 줄'); await nx.test.cmd(''); return true;"); await Task.Delay(200);
+        var tx = d.Entities.OfType<Core.Model.Text>().Where(t => !t.IsAttrib).ToList();
+        bool okTx = tx.Count == 2 && tx[0].Value == "한글 텍스트 TEXT 1" && tx[1].Value == "둘째 줄" && Math.Abs(tx[0].Height - 5) < 1e-9 && Math.Abs(tx[0].Pos.Y + 30) < 1e-9 && tx[1].Pos.Y < tx[0].Pos.Y - 5 && Math.Abs(tx[1].Pos.X) < 1e-9;
+        bool spaceKept = sp.GetProperty("kept").GetString() == "한글" && sp.GetProperty("tool").GetString() == "dtext" && sp.GetProperty("focus").GetBoolean();
+        GB("shape_text_dt", okTx && spaceKept, $"{tx.Count} TEXT: " + string.Join(" | ", tx.Select(t => $"'{t.Value}' h {t.Height:G4} at ({t.Pos.X:G6},{t.Pos.Y:G6})")) + $"; Space during text entry kept the input {spaceKept} ({sp.GetRawText()})");
+        // MTEXT (T): two corners (width 80), two lines
+        await JS(w, "await nx.test.cmd('t'); await nx.test.cmd('100,-30'); await nx.test.cmd('180,-60'); await nx.test.cmd('첫 줄'); await nx.test.cmd('둘째 줄 MTEXT'); await nx.test.cmd(''); return true;"); await Task.Delay(200);
+        var mt = d.Entities.OfType<Core.Model.MText>().LastOrDefault();
+        string nl = ((char)92).ToString() + "P";
+        GB("shape_mtext", mt != null && Math.Abs(mt.Width - 80) < 1e-9 && mt.Value == "첫 줄" + nl + "둘째 줄 MTEXT" && Math.Abs(mt.Pos.X - 100) < 1e-9 && Math.Abs(mt.Pos.Y + 30) < 1e-9, mt == null ? "no mtext" : $"'{mt.Value}' width {mt.Width:G6} at ({mt.Pos.X:G6},{mt.Pos.Y:G6})");
+        // toolbar: one button per shape, and a click starts the command
+        var tb = await JS(w, "const ids = ['rect', 'arc', 'ellipse', 'polygon', 'point', 'dtext']; const found = ids.filter(n => document.querySelector(`.toolbar [data-tool=${n}]`)); document.querySelector('.toolbar [data-tool=rect]').dispatchEvent(new MouseEvent('click', { bubbles: true })); await nx.test.settle(30); const tool = nx.test.view.tool; await nx.test.key('Escape'); const tbEl = document.querySelector('.toolbar'); return { found: found.length, tool, overflow: tbEl.scrollWidth > tbEl.clientWidth + 1 };");
+        GB("shape_toolbar_buttons", tb.GetProperty("found").GetInt32() == 6 && tb.GetProperty("tool").GetString() == "rect" && !tb.GetProperty("overflow").GetBoolean(), tb.GetRawText());
+        // undo removes the last shape (MTEXT)
+        int before = d.Entities.Count; e.Undo(); await Task.Delay(100);
+        GB("shape_undo", d.Entities.Count == before - 1 && !d.Entities.OfType<Core.Model.MText>().Any(), $"entities {before} → {d.Entities.Count}"); e.Redo();
+        await JS(w, "await nx.test.zoomExtents(); return true;"); await Shot(w, "11_basic_shapes");
+    }
+
     static async Task RightClickAsync(MainWindow w)
     {
         var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); nx.test.closeModal(); await nx.test.cmd('rightclick timed'); await nx.test.cmd('l'); await nx.test.key('Escape'); return true;");

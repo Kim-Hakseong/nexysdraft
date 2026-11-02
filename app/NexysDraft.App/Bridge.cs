@@ -110,6 +110,11 @@ public sealed class Bridge
             case "draw.line": return e.Edit(ed => ed.AddLine(D(r, "x0"), D(r, "y0"), D(r, "x1"), D(r, "y1"), e.CurrentLayer));
             case "draw.circle": return e.Edit(ed => ed.AddCircle(D(r, "cx"), D(r, "cy"), D(r, "r"), e.CurrentLayer));
             case "draw.pline": { var p = DL(r, "pts"); var pts = new List<(double, double)>(); for (int i = 0; i + 1 < p.Count; i += 2) pts.Add((p[i], p[i + 1])); return e.Edit(ed => ed.AddPolyline(pts, B(r, "closed"), e.CurrentLayer)); }
+            case "draw.arc": return e.Edit(ed => ed.AddArc(D(r, "cx"), D(r, "cy"), D(r, "r"), D(r, "a0"), D(r, "a1"), e.CurrentLayer));
+            case "draw.ellipse": return e.Edit(ed => ed.AddEllipse(D(r, "cx"), D(r, "cy"), D(r, "mx"), D(r, "my"), D(r, "ratio", 1), e.CurrentLayer));
+            case "draw.point": return e.Edit(ed => ed.AddPoint(D(r, "x"), D(r, "y"), e.CurrentLayer));
+            case "draw.text": return e.Edit(ed => ed.AddText(D(r, "x"), D(r, "y"), D(r, "h", 2.5), D(r, "rot"), S(r, "text"), e.CurrentLayer));
+            case "draw.mtext": return e.Edit(ed => ed.AddMText(D(r, "x"), D(r, "y"), D(r, "h", 2.5), D(r, "w"), S(r, "text"), e.CurrentLayer));
             case "draw.dim": return e.Edit(ed => ed.AddLinearDimension(new Core.Model.V3(D(r, "x0"), D(r, "y0")), new Core.Model.V3(D(r, "x1"), D(r, "y1")), new Core.Model.V3(D(r, "dx"), D(r, "dy")), D(r, "angle"), e.CurrentLayer));
             case "layer.add": { var c = e.Edit(ed => ed.AddLayer(S(r, "name"), I(r, "color", 7))); if (B(r, "current")) { e.CurrentLayer = S(r, "name"); e.Touch(); } return c; }
             case "layer.set": return e.Edit(ed => ed.SetLayerState(S(r, "name"), BN(r, "off"), BN(r, "frozen"), BN(r, "locked"), IN(r, "color"), r.TryGetProperty("lt", out var lt) ? lt.GetString() : null));

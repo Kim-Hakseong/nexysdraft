@@ -1,5 +1,13 @@
 # 진행 현황 — NexysDraft
 
+## 2026-11-02 draft5e → v0.4.4 (기본 도형)
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| REC·A·EL·POL·PO·DT·T + 툴바 + CLI | **완료** | 셀프테스트 shape_* 9개 PASS, d5e_basic_shapes 2/2 |
+| 새 도면 DXF 저장 구조 | **수정** | 구조 검사 0, ezdxf 0 |
+| 셀프테스트 FATAL → 종료 코드 1 | **수정** | blockers #27 |
+
 ## 2026-11-02 draft5d → v0.4.3 (AutoCAD에서 저장 파일이 안 열림)
 
 | 항목 | 판정 | 근거 |

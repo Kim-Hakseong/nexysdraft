@@ -53,5 +53,5 @@
 | 25 | I1 | 실제 키보드의 F10(Windows 메뉴 키)이 WebView2에 그대로 전달되는지 검사하지 못함 — 셀프테스트는 DOM 이벤트 | 셀프테스트 방식 | §사용자 확인 4. 막히면 POLAR 알약·`POLAR` 명령으로 대체 |
 | 26 | I4 | 지시: 실행 중인 배포본·app\dist를 건드리지 않음 | run-draft5 전제 | package.ps1의 app\dist 갱신을 `-RefreshDist` 옵션으로만. 이번 런은 갱신하지 않음 |
 | 25 | I1 → draft5b | (해결) F10: 셸 가로채기 + SendInput 실제 키 셀프테스트 PASS | host_keys_f10_alt_sendinput | 사용자 키보드 체감만 §사용자 확인 |
-| 27 | D5d | 셀프테스트는 WebView2 초기화가 실패해도(0x800700AA 프로필 사용 중) FATAL 뒤 종료 코드 0을 낸다 | work/hang/trace.log 12:02:58 | 다음 버전에서 FATAL → 종료 코드 1. 이번 스모크는 3번째 실행 PASS 40으로 기록 |
+| 27 | D5d → 5e 해결 | 셀프테스트는 WebView2 초기화가 실패해도(0x800700AA 프로필 사용 중) FATAL 뒤 종료 코드 0을 낸다 | work/hang/trace.log 12:02:58 | 다음 버전에서 FATAL → 종료 코드 1. 이번 스모크는 3번째 실행 PASS 40으로 기록 |
 | 28 | D5d | 실제 AutoCAD가 없어 '열림'을 직접 확인할 수 없음 | — | ezdxf audit + 구조 관문으로 대체, §사용자 확인 |

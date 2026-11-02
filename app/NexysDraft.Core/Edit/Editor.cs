@@ -277,6 +277,16 @@ public sealed class Editor
     }
     public Change AddLine(double x0, double y0, double x1, double y1, string layer) => Add(new Line { P0 = new V3(x0, y0), P1 = new V3(x1, y1) }, layer, "Line");
     public Change AddCircle(double cx, double cy, double r, string layer) => Add(new Circle { Center = new V3(cx, cy), Radius = r }, layer, "Circle");
+    // draft5e basic shapes (RECTANG / POLYGON go through AddPolyline)
+    public Change AddArc(double cx, double cy, double r, double startDeg, double endDeg, string layer) => Add(new Arc { Center = new V3(cx, cy), Radius = r, StartDeg = Arc.Norm(startDeg), EndDeg = Arc.Norm(endDeg) }, layer, "Arc");
+    /// <summary>Full ellipse: major axis end point relative to the centre, minor/major ratio (0 &lt; ratio ≤ 1).</summary>
+    public Change AddEllipse(double cx, double cy, double mx, double my, double ratio, string layer) => Add(new Ellipse { Center = new V3(cx, cy), Major = new V3(mx, my), Ratio = Math.Clamp(ratio, 1e-6, 1) }, layer, "Ellipse");
+    public Change AddPoint(double x, double y, string layer) => Add(new Point { Pos = new V3(x, y) }, layer, "Point");
+    /// <summary>Text style for new text: $TEXTSTYLE when it exists, else Standard, else the first style.</summary>
+    public string CurrentTextStyle() { string s = Doc.HeaderString("$TEXTSTYLE", "Standard"); if (Doc.Styles.Any(t => t.Name.Equals(s, StringComparison.OrdinalIgnoreCase))) return s; return Doc.Styles.FirstOrDefault(t => t.Name.Equals("Standard", StringComparison.OrdinalIgnoreCase))?.Name ?? Doc.Styles.FirstOrDefault()?.Name ?? "Standard"; }
+    public Change AddText(double x, double y, double height, double rotationDeg, string value, string layer) => Add(new Text { Pos = new V3(x, y), Align = new V3(x, y), Height = height, Rotation = Arc.Norm(rotationDeg), Value = value, Style = CurrentTextStyle() }, layer, "Text");
+    /// <summary>MTEXT, top-left attachment at (x, y); value uses \P for line breaks.</summary>
+    public Change AddMText(double x, double y, double height, double width, string value, string layer) => Add(new MText { Pos = new V3(x, y), Height = height, Width = width, Attach = 1, Value = value, Style = CurrentTextStyle() }, layer, "MText");
     public Change AddPolyline(IEnumerable<(double x, double y)> pts, bool closed, string layer)
     {
         var p = new LwPolyline { Closed = closed }; foreach (var (x, y) in pts) p.Vertices.Add(new PVertex { X = x, Y = y });

@@ -131,7 +131,7 @@ input::placeholder { color: var(--faint); }
 .coord { position: absolute; right: 10px; bottom: 8px; font-family: var(--mono); font-size: 11px; color: var(--canvas-coord); background: var(--canvas-coord-bg); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; pointer-events: none; }
 .toolbar { display: flex; align-items: center; gap: 2px; padding: 0 8px; height: 36px; border-bottom: 1px solid var(--border); }
 .toolbar .tool { height: 28px; padding: 0 7px; gap: 4px; font-size: 10px; }
-.toolbar .tool.edit span { display: none; }   /* edit group: icon only (tooltip carries the name) — the 1440 px center column holds all 12 tools */
+.toolbar .tool.edit span { display: none; }   /* draw + edit tools: icon only (tooltip carries the name + alias; the active tool shows its label) — the 1440 px center column holds all 18 tools (draft5e) */
 .toolbar .tool.edit.on span { display: inline; }
 .toolbar .tool.on { background: var(--accent); color: var(--on-accent); }
 .toolbar .m { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }

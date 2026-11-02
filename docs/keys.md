@@ -64,6 +64,10 @@ AutoCAD를 쓰던 사람이 바로 쓸 수 있도록 자주 쓰는 키와 조작
 | PL | PLINE (C = 닫기) | | CO, CP | COPY |
 | C | CIRCLE | | RO | ROTATE |
 | DLI | DIMLINEAR | | MI | MIRROR |
+| **REC** | RECTANG 사각형: 두 모서리(`@가로,세로`도 됨) | | **A** | ARC 호: 시작점 → 호 위의 점 → 끝점 |
+| **EL** | ELLIPSE 타원: 축의 두 끝점 → 다른 축 반지름(점 또는 값) | | **POL** | POLYGON 다각형: 변 수 <4> → 중심 → 반지름(점 또는 값), I = 내접 / C = 외접 |
+| **PO** | POINT 점 | | **DT**, TEXT | 한 줄 텍스트: 시작점 → 높이 → 회전 → 내용(Enter마다 다음 줄, 빈 줄 = 끝) |
+| **T**, MT | MTEXT 여러 줄 텍스트: 두 모서리(폭) → 줄마다 입력, 빈 줄 = 끝 | | | |
 | E, Del | ERASE | | O | OFFSET |
 | S | STRETCH(교차 창) | | U / REDO | 실행 취소 / 다시 |
 | Z → A/E/W/P | ZOOM 전체/범위/창/이전 | | P | PAN |

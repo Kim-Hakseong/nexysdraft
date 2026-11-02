@@ -15,6 +15,7 @@ namespace NexysDraft.App;
 /// with --json, to stdout. Exit code 0 when every line succeeded, 1 otherwise, 2 when the job file could not be read.
 /// Commands: new | open PATH | save PATH(.dxf|.dwg) [--ver r2000|keep] [--no-image] [--no-fontfix] | pdf PATH [--merged] [--sheets] [--overview] | select all|none|window X0,Y0 X1,Y1|crossing …|handles H1 H2 … | layer new NAME [COLOR] |
 /// layer current NAME | layer set NAME on|off|frozen|thawed|locked|unlocked | l X0,Y0 X1,Y1 [X2,Y2 …] | pl [c] X,Y … | c CX,CY R | dli X0,Y0 X1,Y1 DX,DY [angle] |
+/// rec X0,Y0 X1,Y1 | a X1,Y1 X2,Y2 X3,Y3 | el X0,Y0 X1,Y1 HALF | pol N CX,CY R [c] | po X,Y | dt X,Y H TEXT | mt X,Y W H TEXT |
 /// m DX,DY | co DX,DY | e | ro CX,CY DEG | mi X0,Y0 X1,Y1 [erase] | o H DIST SX,SY | s X0,Y0 X1,Y1 DX,DY | text H STRING | replace OLD NEW | undo | redo |
 /// query entities|layers|extents|texts | echo TEXT. Lines starting with # are comments.
 /// </summary>
@@ -109,6 +110,14 @@ public static class ScriptRunner
             case "l": { if (a.Count < 2) throw new ArgumentException("l X0,Y0 X1,Y1 [X2,Y2 …]"); int n = 0; for (int i = 0; i + 1 < a.Count; i++) { var p = Pt(a[i]); var q = Pt(a[i + 1]); Ed().AddLine(p.x, p.y, q.x, q.y, e.CurrentLayer); n++; } return new { lines = n }; }
             case "pl": { bool closed = a.Count > 0 && a[0].Equals("c", StringComparison.OrdinalIgnoreCase); var pts = a.Where(x => x.Contains(',')).Select(Pt).Select(p => (p.x, p.y)).ToList(); if (pts.Count < 2) throw new ArgumentException("pl [c] X,Y X,Y …"); Ed().AddPolyline(pts, closed, e.CurrentLayer); return new { vertices = pts.Count, closed }; }
             case "c": { var p = Pt(a[0]); double r = D(a[1]); Ed().AddCircle(p.x, p.y, r, e.CurrentLayer); return new { center = a[0], r }; }
+            // draft5e basic shapes
+            case "rec": { var p = Pt(a[0]); var q = Pt(a[1]); Ed().AddPolyline(Core.Edit.Shapes.Rectangle(p.x, p.y, q.x, q.y), true, e.CurrentLayer); return new { corners = new[] { a[0], a[1] } }; }
+            case "a": { var p = Pt(a[0]); var m = Pt(a[1]); var q = Pt(a[2]); var arc = Core.Edit.Shapes.Arc3(p.x, p.y, m.x, m.y, q.x, q.y) ?? throw new ArgumentException("a: the three points are collinear"); Ed().AddArc(arc.cx, arc.cy, arc.r, arc.a0, arc.a1, e.CurrentLayer); return new { center = $"{arc.cx},{arc.cy}", r = arc.r, start = arc.a0, end = arc.a1 }; }
+            case "el": { var p = Pt(a[0]); var q = Pt(a[1]); double o = D(a[2]); var el = Core.Edit.Shapes.EllipseByAxis(p.x, p.y, q.x, q.y, o) ?? throw new ArgumentException("el X0,Y0 X1,Y1 OTHER_HALF_AXIS"); Ed().AddEllipse(el.cx, el.cy, el.mx, el.my, el.ratio, e.CurrentLayer); return new { center = $"{el.cx},{el.cy}", major = $"{el.mx},{el.my}", ratio = el.ratio }; }
+            case "pol": { int n = int.Parse(a[0], CultureInfo.InvariantCulture); var c = Pt(a[1]); double r = D(a[2]); bool ins = !(a.Count > 3 && a[3].StartsWith("c", StringComparison.OrdinalIgnoreCase)); var pts = Core.Edit.Shapes.Polygon(n, c.x, c.y, r, ins, ins ? -90 - 180.0 / n : -90); Ed().AddPolyline(pts, true, e.CurrentLayer); return new { sides = pts.Count, inscribed = ins }; }
+            case "po": { var p = Pt(a[0]); Ed().AddPoint(p.x, p.y, e.CurrentLayer); return new { point = a[0] }; }
+            case "dt": { var p = Pt(a[0]); double h = D(a[1]); string text = string.Join(" ", a.Skip(2)); if (text.Length == 0) throw new ArgumentException("dt X,Y HEIGHT TEXT"); Ed().AddText(p.x, p.y, h, 0, text, e.CurrentLayer); return new { handle = e.Doc!.Entities[^1].Handle, text }; }
+            case "mt": { var p = Pt(a[0]); double w = D(a[1]), h = D(a[2]); string text = string.Join(" ", a.Skip(3)); if (text.Length == 0) throw new ArgumentException("mt X,Y WIDTH HEIGHT TEXT (\\P = new line)"); Ed().AddMText(p.x, p.y, h, w, text, e.CurrentLayer); return new { handle = e.Doc!.Entities[^1].Handle, text }; }
             case "dli": { var p0 = Pt(a[0]); var p1 = Pt(a[1]); var pl = Pt(a[2]); double ang = a.Count > 3 ? D(a[3]) : (Math.Abs(pl.y - (p0.y + p1.y) / 2) >= Math.Abs(pl.x - (p0.x + p1.x) / 2) ? 0 : 90); var c = Ed().AddLinearDimension(new V3(p0.x, p0.y), new V3(p1.x, p1.y), new V3(pl.x, pl.y), ang, e.CurrentLayer); var dim = e.Doc!.Entities.OfType<Dimension>().Last(); return new { measurement = dim.Measurement, angle = ang }; }
             case "m": { var d = Pt(a[0]); Ed().Move(Sel(), d.x, d.y); return new { moved = sel.Count }; }
             case "co": { var d = Pt(a[0]); var c = Ed().Copy(Sel(), d.x, d.y); return new { copied = c.Added.Count }; }

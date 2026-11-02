@@ -17,10 +17,10 @@ left.append(files.el); right.append(layers.el, props.el); center.append(view.el)
 main.append(left, center, right); app.append(hdr, main, cmd.el, ftr);
 let frameInfo = '';
 
-const TOOLS: [string, string, string, string][] = [['select', 'SELECT', I.cursor(), 'Select (Esc)'], ['line', 'LINE', I.line(), 'Line (L)'], ['pline', 'PLINE', I.pline(), 'Polyline (PL)'], ['circle', 'CIRCLE', I.circle(), 'Circle (C)'], ['dim', 'DIM', I.dim(), 'Linear dimension (DLI)'], ['move', 'MOVE', I.move(), 'Move (M)'], ['copy', 'COPY', I.copy(), 'Copy (CO)'], ['rotate', 'ROTATE', I.rotate(), 'Rotate (RO)'], ['mirror', 'MIRROR', I.mirror(), 'Mirror (MI)'], ['offset', 'OFFSET', I.offset(), 'Offset (O)'], ['stretch', 'STRETCH', I.stretch(), 'Stretch (S)'], ['erase', 'ERASE', I.erase(), 'Erase (E / Del)']];
+const TOOLS: [string, string, string, string][] = [['select', 'SELECT', I.cursor(), 'Select (Esc)'], ['line', 'LINE', I.line(), 'Line (L)'], ['pline', 'PLINE', I.pline(), 'Polyline (PL)'], ['circle', 'CIRCLE', I.circle(), 'Circle (C)'], ['rect', 'RECT', I.rect(), 'Rectangle (REC)'], ['arc', 'ARC', I.arc(), 'Arc, 3 points (A)'], ['ellipse', 'ELLIPSE', I.ellipse(), 'Ellipse (EL)'], ['polygon', 'POLYGON', I.polygon(), 'Polygon (POL)'], ['point', 'POINT', I.point(), 'Point (PO)'], ['dtext', 'TEXT', I.text(), 'Text (DT) · multiline text (T)'], ['dim', 'DIM', I.dim(), 'Linear dimension (DLI)'], ['move', 'MOVE', I.move(), 'Move (M)'], ['copy', 'COPY', I.copy(), 'Copy (CO)'], ['rotate', 'ROTATE', I.rotate(), 'Rotate (RO)'], ['mirror', 'MIRROR', I.mirror(), 'Mirror (MI)'], ['offset', 'OFFSET', I.offset(), 'Offset (O)'], ['stretch', 'STRETCH', I.stretch(), 'Stretch (S)'], ['erase', 'ERASE', I.erase(), 'Erase (E / Del)']];
 function renderToolbar() {
-  const EDIT = new Set(['move', 'copy', 'rotate', 'mirror', 'offset', 'stretch', 'erase']);
-  toolbar.innerHTML = TOOLS.map(([n, l, ic, t], i) => `${i === 5 ? '<div class="vsep"></div>' : ''}<button type="button" class="tool${EDIT.has(n) ? ' edit' : ''}${view.tool === n ? ' on' : ''}" data-tool="${n}" title="${esc(t)}" aria-label="${l}">${ic}<span>${l}</span></button>`).join('') +
+  const EDIT = new Set(['line', 'pline', 'circle', 'rect', 'arc', 'ellipse', 'polygon', 'point', 'dtext', 'dim', 'move', 'copy', 'rotate', 'mirror', 'offset', 'stretch', 'erase']);   // icon only (tooltip = name + alias)
+  toolbar.innerHTML = TOOLS.map(([n, l, ic, t], i) => `${n === 'move' ? '<div class="vsep"></div>' : ''}<button type="button" class="tool${EDIT.has(n) ? ' edit' : ''}${view.tool === n ? ' on' : ''}" data-tool="${n}" title="${esc(t)}" aria-label="${l}">${ic}<span>${l}</span></button>`).join('') +
     `<div class="vsep"></div><button type="button" class="tool" data-a="zoomext" title="Zoom extents (Z E · wheel double-click)">${I.zoomFit()}<span>FIT</span></button>` +
     `<button type="button" class="tool cvtheme" data-a="cvtheme" title="Drawing background: ${cvLabel()} (app theme ${S?.theme ?? 'light'}) — click to switch">${canvasDark() ? I.theme() : I.sun()}<span>BG ${cvLabel().toUpperCase()}</span></button>`;
 }
@@ -79,7 +79,8 @@ bridge.on('status', m => { if (!S) return; S.status = { text: m.text, led: m.led
 ftr.addEventListener('click', e => { if ((e.target as HTMLElement).closest('[data-a=cancelSave]')) bridge.call('save.cancel'); });
 
 view.onSelectionChanged = () => { props.render(S ?? {}, doc, Array.from(view.selection)); bridge.call('select', { ids: Array.from(view.selection) }); };
-view.onPrompt = t => { cmd.prompt(t); renderToolbar(); };
+view.onPrompt = t => { cmd.prompt(t); renderToolbar(); if (view.wantsText()) cmd.input.focus(); };   // text entry: the command line takes the keys (Korean IME composes there)
+cmd.spaceLiteral = () => view.wantsText();
 view.onHistory = t => cmd.add(t);
 view.onModes = () => renderModes();
 view.onFocusRail = which => { if (which === 'props') { props.el.scrollIntoView({ block: 'nearest' }); (props.body.querySelector('select, textarea, input') as HTMLElement | null)?.focus(); cmd.add('PROPERTIES — rail focused'); } };
@@ -141,7 +142,7 @@ function showHelp() {
     <p><b>열기/저장</b> Ctrl+O 열기(DWG는 LibreDWG로 변환) · Ctrl+S 저장 · Ctrl+Shift+S 다른 이름으로(사전 점검) · Ctrl+P PDF(합본 + 시트별 + 개요).</p>
     <p><b>보기</b> 휠 = 커서 기준 줌, 휠 드래그/Alt+드래그 = 팬, <b>휠 더블클릭</b> = 전체 보기(Z E), Z P = 이전 보기. 툴바 BG = 도면 배경(AUTO/LIGHT/DARK).</p>
     <p><b>선택</b> 클릭, 왼→오 창(안에 든 것), 오→왼 교차(걸친 것), Shift = 추가/제거, Ctrl+A 전체, Del 삭제.</p>
-    <p><b>명령줄</b> 글자를 치면 바로 명령줄로 · Enter/Space = 확정·마지막 명령 반복 · Esc = 취소 · 우클릭 짧게(&lt;250 ms) = 확정·반복, 길게 = 메뉴(RIGHTCLICK TIMED/ENTER/MENU) · <code>x,y</code> · <code>@dx,dy</code> · <code>@길이&lt;각도</code> · 숫자 = 직접 거리. L · PL · C · DLI · M · CO · RO · MI · O · S · E · U · Z(A/E/W/P) · RE 재생성 · R 다시 그리기 · LA · PR · DI 거리 · ID 좌표.</p>
+    <p><b>명령줄</b> 글자를 치면 바로 명령줄로 · Enter/Space = 확정·마지막 명령 반복 · Esc = 취소 · 우클릭 짧게(&lt;250 ms) = 확정·반복, 길게 = 메뉴(RIGHTCLICK TIMED/ENTER/MENU) · <code>x,y</code> · <code>@dx,dy</code> · <code>@길이&lt;각도</code> · 숫자 = 직접 거리. L · PL · C · <b>REC</b> 사각형 · <b>A</b> 호(3점) · <b>EL</b> 타원 · <b>POL</b> 다각형 · <b>PO</b> 점 · <b>DT</b> 텍스트 · <b>T</b> 여러 줄 텍스트 · DLI · M · CO · RO · MI · O · S · E · U · Z(A/E/W/P) · RE 재생성 · R 다시 그리기 · LA · PR · DI 거리 · ID 좌표.</p>
     <p><b>그리기 보조</b> <b>Shift</b> 누르는 동안 임시 직교 · F8 직교 · F10 극좌표(90°, POLAR 45) · F3 객체 스냅(끝점 □ 중점 △ 중심 ○ 교차 × 사분점 ◇) · F7 그리드 · F9 그리드 스냅. 상태줄 알약으로도 전환. 전체 표: docs/keys.md. <b>텍스트</b> 더블클릭 = 편집.</p>
     <ul><li>MVP 제외: 트림·연장·필렛·동적 블록·해치 편집·3D·XREF 편집·플롯 스타일.</li><li>DWG 쓰기는 LibreDWG(소스 빌드) 한계로 R2000. 저장 전 사전 점검(읽기 가능 여부·DXF 권장 사유)을 보여준다.</li></ul>
     <div class="btns"><button class="pill primary" data-b="ok">CLOSE</button></div></div></div>`);

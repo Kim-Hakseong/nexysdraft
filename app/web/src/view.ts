@@ -6,11 +6,40 @@ import { fmtNum, h, aciRgb, rgbCss } from './util';
 
 type Pt = [number, number];
 export interface ToolSpec { name: string; prompt: string }
-const ALIASES: Record<string, string> = { l: 'line', line: 'line', pl: 'pline', pline: 'pline', c: 'circle', circle: 'circle', m: 'move', move: 'move', co: 'copy', cp: 'copy', copy: 'copy', e: 'erase', erase: 'erase', del: 'erase', s: 'stretch', stretch: 'stretch', o: 'offset', offset: 'offset', mi: 'mirror', mirror: 'mirror', ro: 'rotate', rotate: 'rotate', z: 'zoom', zoom: 'zoom', ze: 'zoomext', dli: 'dim', dim: 'dim', dimlin: 'dim', dimlinear: 'dim', u: 'undo', undo: 'undo', redo: 'redo', la: 'layer', layer: 'layer', ed: 'text', text: 'text', ddedit: 'text', sel: 'select', select: 'select', esc: 'cancel', pan: 'pan', p: 'pan', regen: 'regen', re: 'regen', redraw: 'redraw', r: 'redraw', open: 'open', new: 'new', save: 'save', saveas: 'saveas', qsave: 'save', export: 'exportdwg', pdf: 'pdf', plot: 'pdf', print: 'pdf', snap: 'snap', sn: 'snap', grid: 'grid', ortho: 'ortho', polar: 'polar', osnap: 'osnap', os: 'osnap', f3: 'osnap', all: 'selectall', pr: 'props', props: 'props', properties: 'props', di: 'dist', dist: 'dist', id: 'id', rightclick: 'rightclick' };
+const ALIASES: Record<string, string> = { l: 'line', line: 'line', pl: 'pline', pline: 'pline', c: 'circle', circle: 'circle', m: 'move', move: 'move', co: 'copy', cp: 'copy', copy: 'copy', e: 'erase', erase: 'erase', del: 'erase', s: 'stretch', stretch: 'stretch', o: 'offset', offset: 'offset', mi: 'mirror', mirror: 'mirror', ro: 'rotate', rotate: 'rotate', z: 'zoom', zoom: 'zoom', ze: 'zoomext', dli: 'dim', dim: 'dim', dimlin: 'dim', dimlinear: 'dim', u: 'undo', undo: 'undo', redo: 'redo', la: 'layer', layer: 'layer', ed: 'text', ddedit: 'text', text: 'dtext', dt: 'dtext', dtext: 'dtext', t: 'mtext', mt: 'mtext', mtext: 'mtext', rec: 'rect', rectang: 'rect', rectangle: 'rect', a: 'arc', arc: 'arc', el: 'ellipse', ellipse: 'ellipse', pol: 'polygon', polygon: 'polygon', po: 'point', point: 'point', sel: 'select', select: 'select', esc: 'cancel', pan: 'pan', p: 'pan', regen: 'regen', re: 'regen', redraw: 'redraw', r: 'redraw', open: 'open', new: 'new', save: 'save', saveas: 'saveas', qsave: 'save', export: 'exportdwg', pdf: 'pdf', plot: 'pdf', print: 'pdf', snap: 'snap', sn: 'snap', grid: 'grid', ortho: 'ortho', polar: 'polar', osnap: 'osnap', os: 'osnap', f3: 'osnap', all: 'selectall', pr: 'props', props: 'props', properties: 'props', di: 'dist', dist: 'dist', id: 'id', rightclick: 'rightclick' };
 /** Polar tracking increments F10 / POLAR cycles through (AutoCAD POLARANG; default 90°). */
 const POLAR_INCS = [90, 45];
 /** AutoCAD time-sensitive right-click duration (ms). */
 export const RIGHT_MS = 250;
+
+// ---- basic shape geometry (same formulas as NexysDraft.Core.Edit.Shapes)
+const MTEXT_NL = String.fromCharCode(92) + 'P';
+/** MTEXT content escaping: backslash and braces are format characters. */
+function escMText(s: string) { const bs = String.fromCharCode(92); return s.split(bs).join(bs + bs).split('{').join(bs + '{').split('}').join(bs + '}'); }
+export function rectPts(a: Pt, b: Pt): Pt[] { const x0 = Math.min(a[0], b[0]), y0 = Math.min(a[1], b[1]), x1 = Math.max(a[0], b[0]), y1 = Math.max(a[1], b[1]); return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; }
+export function arc3(p1: Pt, p2: Pt, p3: Pt): { cx: number; cy: number; r: number; a0: number; a1: number } | null {
+  const [x1, y1] = p1, [x2, y2] = p2, [x3, y3] = p3;
+  const d = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)); const sc = Math.max(1e-12, Math.hypot(x2 - x1, y2 - y1), Math.hypot(x3 - x1, y3 - y1));
+  if (Math.abs(d) < 1e-12 * sc * sc) return null;
+  const s1 = x1 * x1 + y1 * y1, s2 = x2 * x2 + y2 * y2, s3 = x3 * x3 + y3 * y3;
+  const cx = (s1 * (y2 - y3) + s2 * (y3 - y1) + s3 * (y1 - y2)) / d, cy = (s1 * (x3 - x2) + s2 * (x1 - x3) + s3 * (x2 - x1)) / d, r = Math.hypot(x1 - cx, y1 - cy);
+  const A = (x: number, y: number) => { const a = Math.atan2(y - cy, x - cx) * 180 / Math.PI; return a < 0 ? a + 360 : a; };
+  const a1 = A(x1, y1), a2 = A(x2, y2), a3 = A(x3, y3); const ccw = (f: number, t: number) => { const v = t - f; return v < 0 ? v + 360 : v; };
+  return ccw(a1, a2) <= ccw(a1, a3) ? { cx, cy, r, a0: a1, a1: a3 } : { cx, cy, r, a0: a3, a1: a1 };
+}
+function arcPts(g: { cx: number; cy: number; r: number; a0: number; a1: number }): Pt[] { let sweep = g.a1 - g.a0; if (sweep <= 0) sweep += 360; const n = Math.max(8, Math.ceil(sweep / 4)); const out: Pt[] = []; for (let i = 0; i <= n; i++) { const a = (g.a0 + sweep * i / n) * Math.PI / 180; out.push([g.cx + g.r * Math.cos(a), g.cy + g.r * Math.sin(a)]); } return out; }
+export function polygonPts(n: number, c: Pt, radius: number, inscribed: boolean, angleDeg: number): Pt[] {
+  n = Math.min(1024, Math.max(3, n)); const step = 2 * Math.PI / n; let a = angleDeg * Math.PI / 180, rv = radius;
+  if (!inscribed) { rv = radius / Math.cos(Math.PI / n); a += Math.PI / n; }
+  const out: Pt[] = []; for (let k = 0; k < n; k++) out.push([c[0] + rv * Math.cos(a + k * step), c[1] + rv * Math.sin(a + k * step)]); return out;
+}
+export function ellipseByAxis(p0: Pt, p1: Pt, other: number): { cx: number; cy: number; mx: number; my: number; ratio: number } | null {
+  const cx = (p0[0] + p1[0]) / 2, cy = (p0[1] + p1[1]) / 2, mx = p1[0] - cx, my = p1[1] - cy, half = Math.hypot(mx, my);
+  if (half < 1e-12 || other <= 1e-12) return null;
+  if (other <= half) return { cx, cy, mx, my, ratio: other / half };
+  const ux = -my / half, uy = mx / half; return { cx, cy, mx: ux * other, my: uy * other, ratio: half / other };
+}
+function ellipsePts(g: { cx: number; cy: number; mx: number; my: number; ratio: number }): Pt[] { const out: Pt[] = []; const nx = -g.my * g.ratio, ny = g.mx * g.ratio; for (let i = 0; i < 72; i++) { const t = i * Math.PI * 2 / 72; out.push([g.cx + g.mx * Math.cos(t) + nx * Math.sin(t), g.cy + g.my * Math.cos(t) + ny * Math.sin(t)]); } return out; }
 
 export class CanvasView {
   el: HTMLElement; wrap: HTMLElement; glc: HTMLCanvasElement; ovc: HTMLCanvasElement; coord: HTMLElement; hint: HTMLElement;
@@ -24,7 +53,7 @@ export class CanvasView {
   onDblClickText: ((id: string) => void) | null = null; onCommand: ((name: string) => boolean) | null = null;
   frameTimes: number[] = []; raf = 0; needDraw = true; dark = false; dirtyStats = '';
   textEditEl: HTMLTextAreaElement | null = null;
-  lastDist = 10; lastRadius = 10;
+  lastDist = 10; lastRadius = 10; lastSides = 4; lastTextH = 2.5; lastTextRot = 0;
   /** Drafting modes (status-bar pills, AutoCAD keys): F8 ortho, F10 polar tracking, F7 grid display, F9 grid snap; Shift inverts ortho while held. */
   orthoOn = false; polarOn = false; polarInc = 90; gridOn = false; gridSnapOn = false; gridSpacing = 10; shiftDown = false;
   /** Right click (AutoCAD time-sensitive right-click): 'timed' = a click shorter than RIGHT_MS is Enter (confirm / repeat), a longer press opens the menu (default);
@@ -153,6 +182,11 @@ export class CanvasView {
       case 'mirror': return this.step === 2 ? this.pts[0] : null;
       case 'dim': return this.pts.length === 1 ? this.pts[0] : null;
       case 'circle': return this.step === 1 ? this.pts[0] : null;
+      case 'rect': return this.pts.length === 1 ? this.pts[0] : null;
+      case 'arc': return this.pts.length ? this.pts[this.pts.length - 1] : null;
+      case 'ellipse': return this.step === 1 ? this.pts[0] : this.step === 2 ? this.ellipseCenter() : null;
+      case 'polygon': return this.step === 2 ? this.pts[0] : null;
+      case 'mtext': return this.step === 1 ? this.pts[0] : null;
     }
     return null;
   }
@@ -164,7 +198,7 @@ export class CanvasView {
     return this.constrain(q, shift);
   }
   constrain(q: Pt, shift: boolean): Pt {
-    const base = this.basePoint(); if (!base || this.tool === 'circle') return q;
+    const base = this.basePoint(); if (!base || this.tool === 'circle' || this.tool === 'rect' || this.tool === 'mtext') return q;
     const dx = q[0] - base[0], dy = q[1] - base[1];
     if (this.orthoOn !== shift) return Math.abs(dx) >= Math.abs(dy) ? [q[0], base[1]] : [base[0], q[1]];
     if (this.polarOn && (dx || dy)) {
@@ -198,6 +232,9 @@ export class CanvasView {
     if (this.needsSelection() && this.step === 0) return false;
     if (this.tool === 'offset' && this.step <= 1) return false;
     if (this.tool === 'text' || this.tool === 'layer' || this.tool === 'zoomopt') return false;
+    if (this.tool === 'polygon' && this.step === 0) return false;
+    if (this.tool === 'dtext' && this.step >= 1) return false;
+    if (this.tool === 'mtext' && this.step >= 2) return false;
     return true;
   }
   say(text: string) { this.onHistory?.(text); }
@@ -229,7 +266,7 @@ export class CanvasView {
       case 'select': this.cancel(); return true;
       case 'pan': this.tool = 'pan'; this.prompt('PAN — drag, Esc to end'); return true;
       case 'text': { const id = Array.from(this.selection)[0]; const e = id ? this.doc?.ents.get(id) : null; if (e && (e.t === 'T' || e.t === 'M')) this.editText(id!); else this.say('Select a TEXT or MTEXT first (or double-click it)'); return true; }
-      case 'line': case 'pline': case 'circle': case 'move': case 'copy': case 'erase': case 'rotate': case 'mirror': case 'stretch': case 'offset': case 'dim': this.start(name, arg); return true;
+      case 'line': case 'pline': case 'circle': case 'move': case 'copy': case 'erase': case 'rotate': case 'mirror': case 'stretch': case 'offset': case 'dim': case 'rect': case 'arc': case 'ellipse': case 'polygon': case 'point': case 'dtext': case 'mtext': this.start(name, arg); return true;
     }
     return false;
   }
@@ -249,6 +286,13 @@ export class CanvasView {
       case 'line': this.prompt('LINE — Specify first point:'); break;
       case 'pline': this.prompt('PLINE — Specify start point:'); break;
       case 'circle': this.prompt('CIRCLE — Specify center point:'); break;
+      case 'rect': this.prompt('RECTANG — Specify first corner point:'); break;
+      case 'arc': this.prompt('ARC — Specify start point:'); break;
+      case 'ellipse': this.prompt('ELLIPSE — Specify axis endpoint:'); break;
+      case 'polygon': { const n = parseInt(arg ?? '', 10); if (n >= 3) { this.lastSides = n; this.step = 1; this.prompt(`POLYGON ${n} sides — Specify center of polygon:`); } else this.prompt(`POLYGON — Enter number of sides <${this.lastSides}>:`); break; }
+      case 'point': this.prompt('POINT — Specify a point:'); break;
+      case 'dtext': this.prompt(`TEXT — Specify start point of text (height ${fmtNum(this.lastTextH, 3)}):`); break;
+      case 'mtext': this.prompt('MTEXT — Specify first corner:'); break;
       case 'offset': { const d = parseFloat(arg ?? ''); if (d > 0) { this.lastDist = d; this.step = 1; this.prompt(`OFFSET ${d} — Select object to offset:`); } else this.prompt(`OFFSET — Specify offset distance <${fmtNum(this.lastDist, 3)}>:`); break; }
       case 'dim': this.prompt('DIMLINEAR — Specify first extension line origin:'); break;
       case 'zoomwin': this.prompt('ZOOM Window — first corner:'); break;
@@ -272,6 +316,10 @@ export class CanvasView {
   enter() {
     if (this.needsSelection() && this.step === 0) { if (!this.toolSel.length) { this.cancel(); return; } this.step = 1; this.afterSelection(); return; }
     if (this.tool === 'pline') { this.finishPline(false); return; }
+    if (this.tool === 'polygon' && this.step === 0) { this.step = 1; this.prompt(`POLYGON ${this.lastSides} sides — Specify center of polygon:`); return; }
+    if (this.tool === 'dtext' && this.step === 1) { this.step = 2; this.prompt(`TEXT — Specify rotation angle of text <${fmtNum(this.lastTextRot, 3)}>:`); return; }
+    if (this.tool === 'dtext' && this.step === 2) { this.step = 3; this.prompt('TEXT — Enter text (Enter on an empty line ends):'); return; }
+    if (this.tool === 'mtext' && this.step === 2) { this.finishMText(); return; }
     if (this.tool === 'line') { this.cancel(); return; }
     if (this.tool === 'offset' && this.step === 0) { this.step = 1; this.prompt(`OFFSET ${fmtNum(this.lastDist, 3)} — Select object to offset:`); return; }
     if (this.tool === 'mirror' && this.step === 3) { this.finishMirror(false); return; }
@@ -289,6 +337,16 @@ export class CanvasView {
     if (this.tool === 'offset' && this.step === 0) { const d = parseFloat(t); if (d > 0) { this.lastDist = d; this.step = 1; this.prompt(`OFFSET ${d} — Select object to offset:`); } return true; }
     if (this.tool === 'circle' && this.step === 1) { const r = parseFloat(t); if (r > 0) { this.finishCircle(r); } return true; }
     if (this.tool === 'rotate' && this.step === 2) { const a = parseFloat(t); if (isFinite(a)) this.finishRotate(a); return true; }
+    if (this.tool === 'polygon' && this.step === 0) { const n = parseInt(t, 10); if (n >= 3 && n <= 1024) { this.lastSides = n; this.step = 1; this.prompt(`POLYGON ${n} sides — Specify center of polygon:`); } else this.say('POLYGON — number of sides 3 … 1024'); return true; }
+    if (this.tool === 'polygon' && this.step === 2) {
+      if (low === 'i' || low === 'c') { this.pending.inscribed = low === 'i'; this.prompt(this.polygonPrompt()); return true; }
+      const r = parseFloat(t); if (r > 0 && this.parsePoint(t) === null) { this.finishPolygon(r, null); return true; }
+    }
+    if (this.tool === 'ellipse' && this.step === 2) { const d = parseFloat(t); if (d > 0 && this.parsePoint(t) === null) { this.finishEllipse(d); return true; } }
+    if (this.tool === 'dtext' && this.step === 1) { const hh = parseFloat(t); if (hh > 0) { this.lastTextH = hh; this.step = 2; this.prompt(`TEXT — Specify rotation angle of text <${fmtNum(this.lastTextRot, 3)}>:`); } return true; }
+    if (this.tool === 'dtext' && this.step === 2) { const a = parseFloat(t); if (isFinite(a)) { this.lastTextRot = a; this.step = 3; this.prompt('TEXT — Enter text (Enter on an empty line ends):'); } return true; }
+    if (this.tool === 'dtext' && this.step === 3) { this.textLine(text); return true; }
+    if (this.tool === 'mtext' && this.step === 2) { this.pending.lines = (this.pending.lines ?? []).concat([text]); this.prompt(`MTEXT — line ${this.pending.lines.length + 1} (Enter on an empty line ends):`); return true; }
     const p = this.parsePoint(t);
     if (p) { this.point(p, false); return true; }
     const n = parseFloat(t);
@@ -336,6 +394,31 @@ export class CanvasView {
         else if (this.pts.length === 2) this.prompt('DIMLINEAR — Specify dimension line location:');
         else { const [a, b, c] = this.pts; const horiz = Math.abs(c[1] - (a[1] + b[1]) / 2) >= Math.abs(c[0] - (a[0] + b[0]) / 2) || Math.abs(a[1] - b[1]) < 1e-9; const angle = horiz ? 0 : 90; bridge.call('draw.dim', { x0: a[0], y0: a[1], x1: b[0], y1: b[1], dx: c[0], dy: c[1], angle }); this.say(`DIMLINEAR ${angle === 0 ? 'horizontal' : 'vertical'}`); this.cancel(); }
         break;
+      case 'rect':
+        if (this.pts.length === 0) { this.pts = [p]; this.prompt('RECTANG — Specify other corner point (or @dx,dy):'); }
+        else { const a = this.pts[0]; if (Math.abs(p[0] - a[0]) < 1e-12 || Math.abs(p[1] - a[1]) < 1e-12) { this.say('RECTANG — the corners must differ in X and Y'); break; } bridge.call('draw.pline', { pts: rectPts(a, p).flat(), closed: true }); this.say(`RECTANG ${fmtNum(Math.abs(p[0] - a[0]), 3)} × ${fmtNum(Math.abs(p[1] - a[1]), 3)}`); this.cancel(); }
+        break;
+      case 'arc':
+        this.pts.push(p);
+        if (this.pts.length === 1) this.prompt('ARC — Specify second point of arc:');
+        else if (this.pts.length === 2) this.prompt('ARC — Specify end point of arc:');
+        else { const [a, b, c] = this.pts; const g = arc3(a, b, c); if (!g) { this.say('ARC — the three points are on one line'); this.pts.pop(); break; } bridge.call('draw.arc', { cx: g.cx, cy: g.cy, r: g.r, a0: g.a0, a1: g.a1 }); this.say(`ARC r ${fmtNum(g.r, 3)} ${fmtNum(g.a0, 2)}° → ${fmtNum(g.a1, 2)}°`); this.cancel(); }
+        break;
+      case 'ellipse':
+        if (this.step === 0) { this.pts = [p]; this.step = 1; this.prompt('ELLIPSE — Specify other endpoint of axis:'); }
+        else if (this.step === 1) { if (Math.hypot(p[0] - this.pts[0][0], p[1] - this.pts[0][1]) < 1e-12) break; this.pts.push(p); this.step = 2; this.prompt('ELLIPSE — Specify distance to other axis (point or value):'); }
+        else { const c = this.ellipseCenter()!; this.finishEllipse(Math.hypot(p[0] - c[0], p[1] - c[1])); }
+        break;
+      case 'polygon':
+        if (this.step === 1) { this.pts = [p]; this.step = 2; if (this.pending.inscribed === undefined) this.pending.inscribed = true; this.prompt(this.polygonPrompt()); }
+        else if (this.step === 2) { const c = this.pts[0]; const r = Math.hypot(p[0] - c[0], p[1] - c[1]); if (r > 0) this.finishPolygon(r, Math.atan2(p[1] - c[1], p[0] - c[0]) * 180 / Math.PI); }
+        break;
+      case 'point': bridge.call('draw.point', { x: p[0], y: p[1] }); this.say(`POINT ${fmtNum(p[0], 3)},${fmtNum(p[1], 3)}`); this.cancel(); break;
+      case 'dtext': if (this.step === 0) { this.pts = [p]; this.step = 1; this.prompt(`TEXT — Specify height <${fmtNum(this.lastTextH, 3)}>:`); } break;
+      case 'mtext':
+        if (this.step === 0) { this.pts = [p]; this.step = 1; this.prompt('MTEXT — Specify opposite corner (sets the width):'); }
+        else if (this.step === 1) { this.pts.push(p); this.step = 2; this.pending.lines = []; this.prompt('MTEXT — Enter text, line 1 (Enter on an empty line ends):'); }
+        break;
       case 'id': this.say(`ID  X = ${fmtNum(p[0], 4)}   Y = ${fmtNum(p[1], 4)}   Z = 0`); this.cancel(); break;
       case 'dist':
         this.pts.push(p);
@@ -347,6 +430,31 @@ export class CanvasView {
     this.invalidate();
   }
   finishCircle(r: number) { if (r <= 0) return; this.lastRadius = r; const c = this.pts[0]; bridge.call('draw.circle', { cx: c[0], cy: c[1], r }); this.say(`CIRCLE ${fmtNum(c[0], 3)},${fmtNum(c[1], 3)} r ${fmtNum(r, 3)}`); this.cancel(); }
+  ellipseCenter(): Pt | null { if (this.pts.length < 2) return this.pts.length === 1 ? this.pts[0] : null; const [a, b] = this.pts; return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
+  finishEllipse(other: number) { const [a, b] = this.pts; const g = ellipseByAxis(a, b, other); if (!g) return; bridge.call('draw.ellipse', g); this.say(`ELLIPSE ratio ${fmtNum(g.ratio, 4)}`); this.cancel(); }
+  polygonPrompt() { return `POLYGON ${this.lastSides} sides — ${this.pending.inscribed === false ? 'Circumscribed' : 'Inscribed'}: specify radius (point or value), I = inscribed, C = circumscribed:`; }
+  /** angleDeg null = typed radius: AutoCAD puts the bottom edge horizontal. */
+  finishPolygon(r: number, angleDeg: number | null) {
+    const n = this.lastSides, ins = this.pending.inscribed !== false, c = this.pts[0];
+    const a = angleDeg ?? (ins ? -90 - 180 / n : -90);
+    bridge.call('draw.pline', { pts: polygonPts(n, c, r, ins, a).flat(), closed: true }); this.say(`POLYGON ${n} sides, ${ins ? 'inscribed' : 'circumscribed'} r ${fmtNum(r, 3)}`); this.cancel();
+  }
+  /** One line of TEXT: create it, then move down one line and ask for the next (AutoCAD DTEXT); an empty line ends. */
+  textLine(text: string) {
+    if (text.trim() === '') { this.cancel(); return; }
+    const p = this.pts[0], h = this.lastTextH, rot = this.lastTextRot;
+    bridge.call('draw.text', { x: p[0], y: p[1], h, rot, text }); this.say(`TEXT "${text.slice(0, 40)}"`);
+    const ang = (rot - 90) * Math.PI / 180, step = h * 1.6667; this.pts = [[p[0] + step * Math.cos(ang), p[1] + step * Math.sin(ang)]];
+    this.prompt('TEXT — next line (Enter on an empty line ends):'); this.invalidate();
+  }
+  finishMText() {
+    const lines: string[] = this.pending.lines ?? []; if (!lines.length || this.pts.length < 2) { this.cancel(); return; }
+    const [a, b] = this.pts; const x = Math.min(a[0], b[0]), y = Math.max(a[1], b[1]), w = Math.abs(b[0] - a[0]);
+    bridge.call('draw.mtext', { x, y, h: this.lastTextH, w, text: lines.map(escMText).join(MTEXT_NL) }); this.say(`MTEXT ${lines.length} line(s)`); this.cancel();
+  }
+  strokeWorld(ctx: CanvasRenderingContext2D, pts: Pt[], closed: boolean) { if (pts.length < 2) return; ctx.beginPath(); pts.forEach((q, i) => { const s = w2s(this.view, q[0], q[1]); if (i === 0) ctx.moveTo(s[0], s[1]); else ctx.lineTo(s[0], s[1]); }); if (closed) ctx.closePath(); ctx.stroke(); }
+  /** The command line should keep spaces (text entry), not treat Space as Enter. */
+  wantsText() { return (this.tool === 'dtext' && this.step === 3) || (this.tool === 'mtext' && this.step === 2); }
   finishPline(close: boolean) { if (this.pts.length >= 2) { bridge.call('draw.pline', { pts: this.pts.flat(), closed: close }); this.say(`PLINE ${this.pts.length} vertices${close ? ' (closed)' : ''}`); } this.cancel(); }
   finishRotate(deg: number) { const c = this.pts[0]; bridge.call('edit.rotate', { ids: this.toolSel, cx: c[0], cy: c[1], deg }); this.say(`ROTATE ${this.toolSel.length} by ${fmtNum(deg, 3)}°`); this.setSelection(this.toolSel); this.cancel(); }
   finishMirror(erase: boolean) { const [a, b] = this.pts; bridge.call('edit.mirror', { ids: this.toolSel, x0: a[0], y0: a[1], x1: b[0], y1: b[1], keep: !erase }); this.say(`MIRROR ${this.toolSel.length}${erase ? ' (source erased)' : ''}`); this.cancel(); }
@@ -393,6 +501,11 @@ export class CanvasView {
       const last = this.pts[this.pts.length - 1]; const a = w2s(v, last[0], last[1]), b = w2s(v, cur[0], cur[1]); ctx.strokeStyle = sel;
       if (this.tool === 'line' || this.tool === 'pline' || this.tool === 'mirror' || this.tool === 'dim' && this.pts.length < 2) { ctx.beginPath(); if (this.tool === 'pline') { for (let i = 0; i < this.pts.length; i++) { const p = w2s(v, this.pts[i][0], this.pts[i][1]); if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); } } else ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
       else if (this.tool === 'circle') { const r = Math.hypot(cur[0] - last[0], cur[1] - last[1]) * v.scale; ctx.beginPath(); ctx.arc(a[0], a[1], r, 0, Math.PI * 2); ctx.stroke(); }
+      else if ((this.tool === 'rect' || this.tool === 'mtext' && this.step === 1) && this.pts.length === 1) { ctx.strokeRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])); }
+      else if (this.tool === 'arc') { const g = this.pts.length === 2 ? arc3(this.pts[0], this.pts[1], cur) : null; if (g) this.strokeWorld(ctx, arcPts(g), false); else { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); } }
+      else if (this.tool === 'ellipse' && this.step === 1) { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+      else if (this.tool === 'ellipse' && this.step === 2) { const c = this.ellipseCenter()!; const g = ellipseByAxis(this.pts[0], this.pts[1], Math.hypot(cur[0] - c[0], cur[1] - c[1])); if (g) this.strokeWorld(ctx, ellipsePts(g), true); }
+      else if (this.tool === 'polygon' && this.step === 2) { const c = this.pts[0]; const r = Math.hypot(cur[0] - c[0], cur[1] - c[1]); if (r > 0) this.strokeWorld(ctx, polygonPts(this.lastSides, c, r, this.pending.inscribed !== false, Math.atan2(cur[1] - c[1], cur[0] - c[0]) * 180 / Math.PI), true); }
       else if (this.tool === 'dim' && this.pts.length === 2) { const [p1, p2] = this.pts; const horiz = Math.abs(cur[1] - (p1[1] + p2[1]) / 2) >= Math.abs(cur[0] - (p1[0] + p2[0]) / 2); const s1 = w2s(v, horiz ? p1[0] : cur[0], horiz ? cur[1] : p1[1]), s2 = w2s(v, horiz ? p2[0] : cur[0], horiz ? cur[1] : p2[1]); const q1 = w2s(v, p1[0], p1[1]), q2 = w2s(v, p2[0], p2[1]); ctx.beginPath(); ctx.moveTo(q1[0], q1[1]); ctx.lineTo(s1[0], s1[1]); ctx.lineTo(s2[0], s2[1]); ctx.lineTo(q2[0], q2[1]); ctx.stroke(); }
       else if ((this.tool === 'move' || this.tool === 'copy' || this.tool === 'stretch') && this.step === 2) {
         const dx = cur[0] - last[0], dy = cur[1] - last[1]; ctx.strokeStyle = sel; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);

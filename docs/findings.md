@@ -160,3 +160,7 @@
 - LibreDWG dwg2dxf의 DXF 출력은 AutoCAD 규칙에 맞지 않는다. u04는 중복 핸들 5,210개와 끊어진 포인터 376개, u01은 루트 사전이 첫 객체가 아니고 중복 핸들 2개다(work/d5e/raw, strict.py·ezdxf). 이 객체를 옮겨 쓰는 저장은 AutoCAD에서 열릴 수 없다. DWG에서 연 도면은 항상 R2000으로 새로 생성해서 저장한다.
 - `DxfWriter.Common`의 102 그룹 단축 평가 버그로 빈 `{ACAD_XDICTIONARY }`가 쓰였다. 사용자 도면 R2000 저장 7개 중 5개를 ezdxf가 읽지 못했고, 수정 뒤에는 7개 모두 audit 수정 0·오류 0이다.
 - ezdxf 1.4.5(scratchpad venv)를 AutoCAD 대용 검사기로 쓸 수 있다. ODA File Converter는 이 결함들을 모두 받아들여서 AutoCAD 호환성 검증에는 부족했다.
+
+## 2026-11-02 draft5e
+- `Document.CreateNew()`에서 만든 새 도면을 원본 유지 모드로 저장하면 OBJECTS가 비고, BLOCK/ENDBLK의 330이 존재하지 않는 레코드(103·106)를 가리켰다(D5dTests.Check). 원본 구조가 없는 도면은 R2000으로 생성해야 한다(`DxfSave.Choose`).
+- 기본 도형 7종을 실제 명령줄 입력으로 그렸을 때 좌표가 기대값과 1e-9 안에서 같았다(셀프테스트 shape_*).
