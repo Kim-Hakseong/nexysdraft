@@ -81,7 +81,7 @@ public sealed class Engine
                 warnings.AddRange(LibreDwg.Summarize(r.Stderr).Take(8));
             }
             var doc = await Task.Run(() => DxfReader.Read(dxf));
-            doc.Path = src ?? path;
+            doc.Path = src ?? path; doc.FromLibreDwg = src != null;
             Doc = doc; Editor = new Editor(doc); Editor.Applied += OnApplied;   // no forced GC here: a blocking gen2 on the server heap showed up as a >300 ms UI stall in --selftest
             SourceDwg = src; ConvertMs = convMs; OpenMs = sw.Elapsed.TotalMilliseconds; OpenWarnings.Clear(); OpenWarnings.AddRange(warnings);
             Selection.Clear(); CurrentLayer = doc.LayerOf(doc.HeaderString("$CLAYER", "0")) != null ? doc.HeaderString("$CLAYER", "0") : "0";
@@ -136,7 +136,7 @@ public sealed class Engine
                 var docRef = Doc; var fixes = FontCompat ? Core.Dxf.FontCompat.Plan(docRef) : new List<FontFix>(); LastFontFixes.Clear(); LastFontFixes.AddRange(fixes);
                 var (mode, reason) = DxfSave.Choose(docRef, DxfSave.Parse(dxfVer ?? DxfVersion));
                 LastSave = new SaveInfo { Format = "dxf", Version = mode == DxfWriter.Mode.R2000 ? "AC1015" : Doc.Version, Reason = reason };
-                await Task.Run(() => DxfWriter.Write(docRef, path, mode, fixes));
+                await Task.Run(() => DxfWriter.Write(docRef, path, mode, fixes, false, mode == DxfWriter.Mode.R2000));   // a DXF for AutoCAD gets the full OBJECTS skeleton (draft5d)
                 Doc.Dirty = false; Doc.Path = path; SourceDwg = null;
                 SetStatus($"Saved {Path.GetFileName(path)} ({LastSave.Version}: {reason}, ASCII, {sw.Elapsed.TotalMilliseconds:F0} ms){(LastFontFixes.Count > 0 ? $" — font compat: {LastFontFixes.Count} style(s) → " + string.Join(", ", LastFontFixes.Select(f => $"{f.Style}: {f.OldFont} → {f.NewFamily} {f.NewFile}")) : "")}");
             }

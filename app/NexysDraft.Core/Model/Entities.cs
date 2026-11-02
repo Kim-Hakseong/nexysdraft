@@ -368,6 +368,9 @@ public sealed class RawTable { public string Name = ""; public List<Group> Head 
 public sealed class Document
 {
     public string Path = ""; public string Version = "AC1015"; public string CodePage = "ANSI_949"; public bool SourceUtf8;
+    /// <summary>The drawing came from a DWG through LibreDWG dwg2dxf. Its OBJECTS / table records are not AutoCAD-valid (duplicate handles,
+    /// dangling owners — measured draft5d), so a DXF save regenerates the file (R2000 writer) instead of copying them.</summary>
+    public bool FromLibreDwg;
     public List<Group> HeaderRaw = new();
     public List<Group> ClassesRaw = new();
     public List<RawTable> RawTables = new();

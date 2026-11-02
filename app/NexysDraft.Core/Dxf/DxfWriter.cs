@@ -16,7 +16,7 @@ public sealed class DxfWriter
     readonly Document _doc; readonly Mode _mode; readonly Encoding _enc; MemoryStream _ms = new();
     /// <summary>R2000 mode: write the full AutoCAD-style OBJECTS skeleton (layouts, plot settings, mline style). Off by default — see the OBJECTS note in BuildR2000.</summary>
     public static bool FullObjects { get; set; }
-    readonly bool _fullObjects = FullObjects;
+    bool _fullObjects = FullObjects;
     Dictionary<string, FontFix>? _fontFixes;
     bool _dropImages;
     /// <summary>R2000 mode: hatch loops as tessellated polyline loops and dimension blocks written explicitly (dxf2dwg 0.14 drops edge-type hatch boundaries — docs/libredwg.md).</summary>
@@ -32,9 +32,11 @@ public sealed class DxfWriter
         _enc = _year >= 2007 ? new UTF8Encoding(false) : DxfCodec.CodePageEncoding(doc.CodePage);
     }
 
-    public static List<string> Write(Document doc, string path, Mode mode, IReadOnlyList<FontFix>? fontFixes = null, bool dropImages = false)
+    /// <param name="fullObjects">R2000: write the AutoCAD-style OBJECTS skeleton (groups, layouts, plot settings, mline style) — for a DXF the user
+    /// opens in AutoCAD (draft5d). The R2000 DXF handed to dxf2dwg keeps the bare root dictionary (null = <see cref="FullObjects"/>).</param>
+    public static List<string> Write(Document doc, string path, Mode mode, IReadOnlyList<FontFix>? fontFixes = null, bool dropImages = false, bool? fullObjects = null)
     {
-        var w = new DxfWriter(doc, mode) { _fontFixes = fontFixes?.ToDictionary(f => f.Style, StringComparer.OrdinalIgnoreCase), _dropImages = dropImages };
+        var w = new DxfWriter(doc, mode) { _fontFixes = fontFixes?.ToDictionary(f => f.Style, StringComparer.OrdinalIgnoreCase), _dropImages = dropImages, _fullObjects = fullObjects ?? FullObjects };
         var bytes = w.Build();
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllBytes(path, bytes);
@@ -52,16 +54,20 @@ public sealed class DxfWriter
     void W(int code, int v) => W(code, v.ToString(CultureInfo.InvariantCulture));
     void P(int code, V3 p, bool z = true) { W(code, p.X); W(code + 10, p.Y); if (z) W(code + 20, p.Z); }
     void Raw(IEnumerable<Group> gs) { foreach (var g in gs) if (Ok(g.Code)) W(g.Code, g.Value); }
+    /// <summary>R2000: copy a record without its 102 groups (xdictionary / reactors point at OBJECTS the R2000 writer does not write).</summary>
+    void RawNo102(IEnumerable<Group> gs) { bool inside = false; foreach (var g in gs) { if (g.Code == 102) { inside = !g.Value.StartsWith("}"); continue; } if (!inside && Ok(g.Code)) W(g.Code, g.Value); } }
+    int _imagesLeftOut;
     bool Ok(int code) => _mode != Mode.R2000 || !(code is >= 420 and <= 449 || code is 347 or 348 or 284 or 390 or 430 or 440);
 
     byte[] Build()
     {
         if (_mode == Mode.R2000)
         {
-            _acadHandle = AcadXdataHandle; BuildR2000();
-            if (Count(_ms.ToArray(), "\r\n  5\r\n" + AcadXdataHandle + "\r\n") + Count(_ms.ToArray(), "\r\n105\r\n" + AcadXdataHandle + "\r\n") > 1) { _acadHandle = null; _ms = new MemoryStream(); BuildR2000(); Warnings.Add("handle 12 is taken: xdata of the ACAD application (text style families) may not survive dxf2dwg"); }
+            _acadHandle = AcadXdataHandle; _imagesLeftOut = 0; BuildR2000();
+            if (Count(_ms.ToArray(), "\r\n  5\r\n" + AcadXdataHandle + "\r\n") + Count(_ms.ToArray(), "\r\n105\r\n" + AcadXdataHandle + "\r\n") > 1) { _acadHandle = null; _ms = new MemoryStream(); _imagesLeftOut = 0; BuildR2000(); Warnings.Add("handle 12 is taken: xdata of the ACAD application (text style families) may not survive dxf2dwg"); }
         }
         else BuildPreserve();
+        if (_imagesLeftOut > 0) Warnings.Add($"{_imagesLeftOut} IMAGE left out (R2000 does not carry the image definitions)");
         return _ms.ToArray();
     }
     /// <summary>The handle LibreDWG dxf2dwg writes for every "1001 ACAD" xdata application reference (measured, draft4 H0).</summary>
@@ -183,7 +189,8 @@ public sealed class DxfWriter
         // DIMSTYLE
         W(0, "TABLE"); W(2, "DIMSTYLE"); W(5, _tDimstyle); W(330, "0"); W(100, "AcDbSymbolTable");
         var ds = _doc.RawTables.FirstOrDefault(t => t.Name.Equals("DIMSTYLE", StringComparison.OrdinalIgnoreCase));
-        var dsEntries = ds?.Entries ?? new List<List<Group>>();
+        // records without a name (u04: one from LibreDWG) are not valid table entries
+        var dsEntries = (ds?.Entries ?? new List<List<Group>>()).Where(e => e.FirstOrDefault(g => g.Code == 2).Value is { Length: > 0 }).ToList();
         W(70, dsEntries.Count + 1); W(100, "AcDbDimStyleTable");
         if (dsEntries.Count == 0) { W(0, "DIMSTYLE"); W(105, _doc.NewHandle()); W(330, _tDimstyle); W(100, "AcDbSymbolTableRecord"); W(100, "AcDbDimStyleTableRecord"); W(2, "Standard"); W(70, 0); W(41, 2.5); W(42, 0.625); W(44, 1.25); W(140, 2.5); W(147, 0.625); W(77, 1); W(271, 2); W(272, 2); W(279, 1); }
         else foreach (var e in dsEntries) Raw(e);
@@ -351,6 +358,8 @@ public sealed class DxfWriter
     {
         if (_mode == Mode.R2000 && !R2000Loss.R2000Entities.Contains(e.DxfName)) return;   // counted by R2000Loss.Detect
         if (_dropImages && e.DxfName == "IMAGE") return;   // "save DWG without the n IMAGE entities" (draft4 H2)
+        // R2000 OBJECTS carry no IMAGEDEF / IMAGEDEF_REACTOR, so an IMAGE would point at nothing (AutoCAD rejects it); left out and reported
+        if (_mode == Mode.R2000 && e.DxfName == "IMAGE") { _imagesLeftOut++; return; }
         if (_mode == Mode.R2000 && e is Insert ins0 && (ins0.Block.Length == 0 || !_doc.Blocks.ContainsKey(ins0.Block))) return;   // unresolved block reference — counted by R2000Loss.Detect
         if (_mode == Mode.Preserve && e.Raw != null && !e.Dirty)
         {
@@ -366,7 +375,7 @@ public sealed class DxfWriter
         if (e is Unknown un)
         {
             if (un.Raw == null) return;
-            Raw(un.Raw); if (un.Children != null) foreach (var c in un.Children) Raw(c); if (un.SeqendRaw != null) Raw(un.SeqendRaw);
+            if (_mode == Mode.R2000) RawNo102(un.Raw); else Raw(un.Raw); if (un.Children != null) foreach (var c in un.Children) Raw(c); if (un.SeqendRaw != null) Raw(un.SeqendRaw);
             return;
         }
         if (string.IsNullOrEmpty(e.Handle)) e.Handle = _doc.NewHandle();
@@ -490,7 +499,19 @@ public sealed class DxfWriter
     void Common(Entity e, string owner)
     {
         W(0, e.DxfName); W(5, e.Handle);
-        foreach (var g in e.Extra) if (g.Code == 102 || _in102(g)) W(g.Code, g.Value);
+        // 102 groups ({ACAD_XDICTIONARY 360 …}, {ACAD_REACTORS 330 …}) point at OBJECTS entries. The R2000 writer regenerates OBJECTS
+        // without them, so it drops the groups whole; preserve mode keeps each group with its contents.
+        // (Before draft5d `g.Code == 102 || _in102(g)` short-circuited: braces were written, the 360 inside was not → empty
+        // "{ACAD_XDICTIONARY }" groups that ezdxf rejects and AutoCAD refuses to open.)
+        if (_mode != Mode.R2000)
+        {
+            bool inside = false;
+            foreach (var g in e.Extra)
+            {
+                if (g.Code == 102) { inside = !g.Value.StartsWith("}"); W(g.Code, g.Value); continue; }
+                if (inside) W(g.Code, g.Value);
+            }
+        }
         if (!string.IsNullOrEmpty(owner)) W(330, owner);
         W(100, "AcDbEntity"); if (e.PaperSpace) W(67, 1); W(8, e.Layer);
         if (!e.Linetype.Equals("BYLAYER", StringComparison.OrdinalIgnoreCase) && e.Linetype != "") W(6, e.Linetype);
@@ -500,8 +521,6 @@ public sealed class DxfWriter
         if (e.LtScale != 1) W(48, e.LtScale);
         if (e.Invisible) W(60, 1);
     }
-    bool _in102Flag;
-    bool _in102(Group g) { if (g.Code == 102) { _in102Flag = !g.Value.StartsWith("}"); return true; } return _in102Flag; }
     void Xdata(Entity e) { bool skip = false; foreach (var g in e.Extra) { if (g.Code == 102) { skip = !g.Value.StartsWith("}"); continue; } if (skip) continue; if (g.Code >= 1000) W(g.Code, g.Value); } }
 
     void WriteText(Text t, string owner) { if (string.IsNullOrEmpty(t.Handle)) t.Handle = _doc.NewHandle(); Common(t, owner); WriteTextBody(t); Xdata(t); }

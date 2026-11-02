@@ -155,3 +155,8 @@
 - Nexys 제품군 헤더 로고: diadem(Nexys VIEW)·nexys-view·nexys-bus 모두 `app/web/public/brand/Logo.png`(MD5 2e4a3722773dd9268311033e3ce05b79)를 18 px 높이로 쓰고, 다크 테마는 `brightness(1.15)`다. AppIcon.ico(b2a3abd9…)·AppIcon.png(91d77b77…)도 세 제품과 NexysDraft가 같다.
 - 차이: VIEW 헤더는 로고 + 버전 줄뿐이고, NexysBus는 로고 + 굵은 제품명 + 버전 줄이다. NexysDraft는 지시서 예시에 따라 Bus 방식(제품명 줄 있음)으로 했다.
 - 로고 영역 픽셀 상관: VIEW 대비 라이트·다크 모두 1.00, 이전 "N" 원 헤더는 0.21(work/gates/d5c_header_logo.txt).
+
+## 2026-11-02 draft5d
+- LibreDWG dwg2dxf의 DXF 출력은 AutoCAD 규칙에 맞지 않는다. u04는 중복 핸들 5,210개와 끊어진 포인터 376개, u01은 루트 사전이 첫 객체가 아니고 중복 핸들 2개다(work/d5e/raw, strict.py·ezdxf). 이 객체를 옮겨 쓰는 저장은 AutoCAD에서 열릴 수 없다. DWG에서 연 도면은 항상 R2000으로 새로 생성해서 저장한다.
+- `DxfWriter.Common`의 102 그룹 단축 평가 버그로 빈 `{ACAD_XDICTIONARY }`가 쓰였다. 사용자 도면 R2000 저장 7개 중 5개를 ezdxf가 읽지 못했고, 수정 뒤에는 7개 모두 audit 수정 0·오류 0이다.
+- ezdxf 1.4.5(scratchpad venv)를 AutoCAD 대용 검사기로 쓸 수 있다. ODA File Converter는 이 결함들을 모두 받아들여서 AutoCAD 호환성 검증에는 부족했다.

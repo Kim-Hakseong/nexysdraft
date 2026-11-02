@@ -19,7 +19,7 @@ public class H1Tests
     /// <summary>Model-space counts of what the writer carries (R2000: R2000 entity types with resolved blocks; Preserve: everything).</summary>
     static Dictionary<string, int> Carried(Document a, DxfWriter.Mode mode, bool dropImages = false)
     {
-        bool written(Entity e) => mode == DxfWriter.Mode.Preserve || (R2000Loss.R2000Entities.Contains(e.DxfName) && !(e is Insert ins && (ins.Block.Length == 0 || !a.Blocks.ContainsKey(ins.Block))));
+        bool written(Entity e) => mode == DxfWriter.Mode.Preserve || (R2000Loss.R2000Entities.Contains(e.DxfName) && e.DxfName != "IMAGE" && !(e is Insert ins && (ins.Block.Length == 0 || !a.Blocks.ContainsKey(ins.Block))));
         return a.Entities.Where(e => !e.PaperSpace && e is not Unknown && written(e) && !(dropImages && e.DxfName == "IMAGE")).GroupBy(e => e.DxfName).ToDictionary(g => g.Key, g => g.Count());
     }
     static Dictionary<string, int> Model(Document b) => b.Entities.Where(e => !e.PaperSpace && e is not Unknown).GroupBy(e => e.DxfName).ToDictionary(g => g.Key, g => g.Count());
@@ -33,7 +33,7 @@ public class H1Tests
         foreach (var f in Directory.GetFiles(Samples.UserDir, "*.dwg").OrderBy(x => x))
         {
             n++;
-            var a = DxfReader.Read(OdaGateTests.Dxf(f)); var (mode, reason) = DxfSave.Choose(a, DxfSave.Ver.Auto); var fixes = FontCompat.Plan(a);
+            var a = DxfReader.Read(OdaGateTests.Dxf(f)); a.FromLibreDwg = true; /* as the app opens a DWG (draft5d: always regenerated) */ var (mode, reason) = DxfSave.Choose(a, DxfSave.Ver.Auto); var fixes = FontCompat.Plan(a);
             string outp = Path.Combine(Samples.WorkDir("h1"), Path.GetFileNameWithoutExtension(f) + ".nexys.dxf");
             var warn = DxfWriter.Write(a, outp, mode, fixes);
             string ver = AcadVer(outp); bool verOk = string.CompareOrdinal(ver, DxfSave.NanoCadNewest) <= 0;

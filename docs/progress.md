@@ -1,5 +1,14 @@
 # 진행 현황 — NexysDraft
 
+## 2026-11-02 draft5d → v0.4.3 (AutoCAD에서 저장 파일이 안 열림)
+
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 빈 XDICTIONARY 묶음 수정 | **완료** | ezdxf 읽기 실패 5/7 → 0/7 |
+| DWG에서 연 도면 → R2000 재생성 저장 | **완료** | d5d_autocad_structure.txt 13/13 |
+| DXF 직접 저장에 OBJECTS 골격 | **완료** | ODA 판독 13/13, ezdxf 0 오류 |
+| 실제 AutoCAD 확인 | **대기** | §사용자 확인 |
+
 ## 2026-10-31 draft5c (run-draft5c.md) → v0.4.2
 
 | 항목 | 판정 | 근거 |

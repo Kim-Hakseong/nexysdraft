@@ -20,6 +20,7 @@ public static class DxfSave
     {
         Ver.R2000 => (DxfWriter.Mode.R2000, $"R2000 (chosen; original {d.Version})"),
         Ver.Keep => (DxfWriter.Mode.Preserve, $"original version {d.Version} kept (chosen)"),
-        _ => TooNew(d) ? (DxfWriter.Mode.R2000, $"R2000: original {d.Version} is newer than {NanoCadNewest} (nanoCAD 5 limit)") : (DxfWriter.Mode.Preserve, $"original version {d.Version} kept (≤ {NanoCadNewest})"),
+        _ => d.FromLibreDwg ? (DxfWriter.Mode.R2000, $"R2000: opened from DWG (LibreDWG output is regenerated so AutoCAD can read it)")
+           : TooNew(d) ? (DxfWriter.Mode.R2000, $"R2000: original {d.Version} is newer than {NanoCadNewest} (nanoCAD 5 limit)") : (DxfWriter.Mode.Preserve, $"original version {d.Version} kept (≤ {NanoCadNewest})"),
     };
 }
