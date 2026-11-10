@@ -320,7 +320,9 @@ public sealed class DxfReader
                     while (_i < _g.Count && _g[_i].Code == 0 && _g[_i].Value.Equals("VERTEX", StringComparison.OrdinalIgnoreCase))
                     {
                         var vr = TakeRecord(); p.VertexRaw.Add(vr); int vf = I(vr, 70);
-                        if ((vf & 16) != 0 || (vf & 8) != 0) continue;   // spline frame control point / mesh — skip (bezier/spline-fit polylines keep their fit vertices)
+                        // spline frame control point (16) — skip; the fitted curve points (8 = made by spline fitting, 1 = made by curve fitting) are the shape.
+                        // draft5f: 8 was skipped too, so a spline-fit polyline came out with no vertex at all (invisible, and written as an empty POLYLINE)
+                        if ((vf & 16) != 0) continue;
                         var pv = Pt(vr, 10); p.Vertices.Add(new PVertex { X = pv.X, Y = pv.Y, Z = pv.Z, Bulge = D(vr, 42), StartWidth = D(vr, 40, p.StartWidth), EndWidth = D(vr, 41, p.EndWidth) });
                     }
                     if (_i < _g.Count && _g[_i].Code == 0 && _g[_i].Value.Equals("SEQEND", StringComparison.OrdinalIgnoreCase)) { p.SeqendRaw = TakeRecord(); p.SeqendHandle = S(p.SeqendRaw, 5); }

@@ -14,3 +14,6 @@ docs/screens/*user*
 design/mockup/*.png
 docs/screens/00_mockup_draft.png
 docs/screens/09_pixel_diff_*.png
+
+# DWG TrueView console (dev check) drops this in the working folder
+ErrorReports/

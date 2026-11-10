@@ -1,7 +1,8 @@
-# next — NexysDraft 다음 런 후보 (draft5e 종료 시점, 2026-11-02, v0.4.4)
+# next — NexysDraft 다음 런 후보 (draft5f 종료 시점, 2026-11-10, v0.4.5)
 
 ## 사용자 확인이 먼저
-- **AutoCAD에서 열리는지**(docs/report-draft5d.md §사용자 확인): v0.4.4로 저장한 DXF와 DWG. 안 열리면 AutoCAD 오류 문구와 버전.
+- **동료 PC의 TrueView에서 열리는지**(docs/report-draft5f.md §사용자 확인): v0.4.5로 다시 저장한 DWG. 그래도 중단되면 TrueView/AutoCAD 버전과 그 파일.
+- 개발 PC의 DWG TrueView 2027에서는 저장본 DXF·DWG가 모두 열린다(work/gates/d5f_trueview.txt).
 - 기본 도형(REC·A·EL·POL·PO·DT·T)을 써 본 체감(docs/report-draft5e.md).
 - docs/report-draft5b.md §사용자 확인: 실제 키보드 F10·Alt(다음 키가 먹히지 않는지, Alt+드래그 팬), 우클릭 시간 감지 체감.
 - docs/report-draft5.md §사용자 확인: Shift 직교·F8·`@100<45`·직접 거리·휠 조작 체감, BG 배경 전환.

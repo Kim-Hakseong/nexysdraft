@@ -100,3 +100,10 @@
 | D3 편집 | 완료 | 선택, MOVE/COPY/ERASE/ROTATE/STRETCH/OFFSET/MIRROR, 텍스트 편집, LINE/PLINE/CIRCLE, DLI, 레이어, Undo/Redo, 명령줄 |
 | D4 UI | 완료 (순서 역전: 구현 뒤 목업) | design/mockup/draft.html·png, tools/pixel_diff.py, 라이트/다크 |
 | D5 출력·검증·배포 | 완료 | PDF(당시 dwg2spdf), `--selftest`, `--stress`, app/dist/NexysDraft.exe, docs/report-draft1.md |
+
+## 2026-11-10 draft5f (동료 보고: 저장한 DWG가 DWG TrueView에서 중단)
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| TrueView로 재현·측정 | 완료 (오류 문구 자체는 재현 못 함) | DWG TrueView 2027 설치, accoreconsole·창으로 저장본 열기 |
+| 결함 4종 수정 (모형 공간 1F, LAYER 390, HATCH 47, 스플라인 맞춤 폴리라인) | 완료 | work/gates/d5f_trueview.txt 13/13, dotnet test 45/45 |
+| v0.4.5 배포 | 완료 | docs/report-draft5f.md |

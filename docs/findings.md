@@ -164,3 +164,12 @@
 ## 2026-11-02 draft5e
 - `Document.CreateNew()`에서 만든 새 도면을 원본 유지 모드로 저장하면 OBJECTS가 비고, BLOCK/ENDBLK의 330이 존재하지 않는 레코드(103·106)를 가리켰다(D5dTests.Check). 원본 구조가 없는 도면은 R2000으로 생성해야 한다(`DxfSave.Choose`).
 - 기본 도형 7종을 실제 명령줄 입력으로 그렸을 때 좌표가 기대값과 1e-9 안에서 같았다(셀프테스트 shape_*).
+
+## 2026-11-10 draft5f
+- DWG TrueView 2027에는 콘솔 엔진 `accoreconsole.exe`가 들어 있다. `/i 파일 /s 스크립트`로 창 없이 DWG·DXF를 열고, 결함을 글로 보고한다(Git Bash에서는 `MSYS_NO_PATHCONV=1` 필요, 출력은 UTF-16).
+- LibreDWG dxf2dwg는 DWG를 자기 `*Model_Space` 레코드(핸들 1F)로 시작한다. 넘긴 DXF의 모형 공간 레코드가 1F가 아니면 1F짜리가 주인 없이 남는다(v0.4.4 저장본 8개 중 6개). 다른 객체가 1F를 쓰면 TrueView가 "Duplicate handle(s) ignored. Drawing needs recovery"를 낸다(u04).
+- AutoCAD는 AC1015+ DXF의 LAYER에 390(플롯 스타일)이 없으면 도면을 버린다("Did not receive PlotStyleName"). ezdxf audit·ODA·nanoCAD는 이 결함을 통과시켰다.
+- HATCH의 47(pixel size)은 경계 경로에 derived 비트(92 & 4)가 있을 때만 있어야 한다. 있으면 안 될 때 있으면 "expected group code 98", 있어야 할 때 없으면 "expected group code 47"이다.
+- 폴리라인 VERTEX 플래그 8은 스플라인 맞춤으로 생긴 곡선 위의 점이고, 16이 프레임 제어점이다. 8까지 버려서 스플라인 맞춤 폴리라인이 정점 0개가 됐었다.
+- LAYOUT 객체를 포함한 DXF를 dxf2dwg(0.14.8679)에 넘기면 TrueView 2027이 "Damaged File"로 거부한다. 루트 사전만 넘긴 DWG(LAYOUT 없음)는 연다.
+- 동료가 본 `INTERNAL ERROR: !dbspace.cpp@2194: eOk`는 TrueView 2027에서 재현되지 않았다(UNVERIFIED: 구버전에서 주인 없는 `*Model_Space`가 원인인지).

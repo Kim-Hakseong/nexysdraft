@@ -56,7 +56,7 @@ public sealed class DxfWriter
     void Raw(IEnumerable<Group> gs) { foreach (var g in gs) if (Ok(g.Code)) W(g.Code, g.Value); }
     /// <summary>R2000: copy a record without its 102 groups (xdictionary / reactors point at OBJECTS the R2000 writer does not write).</summary>
     void RawNo102(IEnumerable<Group> gs) { bool inside = false; foreach (var g in gs) { if (g.Code == 102) { inside = !g.Value.StartsWith("}"); continue; } if (!inside && Ok(g.Code)) W(g.Code, g.Value); } }
-    int _imagesLeftOut;
+    int _imagesLeftOut; string? _plotStyle;
     bool Ok(int code) => _mode != Mode.R2000 || !(code is >= 420 and <= 449 || code is 347 or 348 or 284 or 390 or 430 or 440);
 
     byte[] Build()
@@ -67,12 +67,40 @@ public sealed class DxfWriter
             if (Count(_ms.ToArray(), "\r\n  5\r\n" + AcadXdataHandle + "\r\n") + Count(_ms.ToArray(), "\r\n105\r\n" + AcadXdataHandle + "\r\n") > 1) { _acadHandle = null; _ms = new MemoryStream(); _imagesLeftOut = 0; BuildR2000(); Warnings.Add("handle 12 is taken: xdata of the ACAD application (text style families) may not survive dxf2dwg"); }
         }
         else BuildPreserve();
+        // draft5f: *Model_Space must sit at handle 1F. LibreDWG dxf2dwg starts every DWG with its own *Model_Space record at 1F; when the
+        // drawing's record has another handle that one stays behind as a second, ownerless *Model_Space (measured with dwgread on 6 of 8 saves),
+        // and when another object holds 1F the DWG has a duplicate handle (TrueView: "Duplicate handle(s) ignored. Drawing needs recovery").
+        // AutoCAD's own files use 1F as well, so the swap is applied to every regenerated file.
+        if (_mode == Mode.R2000 && !_msHandle.Equals(ModelSpaceCanonical, StringComparison.OrdinalIgnoreCase))
+        {
+            var swapped = SwapHandles(_ms.ToArray(), _msHandle, ModelSpaceCanonical);
+            _ms = new MemoryStream(); _ms.Write(swapped, 0, swapped.Length);
+        }
         if (_imagesLeftOut > 0) Warnings.Add($"{_imagesLeftOut} IMAGE left out (R2000 does not carry the image definitions)");
         return _ms.ToArray();
     }
     /// <summary>The handle LibreDWG dxf2dwg writes for every "1001 ACAD" xdata application reference (measured, draft4 H0).</summary>
     public const string AcadXdataHandle = "12";
     string? _acadHandle;
+    public const string ModelSpaceCanonical = "1F";
+    static bool IsHandleCode(int c) => c is 5 or 105 or 1005 || c is >= 320 and <= 369 || c is >= 390 and <= 399 || c is 480 or 481;
+    /// <summary>Exchange two handles in every handle-valued group of a finished DXF (5, 105, 320–369, 390–399, 480–481, 1005). $HANDSEED is left alone.
+    /// Works on bytes (Latin-1 view), so the text encoding of the file does not matter.</summary>
+    public static byte[] SwapHandles(byte[] dxf, string a, string b)
+    {
+        var enc = Encoding.Latin1; var lines = enc.GetString(dxf).Split("\r\n");
+        bool seed = false;
+        for (int i = 0; i + 1 < lines.Length; i += 2)
+        {
+            if (!int.TryParse(lines[i].Trim(), out int code)) continue;
+            if (code == 9) { seed = lines[i + 1].Trim() == "$HANDSEED"; continue; }
+            if (seed && code == 5) { seed = false; continue; }
+            if (!IsHandleCode(code)) continue;
+            string v = lines[i + 1].Trim();
+            if (v.Equals(a, StringComparison.OrdinalIgnoreCase)) lines[i + 1] = b; else if (v.Equals(b, StringComparison.OrdinalIgnoreCase)) lines[i + 1] = a;
+        }
+        return enc.GetBytes(string.Join("\r\n", lines));
+    }
     static int Count(byte[] hay, string needle)
     {
         var n = Encoding.ASCII.GetBytes(needle); int c = 0;
@@ -132,7 +160,7 @@ public sealed class DxfWriter
         _tVport = TableHandle("VPORT"); _tLtype = TableHandle("LTYPE"); _tLayer = TableHandle("LAYER"); _tStyle = TableHandle("STYLE"); _tView = TableHandle("VIEW"); _tUcs = TableHandle("UCS"); _tAppid = TableHandle("APPID"); _tDimstyle = TableHandle("DIMSTYLE"); _tBlockRec = TableHandle("BLOCK_RECORD");
         _msHandle = _doc.ModelSpaceHandle; if (_msHandle == "") _msHandle = _doc.NewHandle();
         _psHandle = _doc.PaperSpaceHandle; if (_psHandle == "") _psHandle = _doc.NewHandle();
-        string hRoot = _doc.NewHandle(), hGroup = _doc.NewHandle(), hPsn = _doc.NewHandle(), hPlaceholder = _doc.NewHandle(), hMl = _doc.NewHandle(), hMlStd = _doc.NewHandle(), hPlot = _doc.NewHandle(), hLayouts = _doc.NewHandle(), hLayoutM = _doc.NewHandle(), hLayout1 = _doc.NewHandle();
+        string hRoot = _doc.NewHandle(), hGroup = _doc.NewHandle(), hPsn = _doc.NewHandle(), hPlaceholder = _doc.NewHandle(), hMl = _doc.NewHandle(), hMlStd = _doc.NewHandle(), hPlot = _doc.NewHandle(), hLayouts = _doc.NewHandle(), hLayoutM = _doc.NewHandle(), hLayout1 = _doc.NewHandle(); _plotStyle = _fullObjects ? hPlaceholder : null;
         var sw = new MemoryStream(); SwapStream(sw);
         // CLASSES (empty is valid)
         W(0, "SECTION"); W(2, "CLASSES"); W(0, "ENDSEC");
@@ -303,6 +331,11 @@ public sealed class DxfWriter
         W(0, "LAYER"); W(5, l.Handle); W(330, tableHandle); W(100, "AcDbSymbolTableRecord"); W(100, "AcDbLayerTableRecord"); W(2, l.Name); W(70, l.Flags); W(62, l.Off ? -Math.Max(1, l.Color) : l.Color);
         if (l.TrueColor != null && _year >= 2004) W(420, l.TrueColor.Value);
         W(6, l.Linetype); if (!l.Plot) W(290, 0); W(370, l.Lineweight);
+        // draft5f: AutoCAD refuses an AC1015+ DXF whose LAYER has no plot style handle ("Error in LAYER Table. Did not receive PlotStyleName",
+        // measured with DWG TrueView 2027). Regenerated files point at the placeholder of ACAD_PLOTSTYLENAME; a preserved file reuses the
+        // handle its own layers carry. The DXF handed to dxf2dwg has no such object and gets none.
+        string? ps = _mode == Mode.R2000 ? _plotStyle : l.Raw?.FirstOrDefault(g => g.Code == 390).Value ?? _doc.Layers.Select(x => x.Raw?.FirstOrDefault(g => g.Code == 390).Value).FirstOrDefault(v => !string.IsNullOrEmpty(v));
+        if (!string.IsNullOrEmpty(ps)) W(390, ps);
     }
     void WriteLtype(LineType l, string tableHandle)
     {
@@ -392,7 +425,7 @@ public sealed class DxfWriter
                 break;
             case Polyline pl:
                 {
-                    W(100, pl.Is3D ? "AcDb3dPolyline" : "AcDb2dPolyline"); W(66, 1); P(10, new V3(0, 0, pl.Elevation)); W(70, pl.Flags); if (pl.StartWidth != 0) W(40, pl.StartWidth); if (pl.EndWidth != 0) W(41, pl.EndWidth);
+                    W(100, pl.Is3D ? "AcDb3dPolyline" : "AcDb2dPolyline"); W(66, 1); P(10, new V3(0, 0, pl.Elevation)); W(70, pl.Flags & ~6);   // 2 curve-fit, 4 spline-fit: the vertices below are plain ones (frame points are not kept) if (pl.StartWidth != 0) W(40, pl.StartWidth); if (pl.EndWidth != 0) W(41, pl.EndWidth);
                     for (int i = 0; i < pl.Vertices.Count; i++)
                     {
                         var v = pl.Vertices[i]; string vh = pl.VertexRaw != null && i < pl.VertexRaw.Count ? pl.VertexRaw[i].FirstOrDefault(g => g.Code == 5).Value ?? "" : "";
@@ -427,6 +460,7 @@ public sealed class DxfWriter
             case Hatch h:
                 {
                     W(100, "AcDbHatch"); P(10, new V3(0, 0, h.Elevation)); P(210, h.Normal); W(2, h.Pattern); W(70, h.Solid ? 1 : 0); W(71, _mode == Mode.R2000 ? 0 : h.Associative ? 1 : 0); W(91, h.Loops.Count);
+                    bool derived = false;   // any boundary path written with the "derived" bit (92 & 4)
                     foreach (var loop in h.Loops)
                     {
                         if (_mode == Mode.R2000 && HatchAsPolylineLoops && !(loop.IsPolyline && loop.Edges.Count > 0 && loop.Edges[0].Type == 0))
@@ -439,7 +473,7 @@ public sealed class DxfWriter
                             W(97, 0);
                             continue;
                         }
-                        W(92, loop.Type);
+                        W(92, loop.Type); derived |= (loop.Type & 4) != 0;
                         if (loop.IsPolyline && loop.Edges.Count > 0 && loop.Edges[0].Type == 0)
                         {
                             var ed = loop.Edges[0]; W(72, ed.PolyHasBulge ? 1 : 0); W(73, ed.PolyClosed ? 1 : 0); W(93, ed.Poly.Count);
@@ -465,7 +499,12 @@ public sealed class DxfWriter
                     }
                     W(75, h.Style); W(76, h.PatternType); if (!h.Solid) { W(52, h.PatternAngle); W(41, h.PatternScale); W(77, h.DoubleFlag ? 1 : 0); }
                     bool tailHasSeed = h.Tail.Any(g => g.Code == 98);
-                    Raw(h.Tail);
+                    // draft5f: AutoCAD reads 47 (pixel size) exactly when a boundary path has the derived bit (as in the DWG layout of HATCH) and
+                    // refuses the file otherwise: with 47 but no derived path "expected group code 98" (u07 — an edge loop written as a polyline
+                    // loop loses the bit), without 47 but a derived path "expected group code 47" (measured with TrueView 2027 on u01–u07).
+                    bool tailHas47 = h.Tail.Any(g => g.Code == 47);
+                    if (derived && !tailHas47) W(47, 1.0);
+                    Raw(derived ? h.Tail : h.Tail.Where(g => g.Code != 47));
                     if (!tailHasSeed) { W(98, 1); W(10, 0.0); W(20, 0.0); }
                     break;
                 }
