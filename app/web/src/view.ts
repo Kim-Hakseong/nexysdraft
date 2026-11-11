@@ -1,12 +1,14 @@
 // Canvas view: viewport (pan/zoom), input, tools (select/draw/edit), snapping, overlay drawing, command line.
 import { bridge } from './bridge';
-import { Doc, SNAP_CEN, SNAP_END, SNAP_INT, SNAP_MID, SNAP_QUAD, SNAP_INS, textBox, Ent } from './doc';
+import { Doc, SNAP_CEN, SNAP_END, SNAP_INT, SNAP_MID, SNAP_QUAD, SNAP_INS, textBox, Ent, segInt } from './doc';
 import { Renderer, View, s2w, w2s, drawText } from './render';
 import { fmtNum, h, aciRgb, rgbCss } from './util';
+import { resolveTrack, TrackRes } from './track';
+import { L, xl } from './i18n';
 
 type Pt = [number, number];
 export interface ToolSpec { name: string; prompt: string }
-const ALIASES: Record<string, string> = { l: 'line', line: 'line', pl: 'pline', pline: 'pline', c: 'circle', circle: 'circle', m: 'move', move: 'move', co: 'copy', cp: 'copy', copy: 'copy', e: 'erase', erase: 'erase', del: 'erase', s: 'stretch', stretch: 'stretch', o: 'offset', offset: 'offset', mi: 'mirror', mirror: 'mirror', ro: 'rotate', rotate: 'rotate', z: 'zoom', zoom: 'zoom', ze: 'zoomext', dli: 'dim', dim: 'dim', dimlin: 'dim', dimlinear: 'dim', u: 'undo', undo: 'undo', redo: 'redo', la: 'layer', layer: 'layer', ed: 'text', ddedit: 'text', text: 'dtext', dt: 'dtext', dtext: 'dtext', t: 'mtext', mt: 'mtext', mtext: 'mtext', rec: 'rect', rectang: 'rect', rectangle: 'rect', a: 'arc', arc: 'arc', el: 'ellipse', ellipse: 'ellipse', pol: 'polygon', polygon: 'polygon', po: 'point', point: 'point', sel: 'select', select: 'select', esc: 'cancel', pan: 'pan', p: 'pan', regen: 'regen', re: 'regen', redraw: 'redraw', r: 'redraw', open: 'open', new: 'new', save: 'save', saveas: 'saveas', qsave: 'save', export: 'exportdwg', pdf: 'pdf', plot: 'pdf', print: 'pdf', snap: 'snap', sn: 'snap', grid: 'grid', ortho: 'ortho', polar: 'polar', osnap: 'osnap', os: 'osnap', f3: 'osnap', all: 'selectall', pr: 'props', props: 'props', properties: 'props', di: 'dist', dist: 'dist', id: 'id', rightclick: 'rightclick' };
+const ALIASES: Record<string, string> = { l: 'line', line: 'line', pl: 'pline', pline: 'pline', c: 'circle', circle: 'circle', m: 'move', move: 'move', co: 'copy', cp: 'copy', copy: 'copy', e: 'erase', erase: 'erase', del: 'erase', s: 'stretch', stretch: 'stretch', o: 'offset', offset: 'offset', mi: 'mirror', mirror: 'mirror', ro: 'rotate', rotate: 'rotate', z: 'zoom', zoom: 'zoom', ze: 'zoomext', dli: 'dim', dim: 'dim', dimlin: 'dim', dimlinear: 'dim', u: 'undo', undo: 'undo', redo: 'redo', la: 'layer', layer: 'layer', ed: 'text', ddedit: 'text', text: 'dtext', dt: 'dtext', dtext: 'dtext', t: 'mtext', mt: 'mtext', mtext: 'mtext', rec: 'rect', rectang: 'rect', rectangle: 'rect', a: 'arc', arc: 'arc', el: 'ellipse', ellipse: 'ellipse', pol: 'polygon', polygon: 'polygon', po: 'point', point: 'point', sel: 'select', select: 'select', esc: 'cancel', pan: 'pan', p: 'pan', regen: 'regen', re: 'regen', redraw: 'redraw', r: 'redraw', open: 'open', new: 'new', save: 'save', saveas: 'saveas', qsave: 'save', export: 'exportdwg', pdf: 'pdf', plot: 'pdf', print: 'pdf', snap: 'snap', sn: 'snap', grid: 'grid', ortho: 'ortho', polar: 'polar', osnap: 'osnap', os: 'osnap', f3: 'osnap', all: 'selectall', pr: 'props', props: 'props', properties: 'props', di: 'dist', dist: 'dist', id: 'id', rightclick: 'rightclick', tr: 'trim', trim: 'trim', ex: 'extend', extend: 'extend', otrack: 'otrack', f11: 'otrack' };
 /** Polar tracking increments F10 / POLAR cycles through (AutoCAD POLARANG; default 90°). */
 const POLAR_INCS = [90, 45];
 /** AutoCAD time-sensitive right-click duration (ms). */
@@ -50,15 +52,20 @@ export class CanvasView {
   tool = 'select'; step = 0; pts: Pt[] = []; toolSel: string[] = []; pending: any = {}; lastTool = 'line';
   dragStart: Pt | null = null; dragMode: 'none' | 'pan' | 'box' = 'none'; panStart: { x: number; y: number; cx: number; cy: number } | null = null;
   onSelectionChanged: (() => void) | null = null; onPrompt: ((text: string) => void) | null = null; onHistory: ((line: string) => void) | null = null;
-  onDblClickText: ((id: string) => void) | null = null; onCommand: ((name: string) => boolean) | null = null;
+  onDblClickText: ((id: string) => void) | null = null; onCommand: ((name: string, arg?: string) => boolean) | null = null;
   frameTimes: number[] = []; raf = 0; needDraw = true; dark = false; dirtyStats = '';
   textEditEl: HTMLTextAreaElement | null = null;
   lastDist = 10; lastRadius = 10; lastSides = 4; lastTextH = 2.5; lastTextRot = 0;
   /** Drafting modes (status-bar pills, AutoCAD keys): F8 ortho, F10 polar tracking, F7 grid display, F9 grid snap; Shift inverts ortho while held. */
-  orthoOn = false; polarOn = false; polarInc = 90; gridOn = false; gridSnapOn = false; gridSpacing = 10; shiftDown = false;
+  orthoOn = false; polarOn = true; polarInc = 90; gridOn = false; gridSnapOn = false; gridSpacing = 10; shiftDown = false;
   /** Right click (AutoCAD time-sensitive right-click): 'timed' = a click shorter than RIGHT_MS is Enter (confirm / repeat), a longer press opens the menu (default);
    *  'enter' = always Enter; 'menu' = always the context menu. RIGHTCLICK TIMED|ENTER|MENU. */
   rightClickMode: 'timed' | 'enter' | 'menu' = 'timed'; rightDownAt = 0; regenCount = 0;
+  /** Object snap tracking (F11): osnap points acquired by resting the cursor on them; alignment paths run through them. */
+  otrackOn = true; trackPts: Pt[] = []; trk: TrackRes | null = null; private hoverSnap: { x: number; y: number } | null = null; private hoverTimer = 0;
+  /** Selection box opened by a click on empty space (AutoCAD implied window): the next click closes it. */
+  boxClick = false;
+  private previewSeq = 0; private previewKey = '';
   onModes: (() => void) | null = null; onFocusRail: ((which: 'layers' | 'props') => void) | null = null;
   viewStack: { cx: number; cy: number; scale: number }[] = []; lastWheelPush = 0; lastMiddleDown = 0; menuEl: HTMLElement | null = null;
 
@@ -66,7 +73,7 @@ export class CanvasView {
     this.el = h(`<div class="card canvas-card"></div>`);
     this.wrap = h(`<div class="canvas-wrap" tabindex="0"></div>`);
     this.glc = document.createElement('canvas'); this.ovc = document.createElement('canvas'); this.ovc.className = 'ov';
-    this.coord = h(`<div class="coord">—</div>`); this.hint = h(`<div class="drop-hint"><div><b>NexysDraft</b>DWG 또는 DXF 파일을 여기에 끌어다 놓거나 OPEN (Ctrl+O)</div></div>`);
+    this.coord = h(`<div class="coord">—</div>`); this.hint = h(`<div class="drop-hint"><div><b>NexysDraft</b>${L('Drop a DWG or DXF file here, or OPEN (Ctrl+O)', 'DWG 또는 DXF 파일을 여기에 끌어다 놓거나 열기 (Ctrl+O)')}</div></div>`);
     this.wrap.append(this.glc, this.ovc, this.hint, this.coord); this.el.append(this.wrap);
     this.rend = new Renderer(this.glc, this.ovc);
     new ResizeObserver(() => { this.resize(); }).observe(this.wrap);
@@ -112,6 +119,7 @@ export class CanvasView {
       if (e.button === 2) { this.rightDownAt = performance.now(); try { w.setPointerCapture(e.pointerId); } catch { } return; }   // decided on release (time-sensitive right click)
       if (e.button !== 0) return;
       if (this.toolWantsPoint()) { this.point(this.effectivePoint(p, e.shiftKey), e.shiftKey); return; }
+      if (this.boxClick && this.dragStart) { const a = this.dragStart; this.boxClick = false; this.dragStart = null; this.dragMode = 'none'; this.box(a, p, this.pending.shift); this.invalidate(); return; }   // second click of a click-click box
       // select tool / selection step: click pick or start box
       this.dragStart = p; this.dragMode = 'box'; this.pending.shift = e.shiftKey; w.setPointerCapture(e.pointerId);
     });
@@ -119,26 +127,29 @@ export class CanvasView {
       const s = this.toScreen(e); const p = this.toWorld(e); this.cursorScreen = s; this.cursor = p; this.shiftDown = e.shiftKey;
       if (this.dragMode === 'pan' && this.panStart) { this.view.cx = this.panStart.cx - (s[0] - this.panStart.x) / this.view.scale; this.view.cy = this.panStart.cy + (s[1] - this.panStart.y) / this.view.scale; this.invalidate(); return; }
       if (this.doc && this.snapOn && this.toolWantsPoint() && this.dragMode !== 'box') this.snapPt = this.doc.snap(p[0], p[1], this.pxTol(10), this.tool === 'move' || this.tool === 'copy' || this.tool === 'stretch' ? new Set(this.toolSel) : null); else this.snapPt = null;
+      this.acquireWatch(); if (this.isTrim() && this.step === 0 && this.dragMode === 'none') this.trimHover(p, e.shiftKey);
       const ep = this.toolWantsPoint() ? this.effectivePoint(p, e.shiftKey) : p; const base = this.basePoint();
       this.coord.textContent = `${fmtNum(ep[0], 3)}, ${fmtNum(ep[1], 3)}` + (this.snapPt && this.snapOn && this.toolWantsPoint() ? `  ${snapName(this.snapPt.k)}` : '') + (base && this.toolWantsPoint() ? `  ${fmtNum(Math.hypot(ep[0] - base[0], ep[1] - base[1]), 3)} < ${fmtNum(Math.atan2(ep[1] - base[1], ep[0] - base[0]) * 180 / Math.PI, 2)}°` : '');
       this.invalidate();
     });
     w.addEventListener('pointerup', e => {
       if (e.button === 2) { if (this.rightDownAt) { const held = performance.now() - this.rightDownAt; this.rightDownAt = 0; this.rightRelease(held, this.toScreen(e)); } return; }
-      if (this.dragMode === 'pan') { this.dragMode = 'none'; this.panStart = null; return; }
+      if (this.dragMode === 'pan') { this.dragMode = this.boxClick ? 'box' : 'none'; this.panStart = null; return; }
       if (this.dragMode === 'box' && this.dragStart) {
         const p = this.toWorld(e); const d = Math.hypot(p[0] - this.dragStart[0], p[1] - this.dragStart[1]) * this.view.scale;
-        if (d < 4) this.pick(p, this.pending.shift); else this.box(this.dragStart, p, this.pending.shift);
+        if (this.boxClick) return;   // click-click box: waits for the second click
+        if (d < 4) { const start = this.dragStart; const hit = this.pick(p, this.pending.shift); if (!hit && this.canBox()) { this.boxClick = true; this.dragStart = start; this.dragMode = 'box'; this.invalidate(); return; } }
+        else this.box(this.dragStart, p, this.pending.shift);
         this.dragStart = null; this.dragMode = 'none'; this.invalidate();
       }
     });
     w.addEventListener('dblclick', e => { if (this.tool !== 'select' || !this.doc) return; const p = this.toWorld(e); const id = this.doc.hit(p[0], p[1], this.pxTol()); const ent = id ? this.doc.ents.get(id) : null; if (ent && (ent.t === 'T' || ent.t === 'M')) this.editText(id!); });
-    w.addEventListener('pointerleave', () => { this.cursor = null; this.snapPt = null; this.invalidate(); });
+    w.addEventListener('pointerleave', () => { this.cursor = null; this.snapPt = null; this.acquireWatch(); this.invalidate(); });
     // keys reach key() through the document handler in main.ts (a second listener here ran Enter / Space twice)
   }
   key(e: KeyboardEvent) {
     if (this.textEditEl) return;
-    if (e.key === 'Escape') { const idle = this.tool === 'select'; this.closeMenu(); this.cancel(); if (idle && this.selection.size) this.setSelection([]); e.preventDefault(); return; }
+    if (e.key === 'Escape') { if (this.boxClick && this.tool === 'select') { this.endBox(); e.preventDefault(); return; } const idle = this.tool === 'select'; this.closeMenu(); this.cancel(); if (idle && this.selection.size) this.setSelection([]); e.preventDefault(); return; }
     if (e.key === 'Delete' && this.selection.size && this.tool === 'select') { this.run('erase'); e.preventDefault(); return; }
     if (e.key === 'Enter' || e.key === ' ') { if (this.tool === 'select') { this.run(this.lastTool); } else this.enter(); e.preventDefault(); return; }
   }
@@ -146,6 +157,7 @@ export class CanvasView {
   rightClick() { if (this.tool === 'select') this.run(this.lastTool); else this.enter(); }
   /** Right button released after `held` ms: timed mode → < RIGHT_MS = Enter, otherwise the context menu. Returns what it did. */
   rightRelease(held: number, s: Pt): 'enter' | 'menu' {
+    if (this.boxClick) { this.endBox(); this.lastRight = 'enter'; return 'enter'; }
     const menu = this.rightClickMode === 'menu' || (this.rightClickMode === 'timed' && held >= RIGHT_MS);
     if (menu) this.openMenu(s); else this.rightClick();
     this.lastRight = menu ? 'menu' : 'enter'; return this.lastRight;
@@ -153,7 +165,7 @@ export class CanvasView {
   lastRight: 'enter' | 'menu' | '' = '';
   openMenu(s: Pt) {
     this.closeMenu(); const idle = this.tool === 'select';
-    const items: [string, string][] = idle ? [['repeat', `반복 ${this.lastTool.toUpperCase()}`], ['zoomext', '전체 보기 (Z E)'], ['zoomprev', '이전 보기 (Z P)'], ['selectall', '전체 선택 (Ctrl+A)']] : [['enter', '확정 (Enter)'], ['cancel', '취소 (Esc)'], ['zoomext', '전체 보기 (Z E)']];
+    const items: [string, string][] = idle ? [['repeat', `${L('Repeat', '반복')} ${this.lastTool.toUpperCase()}`], ['zoomext', L('Zoom extents (Z E)', '전체 보기 (Z E)')], ['zoomprev', L('Previous view (Z P)', '이전 보기 (Z P)')], ['selectall', L('Select all (Ctrl+A)', '전체 선택 (Ctrl+A)')]] : [['enter', L('Confirm (Enter)', '확정 (Enter)')], ['cancel', L('Cancel (Esc)', '취소 (Esc)')], ['zoomext', L('Zoom extents (Z E)', '전체 보기 (Z E)')]];
     const m = h(`<div class="ctxmenu">${items.map(([k, t]) => `<button type="button" data-m="${k}">${t}</button>`).join('')}</div>`);
     m.style.left = s[0] + 'px'; m.style.top = s[1] + 'px';
     m.addEventListener('pointerdown', ev => ev.stopPropagation());
@@ -163,13 +175,14 @@ export class CanvasView {
   closeMenu() { this.menuEl?.remove(); this.menuEl = null; }
 
   // ---------------------------------------------------------------- drafting modes and point constraints
-  toggleMode(m: 'ortho' | 'polar' | 'grid' | 'snap' | 'osnap', on?: boolean) {
+  toggleMode(m: 'ortho' | 'polar' | 'grid' | 'snap' | 'osnap' | 'otrack', on?: boolean) {
     switch (m) {
       case 'ortho': this.orthoOn = on ?? !this.orthoOn; if (this.orthoOn) this.polarOn = false; this.say(`<Ortho ${this.orthoOn ? 'on' : 'off'}>`); break;
       case 'polar': this.polarOn = on ?? !this.polarOn; if (this.polarOn) this.orthoOn = false; this.say(`<Polar ${this.polarOn ? 'on' : 'off'}> ${this.polarInc}°`); break;
       case 'grid': this.gridOn = on ?? !this.gridOn; this.say(`<Grid ${this.gridOn ? 'on' : 'off'}> ${fmtNum(this.gridSpacing, 4)}`); break;
       case 'snap': this.gridSnapOn = on ?? !this.gridSnapOn; this.say(`<Snap ${this.gridSnapOn ? 'on' : 'off'}> ${fmtNum(this.gridSpacing, 4)}`); break;
       case 'osnap': this.snapOn = on ?? !this.snapOn; this.say(`<Osnap ${this.snapOn ? 'on' : 'off'}>`); break;
+      case 'otrack': this.otrackOn = on ?? !this.otrackOn; if (!this.otrackOn) this.trackPts = []; this.say(`<Object Snap Tracking ${this.otrackOn ? 'on' : 'off'}>`); break;
     }
     this.onModes?.(); this.invalidate();
   }
@@ -190,45 +203,100 @@ export class CanvasView {
     }
     return null;
   }
-  /** Raw cursor → picked point: object snap wins (AutoCAD), else grid snap (F9), then ortho (F8, inverted while Shift is held) or polar tracking (F10). */
+  /** Raw cursor → picked point: object snap wins (AutoCAD), else grid snap (F9), then AutoTrack: ortho (F8, inverted while Shift is held), polar tracking (F10) and object snap tracking (F11). */
   effectivePoint(p: Pt, shift: boolean): Pt {
-    if (this.snapPt && this.snapOn) return [this.snapPt.x, this.snapPt.y];
+    if (this.snapPt && this.snapOn) { this.trk = null; return [this.snapPt.x, this.snapPt.y]; }
     let q: Pt = p;
     if (this.gridSnapOn && this.gridSpacing > 0) { const g = this.gridSpacing; q = [Math.round(q[0] / g) * g, Math.round(q[1] / g) * g]; }
-    return this.constrain(q, shift);
+    this.trk = this.track(q, shift, true); return this.trk ? this.trk.pt : q;
   }
-  constrain(q: Pt, shift: boolean): Pt {
-    const base = this.basePoint(); if (!base || this.tool === 'circle' || this.tool === 'rect' || this.tool === 'mtext') return q;
-    const dx = q[0] - base[0], dy = q[1] - base[1];
-    if (this.orthoOn !== shift) return Math.abs(dx) >= Math.abs(dy) ? [q[0], base[1]] : [base[0], q[1]];
-    if (this.polarOn && (dx || dy)) {
-      const inc = this.polarInc * Math.PI / 180; const a = Math.atan2(dy, dx); const k = Math.round(a / inc); const ta = k * inc;
-      if (Math.abs(a - ta) <= 5 * Math.PI / 180) { const len = dx * Math.cos(ta) + dy * Math.sin(ta); const c = Math.round(Math.cos(ta) * 1e12) / 1e12, s = Math.round(Math.sin(ta) * 1e12) / 1e12; return [base[0] + len * c, base[1] + len * s]; }
-    }
-    return q;
+  /** Ortho / polar from the base point only (direct distance entry goes along this). */
+  constrain(q: Pt, shift: boolean): Pt { const r = this.track(q, shift, false); return r ? r.pt : q; }
+  private track(q: Pt, shift: boolean, objects: boolean): TrackRes | null {
+    const free = this.tool === 'circle' || this.tool === 'rect' || this.tool === 'mtext';   // radius / opposite corner: no ortho or polar
+    const base = free ? null : this.basePoint();
+    return resolveTrack(q, { base, ortho: this.orthoOn !== shift, polar: this.polarOn, polarInc: this.polarInc, pts: objects ? this.trackPts : [], otrack: objects && this.otrackOn && this.snapOn, tol: this.pxTol(10) });
+  }
+  /** Object snap tracking: a snap point the cursor rests on for 350 ms is acquired (resting on it again releases it). */
+  private acquireWatch() {
+    const sp = this.otrackOn && this.snapOn && this.toolWantsPoint() ? this.snapPt : null;
+    if (sp && this.hoverSnap && sp.x === this.hoverSnap.x && sp.y === this.hoverSnap.y) return;
+    clearTimeout(this.hoverTimer); this.hoverSnap = sp ? { x: sp.x, y: sp.y } : null; if (!sp) return;
+    this.hoverTimer = window.setTimeout(() => { const cur = this.snapPt; if (cur && this.hoverSnap && cur.x === this.hoverSnap.x && cur.y === this.hoverSnap.y) this.acquire([cur.x, cur.y]); }, 350);
+  }
+  acquire(p: Pt) {
+    const i = this.trackPts.findIndex(a => Math.hypot(a[0] - p[0], a[1] - p[1]) <= this.pxTol(2));
+    if (i >= 0) this.trackPts.splice(i, 1); else { this.trackPts.push(p); if (this.trackPts.length > 7) this.trackPts.shift(); }
+    this.invalidate();
   }
 
   // ---------------------------------------------------------------- selection
-  pick(p: Pt, add: boolean) {
-    if (!this.doc) return; const id = this.doc.hit(p[0], p[1], this.pxTol());
-    if (this.tool !== 'select' && this.step === 0 && this.needsSelection()) { if (id) { this.toolSel.includes(id) ? this.toolSel.splice(this.toolSel.indexOf(id), 1) : this.toolSel.push(id); this.say(`${this.toolSel.length} selected — Enter to continue`); } this.invalidate(); return; }
-    if (this.tool === 'offset' && this.step === 1) { if (id) { this.pending.id = id; this.step = 2; this.prompt('Specify point on side to offset:'); } return; }
+  /** Click on the canvas outside a point prompt. Returns false when nothing was under the cursor (the caller may open a selection box). */
+  pick(p: Pt, add: boolean): boolean {
+    if (!this.doc) return true; const id = this.doc.hit(p[0], p[1], this.pxTol());
+    if (this.isTrim()) {
+      if (this.step === 1) { if (id) { this.toolSel.includes(id) ? this.toolSel.splice(this.toolSel.indexOf(id), 1) : this.toolSel.push(id); this.say(`${this.toolSel.length} edge(s) — Enter to continue`); } this.invalidate(); return !!id; }
+      if (id) this.trimAt([[id, p]], add); return true;
+    }
+    if (this.tool !== 'select' && this.step === 0 && this.needsSelection()) { if (id) { this.toolSel.includes(id) ? this.toolSel.splice(this.toolSel.indexOf(id), 1) : this.toolSel.push(id); this.say(`${this.toolSel.length} selected — Enter to continue`); } this.invalidate(); return !!id; }
+    if (this.tool === 'offset' && this.step === 1) { if (id) { this.pending.id = id; this.step = 2; this.prompt('Specify point on side to offset:'); } return true; }
     if (!add) this.selection.clear();
     if (id) { if (add && this.selection.has(id)) this.selection.delete(id); else this.selection.add(id); }
-    this.onSelectionChanged?.(); this.invalidate();
+    this.onSelectionChanged?.(); this.invalidate(); return !!id;
   }
   box(a: Pt, b: Pt, add: boolean) {
-    if (!this.doc) return; const crossing = b[0] < a[0]; const ids = this.doc.select(a[0], a[1], b[0], b[1], crossing);
+    if (!this.doc) return;
+    if (this.isTrim() && this.step === 0) { this.trimAt(this.fencePicks(a, b), add); return; }
+    const crossing = b[0] < a[0]; const ids = this.doc.select(a[0], a[1], b[0], b[1], crossing);
+    if (this.isTrim()) { for (const id of ids) if (!this.toolSel.includes(id)) this.toolSel.push(id); this.say(`${this.toolSel.length} edge(s) — Enter to continue`); this.invalidate(); return; }
     if (this.tool !== 'select' && this.step === 0 && this.needsSelection()) { for (const id of ids) if (!this.toolSel.includes(id)) this.toolSel.push(id); if (this.tool === 'stretch') this.pending.window = [a, b]; this.say(`${this.toolSel.length} selected — Enter to continue`); this.invalidate(); return; }
     if (!add) this.selection.clear(); for (const id of ids) this.selection.add(id);
     this.onSelectionChanged?.(); this.invalidate();
+  }
+  /** A click on empty space opens a window / crossing box here (object selection, cutting-edge selection). */
+  canBox() { return this.tool === 'select' || (this.needsSelection() && this.step === 0) || (this.isTrim() && this.step === 1); }
+  endBox() { this.boxClick = false; this.dragStart = null; if (this.dragMode === 'box') this.dragMode = 'none'; this.invalidate(); }
+
+  // ---------------------------------------------------------------- trim / extend
+  isTrim() { return this.tool === 'trim' || this.tool === 'extend'; }
+  /** TRIM removes, EXTEND lengthens; Shift swaps the two for one pick (AutoCAD). */
+  private trimExtends(shift: boolean) { return (this.tool === 'extend') !== shift; }
+  private trimPrompt() { const ex = this.tool === 'extend'; return `${ex ? 'EXTEND' : 'TRIM'} — Select object to ${ex ? 'extend' : 'trim'} (Shift+click = ${ex ? 'trim' : 'extend'}, drag = fence, T = choose ${ex ? 'boundary' : 'cutting'} edges${this.pending.edges ? ` [${this.pending.edges.length} chosen]` : ''}, Enter = end):`; }
+  trimAt(picks: [string, Pt][], shift: boolean) {
+    if (!picks.length) return; const extend = this.trimExtends(shift); const args: any = { ids: picks.map(k => k[0]), pts: picks.flatMap(k => k[1]), extend }; if (this.pending.edges) args.edges = this.pending.edges;
+    this.pending.did = true; this.pending.preview = null; this.previewKey = '';
+    bridge.call('edit.trim', args).then((r: any) => {
+      const m: string[] = r?.messages ?? []; const n = picks.length - m.length;
+      if (n > 0) this.say(`${extend ? 'EXTEND' : 'TRIM'} ${n} object(s)`);
+      if (m.length) this.say(`${extend ? 'EXTEND' : 'TRIM'} — ${Array.from(new Set(m)).join('; ')}`);
+      this.invalidate();
+    }).catch(() => { });
+  }
+  /** Fence a → b: one pick per object the segment crosses, at the crossing point. */
+  fencePicks(a: Pt, b: Pt): [string, Pt][] {
+    const out: [string, Pt][] = []; if (!this.doc) return out;
+    for (const id of this.doc.query(a[0], a[1], b[0], b[1])) {
+      const e = this.doc.ents.get(id); if (!e || !this.doc.visible(e) || this.doc.layer(e.l)?.locked) continue; const g = this.doc.geomOf(id); if (!g) continue;
+      let hit: Pt | null = null;
+      for (const part of g.parts) { for (let i = 0; i + 3 < part.segs.length && !hit; i += 4) hit = segInt(a[0], a[1], b[0], b[1], part.segs[i], part.segs[i + 1], part.segs[i + 2], part.segs[i + 3]); if (hit) break; }
+      if (hit) out.push([id, hit]);
+    }
+    return out;
+  }
+  /** Hover preview: ask the engine what the pick would remove / add (the latest answer wins). */
+  private trimHover(p: Pt, shift: boolean) {
+    if (!this.doc) return; const id = this.doc.hit(p[0], p[1], this.pxTol()); const extend = this.trimExtends(shift);
+    if (!id) { if (this.pending.preview) { this.pending.preview = null; this.invalidate(); } this.previewKey = ''; this.previewSeq++; return; }
+    const q = this.pxTol(3); const key = `${id}|${Math.round(p[0] / q)}|${Math.round(p[1] / q)}|${extend}|${this.doc.ver}`; if (key === this.previewKey) return; this.previewKey = key;
+    const seq = ++this.previewSeq; const args: any = { h: id, x: p[0], y: p[1], extend };   // not 'id': that key is the request number of the bridge message if (this.pending.edges) args.edges = this.pending.edges;
+    bridge.call('edit.trimPreview', args).then((r: any) => { if (seq !== this.previewSeq || !this.isTrim()) return; this.pending.preview = r?.ok ? { pts: r.pts, extend } : null; this.invalidate(); }).catch(() => { });
   }
   setSelection(ids: string[]) { this.selection = new Set(ids); this.onSelectionChanged?.(); this.invalidate(); }
 
   // ---------------------------------------------------------------- tools
   needsSelection() { return ['move', 'copy', 'erase', 'rotate', 'mirror', 'stretch'].includes(this.tool); }
   toolWantsPoint() {
-    if (this.tool === 'select' || this.tool === 'pan') return false;
+    if (this.tool === 'select' || this.tool === 'pan' || this.isTrim()) return false;
     if (this.needsSelection() && this.step === 0) return false;
     if (this.tool === 'offset' && this.step <= 1) return false;
     if (this.tool === 'text' || this.tool === 'layer' || this.tool === 'zoomopt') return false;
@@ -237,21 +305,21 @@ export class CanvasView {
     if (this.tool === 'mtext' && this.step >= 2) return false;
     return true;
   }
-  say(text: string) { this.onHistory?.(text); }
-  prompt(text: string) { this.onPrompt?.(text); }
-  cancel() { this.tool = 'select'; this.step = 0; this.pts = []; this.toolSel = []; this.pending = {}; this.prompt('Command:'); this.invalidate(); }
+  say(text: string) { this.onHistory?.(xl(text)); }
+  prompt(text: string) { this.onPrompt?.(xl(text)); }
+  cancel() { this.tool = 'select'; this.step = 0; this.pts = []; this.toolSel = []; this.pending = {}; this.trackPts = []; this.trk = null; this.boxClick = false; this.dragStart = null; if (this.dragMode === 'box') this.dragMode = 'none'; this.prompt('Command:'); this.invalidate(); }
   /** Start a command by name or alias (command line / toolbar). Returns false when unknown. */
   run(cmd: string, arg?: string): boolean {
     const c = cmd.trim().toLowerCase(); if (!c) return true;
     const name = ALIASES[c] ?? c;
-    if (this.onCommand?.(name)) return true;
+    if (this.onCommand?.(name, arg)) return true;
     switch (name) {
       case 'cancel': this.cancel(); return true;
       case 'zoomext': this.zoomExtents(); this.say('ZOOM Extents'); return true;
       case 'zoom': { const a = (arg ?? '').trim().toLowerCase(); if (a === '') { this.start('zoomopt'); return true; } return this.zoomOption(a); }
       case 'regen': { this.doc?.geom.clear(); if (this.doc) this.doc.ver++; this.rend.setDoc(this.doc); this.regenCount++; this.invalidate(); this.say('REGEN — geometry and render buffers rebuilt'); return true; }
       case 'redraw': this.invalidate(); this.say('REDRAW'); return true;
-      case 'ortho': case 'polar': case 'grid': case 'snap': case 'osnap': {
+      case 'ortho': case 'polar': case 'grid': case 'snap': case 'osnap': case 'otrack': {
         const a = (arg ?? '').trim().toLowerCase(); const n = parseFloat(a);
         if (name === 'polar' && n > 0) { this.polarInc = n; this.toggleMode('polar', true); return true; }
         if ((name === 'grid' || name === 'snap') && n > 0) { this.gridSpacing = n; this.toggleMode(name, true); return true; }
@@ -266,7 +334,7 @@ export class CanvasView {
       case 'select': this.cancel(); return true;
       case 'pan': this.tool = 'pan'; this.prompt('PAN — drag, Esc to end'); return true;
       case 'text': { const id = Array.from(this.selection)[0]; const e = id ? this.doc?.ents.get(id) : null; if (e && (e.t === 'T' || e.t === 'M')) this.editText(id!); else this.say('Select a TEXT or MTEXT first (or double-click it)'); return true; }
-      case 'line': case 'pline': case 'circle': case 'move': case 'copy': case 'erase': case 'rotate': case 'mirror': case 'stretch': case 'offset': case 'dim': case 'rect': case 'arc': case 'ellipse': case 'polygon': case 'point': case 'dtext': case 'mtext': this.start(name, arg); return true;
+      case 'line': case 'pline': case 'circle': case 'move': case 'copy': case 'erase': case 'rotate': case 'mirror': case 'stretch': case 'offset': case 'dim': case 'rect': case 'arc': case 'ellipse': case 'polygon': case 'point': case 'dtext': case 'mtext': case 'trim': case 'extend': this.start(name, arg); return true;
     }
     return false;
   }
@@ -278,11 +346,12 @@ export class CanvasView {
     const f = parseFloat(a); if (f > 0) { this.pushView(); this.view.scale *= f; this.invalidate(); } this.cancel(); return true;
   }
   start(name: string, arg?: string) {
-    this.tool = name; this.step = 0; this.pts = []; this.pending = {}; if (name !== 'zoomwin' && name !== 'zoomopt') this.lastTool = name;
+    this.endBox(); this.tool = name; this.step = 0; this.pts = []; this.pending = {}; if (name !== 'zoomwin' && name !== 'zoomopt') this.lastTool = name;
     this.toolSel = this.needsSelection() ? Array.from(this.selection) : [];
     if (name === 'erase' && this.toolSel.length) { this.finishErase(); return; }
     if (this.needsSelection()) { if (this.toolSel.length) { this.step = 1; this.afterSelection(); } else this.prompt(`${name.toUpperCase()} — Select objects (click / window / crossing), Enter to continue:`); return; }
     switch (name) {
+      case 'trim': case 'extend': this.prompt(this.trimPrompt()); break;
       case 'line': this.prompt('LINE — Specify first point:'); break;
       case 'pline': this.prompt('PLINE — Specify start point:'); break;
       case 'circle': this.prompt('CIRCLE — Specify center point:'); break;
@@ -314,6 +383,11 @@ export class CanvasView {
   }
   /** Enter / right click: finish the selection step or the current polyline etc. */
   enter() {
+    if (this.isTrim()) {
+      if (this.step === 1) { this.pending.edges = this.toolSel.length ? this.toolSel.slice() : null; this.step = 0; this.say(this.pending.edges ? `${this.pending.edges.length} edge(s) chosen` : 'every object is an edge'); this.prompt(this.trimPrompt()); this.invalidate(); return; }
+      if (!this.pending.did && !this.pending.entered) { this.pending.entered = true; this.say('Every visible object is a cutting edge — pick the part to ' + (this.tool === 'extend' ? 'extend' : 'trim')); return; }   // classic habit: TR Enter Enter
+      this.cancel(); return;
+    }
     if (this.needsSelection() && this.step === 0) { if (!this.toolSel.length) { this.cancel(); return; } this.step = 1; this.afterSelection(); return; }
     if (this.tool === 'pline') { this.finishPline(false); return; }
     if (this.tool === 'polygon' && this.step === 0) { this.step = 1; this.prompt(`POLYGON ${this.lastSides} sides — Specify center of polygon:`); return; }
@@ -332,6 +406,10 @@ export class CanvasView {
     if (this.tool === 'select') return false;
     const low = t.toLowerCase();
     if (this.tool === 'zoomopt') { this.zoomOption(low); return true; }
+    if (this.isTrim()) {
+      if (this.step === 0 && (low === 't' || low === 'b' || low === 'edges')) { this.step = 1; this.toolSel = []; this.pending.preview = null; this.prompt(`${this.tool.toUpperCase()} — Select ${this.tool === 'extend' ? 'boundary' : 'cutting'} edges (click / window / crossing), Enter when done (none = every object):`); this.invalidate(); return true; }
+      return false;
+    }
     if (this.tool === 'pline' && (low === 'c' || low === 'close')) { this.finishPline(true); return true; }
     if (this.tool === 'mirror' && this.step === 3) { this.finishMirror(low.startsWith('y')); return true; }
     if (this.tool === 'offset' && this.step === 0) { const d = parseFloat(t); if (d > 0) { this.lastDist = d; this.step = 1; this.prompt(`OFFSET ${d} — Select object to offset:`); } return true; }
@@ -351,6 +429,10 @@ export class CanvasView {
     if (p) { this.point(p, false); return true; }
     const n = parseFloat(t);
     const base = this.basePoint();
+    if (isFinite(n) && /^-?[0-9.]+$/.test(t) && !base && this.cursor && this.toolWantsPoint() && this.trk && this.trk.guides.length === 1 && this.trk.guides[0].kind === 'track') {
+      // distance typed while a tracking path shows: measured from the acquired point toward the cursor
+      const g = this.trk.guides[0]; const sgn = (this.cursor[0] - g.ax) * g.dx + (this.cursor[1] - g.ay) * g.dy >= 0 ? 1 : -1; this.point([g.ax + g.dx * n * sgn, g.ay + g.dy * n * sgn], false); return true;
+    }
     if (isFinite(n) && /^-?[\d.]+$/.test(t) && base && this.cursor && ['line', 'pline', 'move', 'copy', 'stretch', 'dist', 'dim'].includes(this.tool)) {
       // direct distance entry: the number goes along the rubber band as constrained now (ortho / polar / Shift)
       const c = this.constrain(this.cursor, this.shiftDown); const dx = c[0] - base[0], dy = c[1] - base[1]; const len = Math.hypot(dx, dy) || 1; this.point([base[0] + dx / len * n, base[1] + dy / len * n], false); return true;
@@ -369,6 +451,7 @@ export class CanvasView {
     return null;
   }
   point(p: Pt, shift: boolean) {
+    this.trackPts = []; this.trk = null;   // acquired points last until the point is picked (AutoCAD)
     switch (this.tool) {
       case 'line':
         this.pts.push(p);
@@ -514,11 +597,22 @@ export class CanvasView {
       else if (this.tool === 'rotate' && this.step === 2) { const ang = Math.atan2(cur[1] - last[1], cur[0] - last[0]); ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 0.7; let n = 0; for (const id of this.toolSel) { if (++n > 2000) break; const g = doc.geomOf(id); if (g) this.strokeGeom(ctx, g, v, 0, 0, 1, ang, 0, last); } ctx.globalAlpha = 1; }
     }
     if (this.tool === 'mirror' && this.step === 3 && this.pts.length === 2 && doc) { const [p0, p1] = this.pts; ctx.strokeStyle = sel; ctx.globalAlpha = 0.7; let n = 0; for (const id of this.toolSel) { if (++n > 2000) break; const g = doc.geomOf(id); if (g) this.strokeGeomMirror(ctx, g, v, p0, p1); } ctx.globalAlpha = 1; }
-    // polar / ortho tracking ray from the base point
-    const base = this.basePoint();
-    if (base && cur && this.toolWantsPoint() && (this.polarOn || this.orthoOn !== this.shiftDown) && !(this.snapPt && this.snapOn)) { const a = w2s(v, base[0], base[1]), b = w2s(v, cur[0], cur[1]); const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy); if (l > 1) { ctx.strokeStyle = T.track; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(a[0] + dx / l * 4000, a[1] + dy / l * 4000); ctx.stroke(); ctx.setLineDash([]); } }
+    // AutoTrack alignment paths (polar / ortho ray from the base point, tracking paths through acquired points) and acquired-point marks
+    const wants = this.toolWantsPoint();
+    if (wants && this.trackPts.length) { ctx.strokeStyle = T.track; ctx.lineWidth = 1.5; ctx.beginPath(); for (const a of this.trackPts) { const p = w2s(v, a[0], a[1]); ctx.moveTo(p[0] - 5, p[1]); ctx.lineTo(p[0] + 5, p[1]); ctx.moveTo(p[0], p[1] - 5); ctx.lineTo(p[0], p[1] + 5); } ctx.stroke(); ctx.lineWidth = 1; }
+    if (wants && cur && this.trk && !(this.snapPt && this.snapOn)) {
+      const far = (v.w + v.h) * 2; ctx.strokeStyle = T.track; ctx.setLineDash([2, 4]); ctx.beginPath();
+      for (const g of this.trk.guides) { const a = w2s(v, g.ax, g.ay); const ux = g.dx, uy = -g.dy; if (g.kind === 'track') ctx.moveTo(a[0] - ux * far, a[1] - uy * far); else ctx.moveTo(a[0], a[1]); ctx.lineTo(a[0] + ux * far, a[1] + uy * far); }
+      ctx.stroke(); ctx.setLineDash([]);
+      if (this.trk.guides.length > 1) { const x = w2s(v, this.trk.pt[0], this.trk.pt[1]); ctx.beginPath(); ctx.moveTo(x[0] - 4, x[1] - 4); ctx.lineTo(x[0] + 4, x[1] + 4); ctx.moveTo(x[0] + 4, x[1] - 4); ctx.lineTo(x[0] - 4, x[1] + 4); ctx.stroke(); }
+      if (this.trk.label && this.cursorScreen) { ctx.font = '11px ui-monospace, Consolas, monospace'; const tw = ctx.measureText(this.trk.label).width; let lx = this.cursorScreen[0] + 16, ly = this.cursorScreen[1] + 18; if (lx + tw + 12 > v.w) lx = this.cursorScreen[0] - tw - 28; if (ly + 20 > v.h) ly = this.cursorScreen[1] - 30; ctx.fillStyle = T.tipBg; ctx.fillRect(lx, ly, tw + 12, 18); ctx.strokeStyle = T.track; ctx.strokeRect(lx + 0.5, ly + 0.5, tw + 11, 17); ctx.fillStyle = T.tip; ctx.textBaseline = 'middle'; ctx.fillText(this.trk.label, lx + 6, ly + 9.5); ctx.textBaseline = 'alphabetic'; }
+    }
+    // TRIM / EXTEND hover preview: the part that goes (dashed) or comes (solid)
+    if (this.isTrim() && this.pending.preview && this.dragMode === 'none') { const pv = this.pending.preview; const pts: Pt[] = []; for (let i = 0; i + 1 < pv.pts.length; i += 2) pts.push([pv.pts[i], pv.pts[i + 1]]); ctx.strokeStyle = sel; ctx.lineWidth = 3; ctx.setLineDash(pv.extend ? [] : [3, 4]); this.strokeWorld(ctx, pts, false); ctx.setLineDash([]); ctx.lineWidth = 1; }
+    // fence (TRIM / EXTEND drag)
+    if (this.isTrim() && this.step === 0 && this.dragMode === 'box' && this.dragStart && this.cursor) { const a = w2s(v, this.dragStart[0], this.dragStart[1]), b = w2s(v, this.cursor[0], this.cursor[1]); ctx.strokeStyle = T.crossing; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); }
     // selection box
-    if (this.dragMode === 'box' && this.dragStart && this.cursor) { const a = w2s(v, this.dragStart[0], this.dragStart[1]), b = w2s(v, this.cursor[0], this.cursor[1]); const crossing = this.cursor[0] < this.dragStart[0]; ctx.strokeStyle = crossing ? T.crossing : T.window; ctx.setLineDash(crossing ? [4, 3] : []); ctx.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); ctx.setLineDash([]); ctx.fillStyle = crossing ? T.crossingFill : T.windowFill; ctx.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); }
+    if (this.dragMode === 'box' && this.dragStart && this.cursor && !(this.isTrim() && this.step === 0)) { const a = w2s(v, this.dragStart[0], this.dragStart[1]), b = w2s(v, this.cursor[0], this.cursor[1]); const crossing = this.cursor[0] < this.dragStart[0]; ctx.strokeStyle = crossing ? T.crossing : T.window; ctx.setLineDash(crossing ? [4, 3] : []); ctx.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); ctx.setLineDash([]); ctx.fillStyle = crossing ? T.crossingFill : T.windowFill; ctx.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); }
     // snap marker
     if (this.snapPt && this.snapOn && this.toolWantsPoint()) { const p = w2s(v, this.snapPt.x, this.snapPt.y); ctx.strokeStyle = snapCol; ctx.lineWidth = 2; const k = this.snapPt.k; ctx.beginPath();
       if (k === SNAP_END) ctx.rect(p[0] - 6, p[1] - 6, 12, 12); else if (k === SNAP_MID) { ctx.moveTo(p[0], p[1] - 7); ctx.lineTo(p[0] + 7, p[1] + 6); ctx.lineTo(p[0] - 7, p[1] + 6); ctx.closePath(); } else if (k === SNAP_CEN) ctx.arc(p[0], p[1], 6, 0, Math.PI * 2); else if (k === SNAP_INT) { ctx.moveTo(p[0] - 6, p[1] - 6); ctx.lineTo(p[0] + 6, p[1] + 6); ctx.moveTo(p[0] + 6, p[1] - 6); ctx.lineTo(p[0] - 6, p[1] + 6); } else if (k === SNAP_QUAD) { ctx.moveTo(p[0], p[1] - 7); ctx.lineTo(p[0] + 7, p[1]); ctx.lineTo(p[0], p[1] + 7); ctx.lineTo(p[0] - 7, p[1]); ctx.closePath(); } else { ctx.rect(p[0] - 5, p[1] - 5, 10, 10); ctx.moveTo(p[0] - 8, p[1]); ctx.lineTo(p[0] + 8, p[1]); }
@@ -531,7 +625,7 @@ export class CanvasView {
   tokens(): Record<string, string> {
     if (this._tok && this._tokDark === this.dark) return this._tok;
     const cs = getComputedStyle(this.wrap); const g = (n: string, d: string) => cs.getPropertyValue(n).trim() || d;
-    this._tok = { sel: g('--canvas-sel', '#E8601C'), snap: g('--canvas-snap', '#2E9E5B'), grid: g('--canvas-grid', '#E4E1DA'), cursor: g('--canvas-crosshair', 'rgba(23,24,26,0.3)'), grip: g('--canvas-grip', '#17181A'), track: g('--canvas-track', '#2E9E5B'), window: g('--canvas-window', '#2F6FD6'), windowFill: g('--canvas-window-fill', 'rgba(47,111,214,0.08)'), crossing: g('--canvas-crossing', '#2E9E5B'), crossingFill: g('--canvas-crossing-fill', 'rgba(46,158,91,0.08)') };
+    this._tok = { sel: g('--canvas-sel', '#E8601C'), snap: g('--canvas-snap', '#2E9E5B'), grid: g('--canvas-grid', '#E4E1DA'), cursor: g('--canvas-crosshair', 'rgba(23,24,26,0.3)'), grip: g('--canvas-grip', '#17181A'), track: g('--canvas-track', '#2E9E5B'), window: g('--canvas-window', '#2F6FD6'), windowFill: g('--canvas-window-fill', 'rgba(47,111,214,0.08)'), crossing: g('--canvas-crossing', '#2E9E5B'), crossingFill: g('--canvas-crossing-fill', 'rgba(46,158,91,0.08)'), tip: g('--canvas-coord', '#5F5E5A'), tipBg: g('--canvas-coord-bg', 'rgba(251,250,248,0.85)') };
     this._tokDark = this.dark; return this._tok;
   }
   /** F7 grid: dots at the grid spacing, coarsened ×5 / ×10 until they are at least 10 px apart. */

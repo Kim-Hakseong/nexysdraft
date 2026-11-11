@@ -173,3 +173,11 @@
 - 폴리라인 VERTEX 플래그 8은 스플라인 맞춤으로 생긴 곡선 위의 점이고, 16이 프레임 제어점이다. 8까지 버려서 스플라인 맞춤 폴리라인이 정점 0개가 됐었다.
 - LAYOUT 객체를 포함한 DXF를 dxf2dwg(0.14.8679)에 넘기면 TrueView 2027이 "Damaged File"로 거부한다. 루트 사전만 넘긴 DWG(LAYOUT 없음)는 연다.
 - 동료가 본 `INTERNAL ERROR: !dbspace.cpp@2194: eOk`는 TrueView 2027에서 재현되지 않았다(UNVERIFIED: 구버전에서 주인 없는 `*Model_Space`가 원인인지).
+
+## 2026-11-11 draft5g
+- 창/교차 선택과 극좌표 추적은 v0.4.1부터 있었지만 동료가 "없다"고 느꼈다. 선택 상자는 드래그로만 열렸고(AutoCAD는 클릭–이동–클릭), 극좌표 추적은 기본이 꺼져 있었다(AutoCAD는 켜짐). 기능이 있어도 기본값과 조작 방식이 다르면 없는 것과 같다.
+- 브리지 메시지는 `{ id, cmd, ...args }`라서 인자 이름이 `id`면 요청 번호를 덮어써 응답이 돌아오지 않는다(`edit.offset`은 응답을 안 써서 드러나지 않았다). 응답이 필요한 명령은 인자를 `id`로 짓지 않는다.
+- F8(직교)을 켜면 극좌표 추적이 꺼지고, 직교를 꺼도 극좌표는 돌아오지 않는다(AutoCAD와 같음).
+- WPF(창 프로그램)라서 파워셸은 `& NexysDraft.exe --script …`의 종료를 기다리지 않는다. 출력을 파이프(`| Out-String`)하거나 cmd·bash에서 실행하면 기다린다.
+- Claude Code·Gemini CLI·Antigravity CLI는 같은 SKILL.md 형식을 읽는다. 사용자 폴더는 각각 `~/.claude/skills`, `~/.gemini/skills`(또는 `~/.agents/skills`), `~/.gemini/config/skills`다. Gemini CLI 문서에는 2026-06-18에 Antigravity CLI로 대체됐다는 안내가 붙어 있다.
+- Antigravity CLI 1.1.12는 `agy -p "요청" --dangerously-skip-permissions`로 창 없이 실행된다. 같은 요청에서 Claude는 3점 호로, Antigravity는 원 2개 + `tr`로 장공을 그렸고 결과는 같았다(객체 11개).

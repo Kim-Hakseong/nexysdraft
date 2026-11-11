@@ -24,4 +24,4 @@ run-draft1.md의 MVP를 끝까지 자율 구현한다. 개발 원본은 `C:\rea-
 3. 숫자 관문: DXF 왕복 1e-6, DWG 왕복(LibreDWG) 좌표 1e-6·HATCH/DIMENSION 개수, 10만 엔티티 팬·줌 ≤16 ms·열기 ≤1 s, 한글 깨짐 0건.
 4. UI 금지 목록(DESIGN v3): 그림자·그라데이션·글래스 금지, accent 색 테두리/좌측 띠 금지(강조는 panel-alt 배경+굵기), 토큰은 styles.css CSS 변수만, 라이트 기본·다크 지원.
 5. 독자 구현: DXF 파서/라이터·렌더·편집은 직접 작성. LibreDWG·dwg2spdf는 프로세스 호출만.
-6. 제외(MVP): 트림·연장·필렛·동적 블록·해치 편집·3D·XREF 편집·플롯 스타일.
+6. 제외(MVP): 필렛·동적 블록·해치 편집·3D·XREF 편집·플롯 스타일. (트림·연장은 draft5g에서 추가: line·arc·circle·polyline)

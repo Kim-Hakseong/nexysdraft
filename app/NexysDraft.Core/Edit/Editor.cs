@@ -21,7 +21,7 @@ public sealed class Change
 /// Editing commands on a <see cref="Document"/> with undo/redo. Every command records the entities it replaces (clone before), adds
 /// and removes; undo re-inserts the clones at their old indices. Geometry is 2D (similarity transforms + per-vertex stretch).
 /// </summary>
-public sealed class Editor
+public sealed partial class Editor
 {
     public Document Doc { get; }
     readonly LinkedList<Change> _undo = new(); readonly Stack<Change> _redo = new();

@@ -16,6 +16,7 @@ namespace NexysDraft.App;
 /// Commands: new | open PATH | save PATH(.dxf|.dwg) [--ver r2000|keep] [--no-image] [--no-fontfix] | pdf PATH [--merged] [--sheets] [--overview] | select all|none|window X0,Y0 X1,Y1|crossing …|handles H1 H2 … | layer new NAME [COLOR] |
 /// layer current NAME | layer set NAME on|off|frozen|thawed|locked|unlocked | l X0,Y0 X1,Y1 [X2,Y2 …] | pl [c] X,Y … | c CX,CY R | dli X0,Y0 X1,Y1 DX,DY [angle] |
 /// rec X0,Y0 X1,Y1 | a X1,Y1 X2,Y2 X3,Y3 | el X0,Y0 X1,Y1 HALF | pol N CX,CY R [c] | po X,Y | dt X,Y H TEXT | mt X,Y W H TEXT |
+/// tr X,Y [X,Y …] (trim the part under each point at the nearest crossings) | ex X,Y [X,Y …] (extend the end near each point to the next object) |
 /// m DX,DY | co DX,DY | e | ro CX,CY DEG | mi X0,Y0 X1,Y1 [erase] | o H DIST SX,SY | s X0,Y0 X1,Y1 DX,DY | text H STRING | replace OLD NEW | undo | redo |
 /// query entities|layers|extents|texts | echo TEXT. Lines starting with # are comments.
 /// </summary>
@@ -126,6 +127,15 @@ public static class ScriptRunner
             case "mi": { var p0 = Pt(a[0]); var p1 = Pt(a[1]); bool erase = a.Count > 2 && a[2].StartsWith("e", StringComparison.OrdinalIgnoreCase); Ed().Mirror(Sel(), p0.x, p0.y, p1.x, p1.y, !erase); return new { mirrored = sel.Count, erase }; }
             case "o": { var side = Pt(a[2]); var c = Ed().Offset(a[0], D(a[1]), new V3(side.x, side.y)) ?? throw new ArgumentException("offset: entity not found or type not supported (line, circle, arc, lwpolyline)"); return new { offset = a[0] }; }
             case "s": { var p0 = Pt(a[0]); var p1 = Pt(a[1]); var dd = Pt(a[2]); Ed().Stretch(Sel(), p0.x, p0.y, p1.x, p1.y, dd.x, dd.y); return new { stretched = sel.Count }; }
+            case "tr":
+            case "ex":
+                {
+                    if (a.Count == 0) throw new ArgumentException(cmd + " X,Y [X,Y …] — a point on the part to " + (cmd == "tr" ? "remove" : "lengthen (near the end to extend)"));
+                    var picks = new List<(string, V3)>(); foreach (var s in a) { var p = Pt(s); var v = new V3(p.x, p.y); var t = Ed().NearestTrimmable(v) ?? throw new ArgumentException("no line, arc, circle or polyline in the drawing"); picks.Add((t.Handle, v)); }
+                    var msgs = new List<string>(); var c = Ed().TrimExtend(picks, null, cmd == "ex", msgs);
+                    if (msgs.Count > 0) throw new ArgumentException(cmd + ": " + string.Join("; ", msgs));
+                    return new { changed = c.Replaced.Count, added = c.Added.Count };
+                }
             case "text": { string h = a[0]; string text = string.Join(" ", a.Skip(1)); var ent = Doc().Find(h) ?? throw new ArgumentException("no entity " + h); var c = ent is MText ? Ed().SetMTextPlain(h, text) : Ed().SetText(h, text); if (c == null) throw new ArgumentException(h + " is not TEXT/MTEXT"); return new { handle = h, text }; }
             case "replace":
                 {

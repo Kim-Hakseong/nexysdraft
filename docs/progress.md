@@ -101,6 +101,17 @@
 | D4 UI | 완료 (순서 역전: 구현 뒤 목업) | design/mockup/draft.html·png, tools/pixel_diff.py, 라이트/다크 |
 | D5 출력·검증·배포 | 완료 | PDF(당시 dwg2spdf), `--selftest`, `--stress`, app/dist/NexysDraft.exe, docs/report-draft1.md |
 
+## 2026-11-11 draft5g (자르기·연장, 추적 가이드, 선택 상자, 패널, 한/영, 에이전트 스킬)
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| TRIM / EXTEND (엔진 + 화면 + 명령줄) | 완료 | D5gTests 8개, 셀프테스트 aid_trim_*·aid_extend_* |
+| 극좌표 추적 기본 켜짐 + 객체 스냅 추적(F11) | 완료 | aid_polar_tracking_default_on, aid_object_snap_tracking |
+| 클릭–클릭 창/교차 선택 상자 | 완료 | aid_box_click_click, aid_window_inside_crossing_touching |
+| 좌우 패널 숨기기, 툴바 줄바꿈 | 완료 | panels_hide_show, toolbar_narrow_window_all_tools_visible |
+| 한국어(기본)/영어 | 완료 (엔진 상태 문구는 영어로 남음) | lang_default_korean, lang_switch_english_keeps_drawing |
+| 에이전트 스킬 설치(`--install-skill`), Claude Code·Antigravity CLI 실행 확인 | 완료 (예전 Gemini CLI는 UNVERIFIED) | work/gates/d5g_agents.txt, docs/agents.md |
+| v0.4.6 배포 | 완료 | docs/report-draft5g.md |
+
 ## 2026-11-10 draft5f (동료 보고: 저장한 DWG가 DWG TrueView에서 중단)
 | 항목 | 판정 | 근거 |
 |---|---|---|

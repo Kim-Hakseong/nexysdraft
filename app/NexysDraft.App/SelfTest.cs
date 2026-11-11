@@ -34,14 +34,29 @@ public static class SelfTest
             await Idle(w, 300);
             w.Width += 1440 - w.Web.ActualWidth; w.Height += 900 - w.Web.ActualHeight; await Idle(w, 300);
             L($"page size {w.Web.ActualWidth}x{w.Web.ActualHeight} dpr {VisualTreeHelper.GetDpi(w).DpiScaleX} webview2 {w.RuntimeVersion}");
+            _lang0 = await SetLang(w, "en");   // the checks read English prompts and labels; the user's language is put back at the end
             if (Args[0] == "--shot") await ShotAsync(w); else if (Args[0] == "--perf") await PerfAsync(w); else if (Args[0] == "--stress") await StressAsync(w); else if (Args[0] == "--skilltest") await SkillTestAsync(w); else await FullAsync(w);
         }
         catch (Exception ex) { L("FATAL " + ex); GB("selftest_completed", false, "FATAL " + ex.GetType().Name + ": " + ex.Message); }   // a crashed run must not exit 0 (draft5d blockers #27)
         finally
         {
+            try { if (_lang0 != "?") await SetLang(w, _lang0); } catch { }
             File.WriteAllLines(Path.Combine(OutDir, "selftest.log"), Log); if (Gate.Count > 0) File.WriteAllLines(Path.Combine(OutDir, "gates.txt"), Gate);
             await Task.Delay(200); Application.Current.Shutdown(Gate.Any(g => g.EndsWith("FAIL") || g.Contains("\tFAIL\t")) ? 1 : 0);
         }
+    }
+    static string? _lang0 = "?";
+    /// <summary>Set the UI language (null = no stored choice → the Korean default) and reload the page; returns the stored value before.</summary>
+    static async Task<string?> SetLang(MainWindow w, string? lang)
+    {
+        var before = await JS(w, "let v = null; try { v = localStorage.getItem('nx.lang'); } catch (e) { } return { v, cur: nx.test.lang() };");
+        string? stored = before.GetProperty("v").ValueKind == JsonValueKind.String ? before.GetProperty("v").GetString() : null;
+        if (stored == lang && before.GetProperty("cur").GetString() == (lang ?? "ko")) return stored;
+        string set = lang == null ? "localStorage.removeItem('nx.lang')" : $"localStorage.setItem('nx.lang', '{lang}')";
+        await w.Bridge!.Eval("(() => { try { " + set + "; } catch (e) { } window.__nxOld = 1; location.reload(); })()");
+        for (int i = 0; i < 150; i++) { await Task.Delay(100); string r = await w.Bridge!.Eval("(window.nx && window.nx.test && !window.__nxOld && window.nxState) ? document.documentElement.lang : ''"); if (r.Trim('"') != "") break; }
+        await Idle(w, 300); await JS(w, "await nx.test.settle(200); return true;");
+        return stored;
     }
     static async Task Idle(MainWindow w, int ms = 50) { await w.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle); await Task.Delay(ms); }
     static async Task<JsonElement> JS(MainWindow w, string body, int timeoutMs = 120000) => await w.Bridge!.RunTest(body, timeoutMs);
@@ -182,6 +197,8 @@ public static class SelfTest
         await KeysAsync(w);
         await RightClickAsync(w);
         await ShapesAsync(w);
+        await DraftAidsAsync(w);
+        await LangPanelsAsync(w);
         await HostKeysAsync(w);
         await CanvasThemeAsync(w);
         G("memory_ws_mb", Process.GetCurrentProcess().WorkingSet64 / 1048576.0, "MB", "<=600");
@@ -194,6 +211,8 @@ public static class SelfTest
         var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(200); nx.test.view.zoomExtents(); nx.test.closeModal(); await nx.test.settle(); return true;");
         var d = e.Doc!;
         static double AngleErr(Core.Model.Line l) { double a = Math.Atan2(l.P1.Y - l.P0.Y, l.P1.X - l.P0.X) * 180 / Math.PI; double m = ((a % 90) + 90) % 90; return Math.Min(m, 90 - m); }
+        var def = await JS(w, "return nx.test.modes();");
+        GB("aid_defaults_polar_otrack_on", def.GetProperty("polar").GetBoolean() && def.GetProperty("otrack").GetBoolean() && def.GetProperty("osnap").GetBoolean() && !def.GetProperty("ortho").GetBoolean(), $"at start: polar {def.GetProperty("polar").GetBoolean()}, otrack {def.GetProperty("otrack").GetBoolean()}, osnap {def.GetProperty("osnap").GetBoolean()}, ortho {def.GetProperty("ortho").GetBoolean()}");
         // (a) Shift held while picking the second point → temporary ortho: 10 lines, 5 mostly horizontal and 5 mostly vertical
         var js = new System.Text.StringBuilder();
         for (int i = 0; i < 10; i++) { double x0 = -500 + i * 60, y0 = -200 + (i % 3) * 40; double x1 = i % 2 == 0 ? x0 + 45 : x0 + 9, y1 = i % 2 == 0 ? y0 + 7 : y0 + 50; js.Append($"await nx.test.cmd('l'); await nx.test.clickWorld({x0}, {y0}); await nx.test.clickWorld({x1}, {y1}, {{ shift: true }}); await nx.test.key('Escape'); "); }
@@ -291,6 +310,107 @@ public static class SelfTest
         int before = d.Entities.Count; e.Undo(); await Task.Delay(100);
         GB("shape_undo", d.Entities.Count == before - 1 && !d.Entities.OfType<Core.Model.MText>().Any(), $"entities {before} → {d.Entities.Count}"); e.Redo();
         await JS(w, "await nx.test.zoomExtents(); return true;"); await Shot(w, "11_basic_shapes");
+    }
+
+    // ================================================================== draft5g: TRIM / EXTEND, click-click window and crossing boxes, polar and object snap tracking — real pointer events
+    static async Task DraftAidsAsync(MainWindow w)
+    {
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); nx.test.closeModal(); return true;");
+        var d = e.Doc!; const double T9 = 1e-9;
+        List<Core.Model.Line> Row(double y) => d.Entities.OfType<Core.Model.Line>().Where(l => l.P0.X < 150 && Math.Abs(l.P0.Y - y) < T9 && Math.Abs(l.P1.Y - y) < T9).OrderBy(l => Math.Min(l.P0.X, l.P1.X)).ToList();
+        string Spans(List<Core.Model.Line> r) => string.Join(" ", r.Select(l => $"{Math.Min(l.P0.X, l.P1.X):G9}..{Math.Max(l.P0.X, l.P1.X):G9}"));
+        // geometry: three horizontals cut by two verticals, a short line to extend, a tracking reference line
+        await JS(w, "for (const c of ['l 0,0 100,0', 'l 0,100 100,100', 'l 0,110 100,110', 'l 30,-20 30,130', 'l 70,-20 70,130', 'l 0,50 20,50', 'l 200,100 260,100']) { const [n, ...pts] = c.split(' '); await nx.test.cmd(n); for (const q of pts) await nx.test.cmd(q); await nx.test.key('Escape'); } await nx.test.zoomExtents(); return true;"); await Task.Delay(200);
+        int n0 = d.Entities.Count;
+
+        // (1) selection box by click – move – click: left → right = window (fully inside), right → left = crossing (touching)
+        var b1 = await JS(w, "await nx.test.key('Escape'); await nx.test.clickWorld(120, -40); const open = nx.test.box().boxClick; await nx.test.moveWorld(180, 40); await nx.test.clickWorld(-20, 140); const cross = nx.test.box(); await nx.test.key('Escape'); await nx.test.clickWorld(-20, -40); await nx.test.moveWorld(50, 50); await nx.test.clickWorld(120, 140); const win = nx.test.box(); await nx.test.key('Escape'); await nx.test.clickWorld(45, 104); await nx.test.clickWorld(55, 106); const winSmall = nx.test.box().selection.length; await nx.test.key('Escape'); await nx.test.clickWorld(55, 106); await nx.test.clickWorld(45, 104); const crossSmall = nx.test.box().selection.length; await nx.test.key('Escape'); await nx.test.clickWorld(45, 104); await nx.test.key('Escape'); const esc = nx.test.box().boxClick; return { open, cross: cross.selection.length, crossOpen: cross.boxClick, win: win.selection.length, winSmall, crossSmall, esc };");
+        // window (-20,-40)…(120,140) holds the six lines left of x = 120; crossing (120,-40)…(-20,140) the same six; the small box between the two horizontals at y 100 / 110 touches nothing inside (window 0) … and nothing crossing either, so use y 104…106 → 0 and 0? the verticals are at x 30 / 70 — the box x 45…55 crosses none
+        bool okBox = b1.GetProperty("open").GetBoolean() && !b1.GetProperty("crossOpen").GetBoolean() && b1.GetProperty("cross").GetInt32() == 6 && b1.GetProperty("win").GetInt32() == 6 && !b1.GetProperty("esc").GetBoolean();
+        GB("aid_box_click_click", okBox, b1.GetRawText());
+        // window vs crossing on the same box: x 25…75, y 95…115 — only parts of the lines are inside → window 0, crossing 4 (two horizontals, two verticals)
+        var b2 = await JS(w, "await nx.test.key('Escape'); await nx.test.clickWorld(25, 95); await nx.test.clickWorld(75, 115); const win = nx.test.box().selection.length; await nx.test.key('Escape'); await nx.test.clickWorld(75, 115); await nx.test.clickWorld(25, 95); const cross = nx.test.box().selection.length; await nx.test.key('Escape'); const dragWin = (await nx.test.selectWindow(25, 95, 75, 115)).length; const dragCross = (await nx.test.selectWindow(75, 115, 25, 95)).length; await nx.test.key('Escape'); return { win, cross, dragWin, dragCross };");
+        GB("aid_window_inside_crossing_touching", b2.GetProperty("win").GetInt32() == 0 && b2.GetProperty("cross").GetInt32() == 4 && b2.GetProperty("dragWin").GetInt32() == 0 && b2.GetProperty("dragCross").GetInt32() == 4, b2.GetRawText() + " (expected window 0, crossing 4, by click-click and by drag)");
+
+        // (2) TRIM: hover preview, click the middle part, one undo step
+        var pv = await JS(w, "await nx.test.cmd('tr'); await nx.test.moveWorld(50, 0, { wait: 250 }); const m = await nx.test.moveWorld(50, 0, { wait: 150 }); return m.preview;");
+        bool okPv = pv.ValueKind == JsonValueKind.Object && Math.Abs(pv.GetProperty("pts")[0].GetDouble() - 30) < T9 && Math.Abs(pv.GetProperty("pts")[pv.GetProperty("pts").GetArrayLength() - 2].GetDouble() - 70) < T9;
+        await JS(w, "await nx.test.clickWorld(50, 0); return true;"); await Task.Delay(200);
+        var r0 = Row(0);
+        GB("aid_trim_click", okPv && r0.Count == 2 && Spans(r0) == "0..30 70..100" && d.Entities.Count == n0 + 1, $"y=0 row: {Spans(r0)} (expected 0..30 70..100), preview 30→70 {okPv} {pv.GetRawText()[..Math.Min(160, pv.GetRawText().Length)]}, entities {n0} → {d.Entities.Count}");
+        // fence drag across the two upper horizontals: both lose their middle part in one undo step
+        await JS(w, "await nx.test.dragWorld(50, 96, 50, 114); return true;"); await Task.Delay(250);
+        var r100 = Row(100); var r110 = Row(110); int nAfter = d.Entities.Count;
+        e.Undo(); await Task.Delay(150); var u100 = Row(100); var u110 = Row(110); e.Redo(); await Task.Delay(150);
+        GB("aid_trim_fence_one_undo", Spans(r100) == "0..30 70..100" && Spans(r110) == "0..30 70..100" && Spans(u100) == "0..100" && Spans(u110) == "0..100", $"y=100: {Spans(r100)}; y=110: {Spans(r110)}; after one undo: {Spans(u100)} / {Spans(u110)}; entities {nAfter}");
+        // Shift+click in TRIM extends: the short line 0,50 → 20,50 reaches the vertical at x = 30; EXTEND again reaches x = 70; Shift+click in EXTEND trims it back
+        await JS(w, "await nx.test.clickWorld(18, 50, { shift: true }); return true;"); await Task.Delay(200); string s1 = Spans(Row(50));
+        await JS(w, "await nx.test.key('Escape'); await nx.test.cmd('ex'); await nx.test.clickWorld(28, 50); return true;"); await Task.Delay(200); string s2 = Spans(Row(50));
+        await JS(w, "await nx.test.clickWorld(50, 50, { shift: true }); await nx.test.key('Escape'); return nx.test.view.tool;"); await Task.Delay(200); string s3 = Spans(Row(50));
+        GB("aid_extend_and_shift", s1 == "0..30" && s2 == "0..70" && s3 == "0..30", $"Shift+click in TRIM → {s1} (0..30); EXTEND → {s2} (0..70); Shift+click in EXTEND → {s3} (0..30)");
+
+        // (3) polar tracking (on by default, 90°): the cursor 1.2 units off the horizontal picks a point exactly on it; far from any polar angle it is free
+        var m0 = await JS(w, "await nx.test.cmd('polar on'); return nx.test.modes();");   // F8 in the keys section switched polar off (ortho and polar exclude each other); the default is checked there
+        var pt = await JS(w, "await nx.test.cmd('l'); await nx.test.cmd('120,-10'); const a = await nx.test.moveWorld(180, -8.8); const free = await nx.test.moveWorld(160, 20); await nx.test.moveWorld(180, -8.8); await nx.test.clickWorld(180, -8.8); await nx.test.key('Escape'); return { on: a.pt, kind: a.trk && a.trk.guides[0].kind, label: a.trk && a.trk.label, free: free.pt, freeTrk: !!free.trk };"); await Task.Delay(200);
+        var lp = d.Entities.OfType<Core.Model.Line>().LastOrDefault();
+        bool okPolar = m0.GetProperty("polar").GetBoolean() && m0.GetProperty("otrack").GetBoolean() && pt.GetProperty("kind").GetString() == "polar" && !pt.GetProperty("freeTrk").GetBoolean() && lp != null && Math.Abs(lp.P0.X - 120) < T9 && Math.Abs(lp.P0.Y + 10) < T9 && Math.Abs(lp.P1.Y + 10) < T9 && Math.Abs(lp.P1.X - 180) < 1e-6;
+        GB("aid_polar_tracking_default_on", okPolar, $"POLAR {m0.GetProperty("polar").GetBoolean()}, OTRACK {m0.GetProperty("otrack").GetBoolean()}; hover → {pt.GetRawText()}; line → ({lp?.P1.X:G9},{lp?.P1.Y:G9}) expected (180,-10)");
+
+        // (4) object snap tracking: rest on the end point (200,100) for 500 ms → acquired; move up beside x = 200 → the point is on the vertical path;
+        //     second point: rest on (260,100), then near (260,160): polar ray from the first point × vertical path through (260,100) = (260,160) exactly
+        var t1 = await JS(w, "await nx.test.cmd('l'); const h = await nx.test.moveWorld(200, 100, { wait: 520 }); const acquired = h.trackPts.length; const m = await nx.test.moveWorld(201.1, 160); const first = m.pt; const g1 = m.trk && m.trk.guides.map(g => g.kind + g.deg).join('+'); await nx.test.clickWorld(201.1, 160); const cleared = nx.test.view.trackPts.length; await nx.test.moveWorld(260, 100, { wait: 520 }); const m2 = await nx.test.moveWorld(259.2, 161.3); const g2 = m2.trk && m2.trk.guides.map(g => g.kind + g.deg).join('+'); const label = m2.trk && m2.trk.label; await nx.test.clickWorld(259.2, 161.3); await nx.test.key('Escape'); return { acquired, first, g1, cleared, second: m2.pt, g2, label };"); await Task.Delay(250);
+        var lt = d.Entities.OfType<Core.Model.Line>().LastOrDefault();
+        bool okTrack = t1.GetProperty("acquired").GetInt32() == 1 && t1.GetProperty("g1").GetString() == "track90" && t1.GetProperty("cleared").GetInt32() == 0 && t1.GetProperty("g2").GetString() == "polar0+track90" && lt != null && Math.Abs(lt.P0.X - 200) < T9 && Math.Abs(lt.P1.X - 260) < T9 && Math.Abs(lt.P1.Y - lt.P0.Y) < T9 && Math.Abs(lt.P0.Y - 160) < 1e-6;
+        GB("aid_object_snap_tracking", okTrack, $"{t1.GetRawText()}; line ({lt?.P0.X:G9},{lt?.P0.Y:G9}) → ({lt?.P1.X:G9},{lt?.P1.Y:G9}) expected (200,160) → (260,160)");
+        // a capture with the tracking paths showing, then F11 / F10 off: no path
+        await JS(w, "await nx.test.cmd('l'); await nx.test.cmd('120,40'); await nx.test.moveWorld(260, 100, { wait: 520 }); await nx.test.moveWorld(259.2, 41.2); return true;"); await Shot(w, "12_tracking_paths");
+        var off = await JS(w, "await nx.test.key('F11'); const a = nx.test.modes(); const m = await nx.test.moveWorld(259.2, 60.7); await nx.test.cmd('polar off'); const p = await nx.test.moveWorld(200, 41.2); const b = nx.test.modes(); await nx.test.key('F11'); await nx.test.cmd('polar on'); await nx.test.key('Escape'); const c = nx.test.modes(); return { otrackOff: !a.otrack, pill: a.pills.includes('otrack:false'), noTrack: !m.trk, polarOff: !b.polar, noPolar: !p.trk, restored: c.polar && c.otrack };");
+        GB("aid_f11_f10_toggle", new[] { "otrackOff", "pill", "noTrack", "polarOff", "noPolar", "restored" }.All(k => off.GetProperty(k).GetBoolean()), off.GetRawText());
+        // toolbar: TRIM and EXTEND buttons, no overflow
+        var tb = await JS(w, "const found = ['trim', 'extend'].filter(n => document.querySelector(`.toolbar [data-tool=${n}]`)); document.querySelector('.toolbar [data-tool=trim]').dispatchEvent(new MouseEvent('click', { bubbles: true })); await nx.test.settle(30); const tool = nx.test.view.tool; await nx.test.key('Escape'); const el = document.querySelector('.toolbar'); return { found: found.length, tool, overflow: el.scrollWidth > el.clientWidth + 1 };");
+        GB("aid_toolbar_trim_extend", tb.GetProperty("found").GetInt32() == 2 && tb.GetProperty("tool").GetString() == "trim" && !tb.GetProperty("overflow").GetBoolean(), tb.GetRawText());
+        await JS(w, "await nx.test.cmd('tr'); await nx.test.moveWorld(30, 75, { wait: 250 }); await nx.test.moveWorld(30, 75, { wait: 100 }); return true;"); await Shot(w, "13_trim_preview"); await JS(w, "await nx.test.key('Escape'); return true;");
+    }
+
+    // ================================================================== draft5g: UI language (Korean default / English) and hiding the side panels
+    static async Task LangPanelsAsync(MainWindow w)
+    {
+        static string S(JsonElement j, string k) => j.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+        // no stored choice → Korean
+        await SetLang(w, null);
+        var ko = await JS(w, "await nx.test.cmd('l'); const u = nx.test.ui(); await nx.test.key('Escape'); await nx.test.key('F1'); const help = document.querySelector('.help h3')?.textContent ?? ''; nx.test.closeModal(); const btn = document.querySelector('.hdr [data-a=lang] span')?.textContent ?? ''; return { ...u, help, btn };");
+        bool okKo = S(ko, "lang") == "ko" && S(ko, "open") == "열기" && S(ko, "line").StartsWith("선") && S(ko, "file") == "파일" && S(ko, "props") == "속성" && S(ko, "prompt").Contains("첫 번째 점 지정") && S(ko, "help").Contains("사용법") && S(ko, "btn") == "한국어" && ko.GetProperty("toolbarH").GetInt32() <= 48;
+        GB("lang_default_korean", okKo, $"no stored language → lang {S(ko, "lang")}, OPEN '{S(ko, "open")}', line tool '{S(ko, "line")}', cards '{S(ko, "file")}' / '{S(ko, "props")}', LINE prompt '{S(ko, "prompt")}', help '{S(ko, "help")}', button '{S(ko, "btn")}', toolbar one row ({ko.GetProperty("toolbarH").GetInt32()} px)");
+        // the header button switches to English (page reload), the drawing stays
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); nx.test.closeModal(); await nx.test.cmd('l'); await nx.test.cmd('0,0'); await nx.test.cmd('100,50'); await nx.test.key('Escape'); return true;"); await Task.Delay(150);
+        int ents = e.Doc!.Entities.Count;
+        await w.Bridge!.Eval("window.__nxOld = 1; document.querySelector('.hdr [data-a=lang]').dispatchEvent(new MouseEvent('click', { bubbles: true }));");
+        for (int i = 0; i < 150; i++) { await Task.Delay(100); string r = await w.Bridge!.Eval("(window.nx && window.nx.test && !window.__nxOld && window.nxState) ? document.documentElement.lang : ''"); if (r.Trim('"') != "") break; }
+        await Idle(w, 300);
+        var en = await JS(w, "await nx.test.settle(300); await nx.test.cmd('l'); const u = nx.test.ui(); await nx.test.key('Escape'); await nx.test.key('F1'); const help = document.querySelector('.help h3')?.textContent ?? ''; nx.test.closeModal(); let stored = null; try { stored = localStorage.getItem('nx.lang'); } catch (e) { } return { ...u, help, stored, ents: nx.test.stats().ents };");
+        bool okEn = S(en, "lang") == "en" && S(en, "open") == "OPEN" && S(en, "line") == "Line (L)" && S(en, "file") == "FILE" && S(en, "props") == "PROPERTIES" && S(en, "prompt").Contains("Specify first point") && S(en, "help").Contains("how to use") && S(en, "stored") == "en" && en.GetProperty("toolbarH").GetInt32() <= 48 && en.GetProperty("ents").GetInt32() == ents && e.Doc!.Entities.Count == ents;
+        GB("lang_switch_english_keeps_drawing", okEn, $"button click → lang {S(en, "lang")} (stored '{S(en, "stored")}'), OPEN '{S(en, "open")}', line tool '{S(en, "line")}', cards '{S(en, "file")}' / '{S(en, "props")}', LINE prompt '{S(en, "prompt")}', help '{S(en, "help")}', entities on the page {en.GetProperty("ents").GetInt32()} = engine {ents}");
+
+        // side panels: toolbar buttons and Ctrl+1 / Ctrl+2 / Ctrl+0; the drawing takes the freed width
+        var p0 = await JS(w, "localStorage.removeItem('nx.panel.left'); localStorage.removeItem('nx.panel.right'); return nx.test.ui();");
+        var p1 = await JS(w, "document.querySelector('.toolbar [data-a=pright]').dispatchEvent(new MouseEvent('click', { bubbles: true })); await nx.test.settle(80); return nx.test.ui();");
+        var p2 = await JS(w, "await nx.test.key('2', { ctrl: true }); await nx.test.settle(80); return { ...nx.test.ui(), view: nx.test.view.view.w };");
+        var p3 = await JS(w, "await nx.test.key('0', { ctrl: true }); await nx.test.settle(80); const a = nx.test.ui(); await nx.test.key('1', { ctrl: true }); await nx.test.settle(80); const b = nx.test.ui(); await nx.test.key('1', { ctrl: true }); await nx.test.settle(80); return { a, b, c: nx.test.ui() };");
+        int W(JsonElement j, string k) => j.GetProperty(k).GetInt32();
+        bool okP = W(p0, "left") == 260 && W(p0, "right") == 300 && W(p1, "right") == 0 && W(p1, "left") == 260 && W(p1, "canvas") == W(p0, "canvas") + 312 && W(p2, "left") == 0 && W(p2, "canvas") == W(p0, "canvas") + 312 + 272 && Math.Abs(p2.GetProperty("view").GetDouble() - W(p2, "canvas")) <= 1
+            && W(p3.GetProperty("a"), "left") == 260 && W(p3.GetProperty("a"), "right") == 300 && W(p3.GetProperty("b"), "right") == 0 && W(p3.GetProperty("c"), "right") == 300 && W(p3.GetProperty("c"), "canvas") == W(p0, "canvas");
+        GB("panels_hide_show", okP, $"both {W(p0, "left")}/{W(p0, "right")} canvas {W(p0, "canvas")} → right hidden {W(p1, "left")}/{W(p1, "right")} canvas {W(p1, "canvas")} → Ctrl+2 left hidden too {W(p2, "left")}/{W(p2, "right")} canvas {W(p2, "canvas")} (view {p2.GetProperty("view").GetDouble():F0}) → Ctrl+0 both back {W(p3.GetProperty("a"), "left")}/{W(p3.GetProperty("a"), "right")} → Ctrl+1 {W(p3.GetProperty("b"), "right")} → Ctrl+1 {W(p3.GetProperty("c"), "right")} canvas {W(p3.GetProperty("c"), "canvas")}");
+        // a narrow window: the toolbar wraps onto a second row instead of cutting tools off; with the panels hidden everything is on one row again
+        double w0 = w.Width; w.Width = Math.Max(900, w0 - 520); await Idle(w, 300);
+        var n1 = await JS(w, "await nx.test.settle(150); return nx.test.ui();");
+        var n2 = await JS(w, "await nx.test.key('0', { ctrl: true }); await nx.test.settle(150); const u = nx.test.ui(); await nx.test.key('0', { ctrl: true }); await nx.test.settle(80); return u;");
+        w.Width = w0; await Idle(w, 300); await JS(w, "await nx.test.settle(150); return true;");
+        bool okN = !n1.GetProperty("toolbarOverflow").GetBoolean() && W(n1, "toolsVisible") == W(n1, "tools") && W(n1, "tools") == 20 && W(n2, "toolsVisible") == 20 && W(n2, "toolbarH") <= W(n1, "toolbarH") && W(n2, "left") == 0 && W(n2, "right") == 0;
+        GB("toolbar_narrow_window_all_tools_visible", okN, $"window {w0:F0} → {Math.Max(900, w0 - 520):F0} px: canvas {W(n1, "canvas")}, tools visible {W(n1, "toolsVisible")}/{W(n1, "tools")}, toolbar height {W(n1, "toolbarH")} px, overflow {n1.GetProperty("toolbarOverflow").GetBoolean()}; panels hidden: canvas {W(n2, "canvas")}, tools {W(n2, "toolsVisible")}/20, toolbar height {W(n2, "toolbarH")} px");
+        await JS(w, "await nx.test.key('0', { ctrl: true }); await nx.test.settle(120); await nx.test.zoomExtents(); return true;"); await Shot(w, "14_panels_hidden_english");
+        await JS(w, "await nx.test.key('0', { ctrl: true }); await nx.test.settle(120); return true;");
+        await SetLang(w, "ko"); await JS(w, "await nx.test.cmd('tr'); await nx.test.settle(80); return true;"); await Shot(w, "15_korean_ui"); await JS(w, "await nx.test.key('Escape'); return true;");
+        await SetLang(w, "en");
     }
 
     static async Task RightClickAsync(MainWindow w)

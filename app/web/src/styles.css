@@ -60,6 +60,7 @@ input::placeholder { color: var(--faint); }
 .card { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; min-width: 0; min-height: 0; }
 .aside { width: 260px; flex: 0 0 260px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .aside.right { width: 300px; flex: 0 0 300px; }
+.main.hide-left > .aside:not(.right), .main.hide-right > .aside.right { display: none; }   /* side panels hidden: the drawing takes the width (toolbar buttons, Ctrl+1 / Ctrl+2 / Ctrl+0) */
 .center { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .card-h { height: 36px; flex: 0 0 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--border); }
 .card-h .ic { color: var(--muted); display: flex; }
@@ -129,8 +130,8 @@ input::placeholder { color: var(--faint); }
 .drop-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--faint); font-size: 12px; letter-spacing: 0.04em; pointer-events: none; }
 .drop-hint b { font-family: var(--serif); font-size: 28px; font-weight: 400; color: var(--muted); display: block; text-align: center; margin-bottom: 8px; }
 .coord { position: absolute; right: 10px; bottom: 8px; font-family: var(--mono); font-size: 11px; color: var(--canvas-coord); background: var(--canvas-coord-bg); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; pointer-events: none; }
-.toolbar { display: flex; align-items: center; gap: 2px; padding: 0 8px; height: 36px; border-bottom: 1px solid var(--border); }
-.toolbar .tool { height: 28px; padding: 0 7px; gap: 4px; font-size: 10px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 1px; padding: 4px 6px; min-height: 36px; border-bottom: 1px solid var(--border); }
+.toolbar .tool { height: 28px; padding: 0 6px; gap: 4px; font-size: 10px; }
 .toolbar .tool.edit span { display: none; }   /* draw + edit tools: icon only (tooltip carries the name + alias; the active tool shows its label) — the 1440 px center column holds all 18 tools (draft5e) */
 .toolbar .tool.edit.on span { display: inline; }
 .toolbar .tool.on { background: var(--accent); color: var(--on-accent); }
@@ -192,3 +193,9 @@ input::placeholder { color: var(--faint); }
 .ftr .modes button { height: 18px; padding: 0 7px; font: 600 9px var(--mono); letter-spacing: 0.06em; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--faint); cursor: pointer; }
 .ftr .modes button.on { background: var(--panel-alt); color: var(--text); font-weight: 700; border-color: var(--border-strong); }
 .toolbar .cvtheme { margin-left: auto; }
+
+/* side panel toggles at both ends of the drawing toolbar: filled while the panel shows */
+.toolbar .ptog { color: var(--faint); }
+.toolbar .ptog.shown { color: var(--text); background: var(--panel-alt); }
+.toolbar .ptog:first-child { margin-right: 4px; }
+.toolbar .ptog:last-child { margin-left: 4px; }

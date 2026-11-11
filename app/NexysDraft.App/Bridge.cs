@@ -105,6 +105,19 @@ public sealed class Bridge
             case "edit.mirror": return e.Edit(ed => ed.Mirror(SL(r, "ids"), D(r, "x0"), D(r, "y0"), D(r, "x1"), D(r, "y1"), B(r, "keep", true)));
             case "edit.offset": return e.Edit(ed => ed.Offset(S(r, "id"), D(r, "dist"), new Core.Model.V3(D(r, "sx"), D(r, "sy"))));
             case "edit.stretch": return e.Edit(ed => ed.Stretch(SL(r, "ids"), D(r, "x0"), D(r, "y0"), D(r, "x1"), D(r, "y1"), D(r, "dx"), D(r, "dy")));
+            case "edit.trim":
+                {
+                    var ids = SL(r, "ids"); var pts = DL(r, "pts"); var picks = new List<(string, Core.Model.V3)>(); for (int i = 0; i < ids.Count && i * 2 + 1 < pts.Count; i++) picks.Add((ids[i], new Core.Model.V3(pts[i * 2], pts[i * 2 + 1])));
+                    var msgs = new List<string>(); ICollection<string>? edges = r.TryGetProperty("edges", out var ev) && ev.ValueKind == JsonValueKind.Array ? SL(r, "edges") : null;
+                    if (e.Editor == null) return null; var c = e.Editor.TrimExtend(picks, edges, B(r, "extend"), msgs);
+                    return new { name = c.Name, touched = c.Touched.ToList(), messages = msgs };
+                }
+            case "edit.trimPreview":
+                {
+                    ICollection<string>? edges = r.TryGetProperty("edges", out var ev) && ev.ValueKind == JsonValueKind.Array ? SL(r, "edges") : null;
+                    var t = e.Editor?.PreviewTrim(S(r, "h"), new Core.Model.V3(D(r, "x"), D(r, "y")), edges, B(r, "extend"));
+                    return t == null ? null : new { ok = t.Ok, pts = t.Preview, reason = t.Reason };
+                }
             case "edit.text": return e.Edit(ed => B(r, "plain") ? ed.SetMTextPlain(S(r, "id"), S(r, "text")) : ed.SetText(S(r, "id"), S(r, "text")));
             case "edit.layer": return e.Edit(ed => ed.SetLayer(SL(r, "ids"), S(r, "layer", "0")));
             case "draw.line": return e.Edit(ed => ed.AddLine(D(r, "x0"), D(r, "y0"), D(r, "x1"), D(r, "y1"), e.CurrentLayer));
