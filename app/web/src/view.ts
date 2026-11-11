@@ -13,6 +13,10 @@ const ALIASES: Record<string, string> = { l: 'line', line: 'line', pl: 'pline', 
 const POLAR_INCS = [90, 45];
 /** AutoCAD time-sensitive right-click duration (ms). */
 export const RIGHT_MS = 250;
+/** A press that moves less than this many screen pixels before the release is a click, not a drag box (a fast click always slides a little). */
+export const DRAG_PX = 6;
+/** After a press that picked an object, the gesture becomes a drag box only when it is clearly a drag: held this long, or moved this far. */
+export const PICK_DRAG_MS = 200, PICK_DRAG_PX = 24;
 
 // ---- basic shape geometry (same formulas as NexysDraft.Core.Edit.Shapes)
 const MTEXT_NL = String.fromCharCode(92) + 'P';
@@ -64,7 +68,7 @@ export class CanvasView {
   /** Object snap tracking (F11): osnap points acquired by resting the cursor on them; alignment paths run through them. */
   otrackOn = true; trackPts: Pt[] = []; trk: TrackRes | null = null; private hoverSnap: { x: number; y: number } | null = null; private hoverTimer = 0;
   /** Selection box opened by a click on empty space (AutoCAD implied window): the next click closes it. */
-  boxClick = false;
+  boxClick = false; private downS: Pt | null = null; private pressPicked = 0;
   private previewSeq = 0; private previewKey = '';
   onModes: (() => void) | null = null; onFocusRail: ((which: 'layers' | 'props') => void) | null = null;
   viewStack: { cx: number; cy: number; scale: number }[] = []; lastWheelPush = 0; lastMiddleDown = 0; menuEl: HTMLElement | null = null;
@@ -121,7 +125,15 @@ export class CanvasView {
       if (this.toolWantsPoint()) { this.point(this.effectivePoint(p, e.shiftKey), e.shiftKey); return; }
       if (this.boxClick && this.dragStart) { const a = this.dragStart; this.boxClick = false; this.dragStart = null; this.dragMode = 'none'; this.box(a, p, this.pending.shift); this.invalidate(); return; }   // second click of a click-click box
       // select tool / selection step: click pick or start box
-      this.dragStart = p; this.dragMode = 'box'; this.pending.shift = e.shiftKey; w.setPointerCapture(e.pointerId);
+      // An object under the cursor is taken at the press (AutoCAD): a fast click that slides before the release still picks it.
+      this.pending.shift = e.shiftKey;
+      this.pressPicked = 0;
+      if (this.doc && this.doc.hit(p[0], p[1], this.pxTol())) {
+        this.dragStart = null; this.dragMode = 'none'; this.pick(p, e.shiftKey);
+        if (!this.canBox() || this.isTrim()) return;
+        this.pressPicked = performance.now();   // a deliberate drag that starts on an object still opens a box (dense drawings leave no empty spot to start from)
+      }
+      this.dragStart = p; this.downS = s; this.dragMode = 'box'; try { w.setPointerCapture(e.pointerId); } catch { }
     });
     w.addEventListener('pointermove', e => {
       const s = this.toScreen(e); const p = this.toWorld(e); this.cursorScreen = s; this.cursor = p; this.shiftDown = e.shiftKey;
@@ -136,13 +148,16 @@ export class CanvasView {
       if (e.button === 2) { if (this.rightDownAt) { const held = performance.now() - this.rightDownAt; this.rightDownAt = 0; this.rightRelease(held, this.toScreen(e)); } return; }
       if (this.dragMode === 'pan') { this.dragMode = this.boxClick ? 'box' : 'none'; this.panStart = null; return; }
       if (this.dragMode === 'box' && this.dragStart) {
-        const p = this.toWorld(e); const d = Math.hypot(p[0] - this.dragStart[0], p[1] - this.dragStart[1]) * this.view.scale;
         if (this.boxClick) return;   // click-click box: waits for the second click
-        if (d < 4) { const start = this.dragStart; const hit = this.pick(p, this.pending.shift); if (!hit && this.canBox()) { this.boxClick = true; this.dragStart = start; this.dragMode = 'box'; this.invalidate(); return; } }
-        else this.box(this.dragStart, p, this.pending.shift);
+        const p = this.toWorld(e); const s = this.toScreen(e); const d = this.downS ? Math.hypot(s[0] - this.downS[0], s[1] - this.downS[1]) : Math.hypot(p[0] - this.dragStart[0], p[1] - this.dragStart[1]) * this.view.scale;
+        if (this.pressPicked) { const held = performance.now() - this.pressPicked; this.pressPicked = 0; if (d >= DRAG_PX && (held >= PICK_DRAG_MS || d >= PICK_DRAG_PX)) this.box(this.dragStart, p, this.pending.shift); }
+        else if (d < DRAG_PX) { const start = this.dragStart; const hit = this.pick(p, this.pending.shift); if (!hit && this.canBox()) { this.boxClick = true; this.dragStart = start; this.dragMode = 'box'; this.invalidate(); return; } }
+        else if (this.canBox() || this.isTrim()) this.box(this.dragStart, p, this.pending.shift);
         this.dragStart = null; this.dragMode = 'none'; this.invalidate();
       }
     });
+    // the system took the pointer away (window switch, native drag): no release will come, so forget the half-made gesture
+    w.addEventListener('pointercancel', () => { this.rightDownAt = 0; this.panStart = null; if (this.dragMode === 'pan') this.dragMode = this.boxClick ? 'box' : 'none'; else if (this.dragMode === 'box' && !this.boxClick) { this.dragStart = null; this.dragMode = 'none'; } this.invalidate(); });
     w.addEventListener('dblclick', e => { if (this.tool !== 'select' || !this.doc) return; const p = this.toWorld(e); const id = this.doc.hit(p[0], p[1], this.pxTol()); const ent = id ? this.doc.ents.get(id) : null; if (ent && (ent.t === 'T' || ent.t === 'M')) this.editText(id!); });
     w.addEventListener('pointerleave', () => { this.cursor = null; this.snapPt = null; this.acquireWatch(); this.invalidate(); });
     // keys reach key() through the document handler in main.ts (a second listener here ran Enter / Space twice)

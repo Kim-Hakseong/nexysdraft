@@ -2,7 +2,7 @@
 import { bridge } from './bridge';
 import { Doc, Ent } from './doc';
 import { I } from './icons';
-import { esc, fmtBytes, fmtInt, fmtNum, h, aciRgb, rgbCss } from './util';
+import { esc, fmtBytes, fmtInt, fmtNum, h, H, aciRgb, rgbCss } from './util';
 import { L } from './i18n';
 
 export class FileRail {
@@ -11,7 +11,7 @@ export class FileRail {
   render(S: any) {
     const f = S.file; const m = this.el.querySelector('.m') as HTMLElement; m.textContent = f ? `${fmtInt(f.entities)} ${L('ents', '객체')} · ${S.layers?.length ?? 0} ${L('layers', '레이어')}` : '';
     const counts = f?.counts ?? {}; const top = Object.entries<number>(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
-    this.body.innerHTML = `<div class="btn-row"><button class="pill primary" data-a="open">${I.folder(13)} ${L('OPEN', '열기')}</button><button class="pill" data-a="save" ${f ? '' : 'disabled'}>${I.save(13)} ${L('SAVE', '저장')}</button><button class="pill" data-a="saveas" ${f ? '' : 'disabled'}>DXF…</button><button class="pill" data-a="savedwg" ${f ? '' : 'disabled'}>DWG…</button><button class="pill" data-a="pdf" ${f ? '' : 'disabled'}>${I.pdf(13)} PDF</button></div>` +
+    H(this.body).innerHTML = `<div class="btn-row"><button class="pill primary" data-a="open">${I.folder(13)} ${L('OPEN', '열기')}</button><button class="pill" data-a="save" ${f ? '' : 'disabled'}>${I.save(13)} ${L('SAVE', '저장')}</button><button class="pill" data-a="saveas" ${f ? '' : 'disabled'}>DXF…</button><button class="pill" data-a="savedwg" ${f ? '' : 'disabled'}>DWG…</button><button class="pill" data-a="pdf" ${f ? '' : 'disabled'}>${I.pdf(13)} PDF</button></div>` +
       (f ? `<div class="file-card"><div class="fn">${esc(f.name)}${f.dirty ? ` <span class="chip">${L('modified', '수정됨')}</span>` : ''}</div><div class="chips"><span class="chip">${esc(f.sourceDwg ? 'DWG' : 'DXF')}</span><span class="chip">${esc(f.version)}</span><span class="chip">${esc(f.codepage)}</span><span class="chip">${fmtBytes(f.size)}</span></div>
         <div class="big">${fmtInt(f.entities)}<small>${L('entities', '객체')}</small></div>
         <div class="kv"><span class="k">${L('LAYERS', '레이어')}</span><span class="v">${S.layers?.length ?? 0}</span><span class="k">${L('BLOCKS', '블록')}</span><span class="v">${f.blocks}</span><span class="k">${L('OPEN', '열기')}</span><span class="v">${f.openMs.toFixed(0)} ms</span>${f.sourceDwg ? `<span class="k">LIBREDWG</span><span class="v">${f.convertMs.toFixed(0)} ms</span>` : ''}${f.unknown ? `<span class="k">${L('UNSUPPORTED', '미지원')}</span><span class="v">${f.unknown}</span>` : ''}</div></div>
@@ -63,11 +63,13 @@ export async function showLossThenSave(preferDwg = true) {
 export class LayerRail {
   el = h(`<div class="card" style="flex:1 1 55%"><div class="card-h"><span class="ic">${I.layers()}</span><span class="t">${L('LAYERS', '레이어')}</span><span class="m"></span></div><div class="scroll body"></div><div class="newlayer"><input placeholder="${L('New layer name', '새 레이어 이름')}" maxlength="60"><button class="pill h26" data-a="add">${I.plus(11)} ${L('NEW', '추가')}</button></div></div>`);
   body = this.el.querySelector('.body') as HTMLElement; input = this.el.querySelector('input') as HTMLInputElement;
-  dark = false; counts = new Map<string, number>();
+  dark = false; counts = new Map<string, number>(); private countDoc: Doc | null = null; private countVer = -1;
   render(S: any, doc: Doc | null) {
-    this.counts.clear(); if (doc) for (const e of doc.ents.values()) this.counts.set(e.l.toLowerCase(), (this.counts.get(e.l.toLowerCase()) ?? 0) + 1);
+    if (doc !== this.countDoc || (doc?.ver ?? -1) !== this.countVer) {   // counted once per change of the drawing, not on every state message (100k entities ≈ tens of ms per click)
+      this.countDoc = doc; this.countVer = doc?.ver ?? -1; this.counts.clear(); if (doc) for (const e of doc.ents.values()) this.counts.set(e.l.toLowerCase(), (this.counts.get(e.l.toLowerCase()) ?? 0) + 1);
+    }
     const layers: any[] = S.layers ?? []; (this.el.querySelector('.m') as HTMLElement).textContent = layers.length ? `${layers.length} · ${L('current', '현재')} ${S.currentLayer}` : '';
-    this.body.innerHTML = layers.length ? layers.map(l => `<div class="lrow${l.name === S.currentLayer ? ' on' : ''}${l.off || l.frozen ? ' off' : ''}" data-l="${esc(l.name)}" title="${esc(l.name)} · ${esc(l.lt)}"><span class="sw" style="background:${rgbCss(aciRgb(l.color, this.dark))}"></span><span class="n">${esc(l.name)}</span><span class="m">${this.counts.get(l.name.toLowerCase()) ?? 0}</span>
+    H(this.body).innerHTML = layers.length ? layers.map(l => `<div class="lrow${l.name === S.currentLayer ? ' on' : ''}${l.off || l.frozen ? ' off' : ''}" data-l="${esc(l.name)}" title="${esc(l.name)} · ${esc(l.lt)}"><span class="sw" style="background:${rgbCss(aciRgb(l.color, this.dark))}"></span><span class="n">${esc(l.name)}</span><span class="m">${this.counts.get(l.name.toLowerCase()) ?? 0}</span>
       <button class="ib${l.off ? '' : ' on'}" data-t="off" title="${l.off ? L('On', '켜기') : L('Off', '끄기')}">${l.off ? I.eyeOff() : I.eye()}</button><button class="ib${l.frozen ? ' on' : ''}" data-t="frozen" title="${L('Freeze / thaw', '동결 / 해동')}">${I.snow()}</button><button class="ib${l.locked ? ' on' : ''}" data-t="locked" title="${L('Lock / unlock', '잠금 / 해제')}">${l.locked ? I.lock() : I.unlock()}</button></div>`).join('') : `<div class="empty">${L('No drawing is open.', '열린 도면이 없습니다.')}</div>`;
   }
   constructor() {

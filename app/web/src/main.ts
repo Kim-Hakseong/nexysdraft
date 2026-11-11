@@ -4,7 +4,7 @@ import { Doc } from './doc';
 import { I } from './icons';
 import { CommandBar, FileRail, LayerRail, PropsRail, showLossThenSave } from './rails';
 import { installTests } from './test';
-import { esc, fmtInt, h } from './util';
+import { esc, fmtInt, h, H, Hreset } from './util';
 import { CanvasView } from './view';
 import { L, lang, setLang, xl } from './i18n';
 
@@ -40,7 +40,7 @@ function togglePanel(which: 'left' | 'right' | 'both', on?: boolean) {
 }
 function renderToolbar() {
   const EDIT = new Set(['select', 'line', 'pline', 'circle', 'rect', 'arc', 'ellipse', 'polygon', 'point', 'dtext', 'dim', 'move', 'copy', 'rotate', 'mirror', 'offset', 'stretch', 'trim', 'extend', 'erase']);   // icon only (tooltip = name + alias)
-  toolbar.innerHTML = `<button type="button" class="tool icon ptog${panels.left ? ' shown' : ''}" data-a="pleft" aria-pressed="${panels.left}" title="${L('Show / hide the left panel (Ctrl+2) · both panels: Ctrl+0', '왼쪽 패널 보이기 / 숨기기 (Ctrl+2) · 양쪽 모두: Ctrl+0')}">${I.panelLeft()}</button>` + TOOLS.map(([n, l, ic, t], i) => `${n === 'move' ? '<div class="vsep"></div>' : ''}<button type="button" class="tool${EDIT.has(n) ? ' edit' : ''}${view.tool === n ? ' on' : ''}" data-tool="${n}" title="${esc(t)}" aria-label="${l}">${ic}<span>${l}</span></button>`).join('') +
+  H(toolbar).innerHTML = `<button type="button" class="tool icon ptog${panels.left ? ' shown' : ''}" data-a="pleft" aria-pressed="${panels.left}" title="${L('Show / hide the left panel (Ctrl+2) · both panels: Ctrl+0', '왼쪽 패널 보이기 / 숨기기 (Ctrl+2) · 양쪽 모두: Ctrl+0')}">${I.panelLeft()}</button>` + TOOLS.map(([n, l, ic, t], i) => `${n === 'move' ? '<div class="vsep"></div>' : ''}<button type="button" class="tool${EDIT.has(n) ? ' edit' : ''}${view.tool === n ? ' on' : ''}" data-tool="${n}" title="${esc(t)}" aria-label="${l}">${ic}<span>${l}</span></button>`).join('') +
     `<div class="vsep"></div><button type="button" class="tool" data-a="zoomext" title="${L('Zoom extents (Z E · wheel double-click)', '전체 보기 (Z E · 휠 더블클릭)')}">${I.zoomFit()}</button>` +
     `<button type="button" class="tool cvtheme" data-a="cvtheme" title="${L('Drawing background', '도면 배경')}: ${cvLabel()} (${L('app theme', '앱 테마')} ${S?.theme ?? 'light'}) — ${L('click to switch', '클릭해서 전환')}">${canvasDark() ? I.theme() : I.sun()}<span>${L('BG', '배경')} ${cvLabel().toUpperCase()}</span></button>` +
     `<button type="button" class="tool icon ptog${panels.right ? ' shown' : ''}" data-a="pright" aria-pressed="${panels.right}" title="${L('Show / hide the right panel (Ctrl+1) · both panels: Ctrl+0', '오른쪽 패널 보이기 / 숨기기 (Ctrl+1) · 양쪽 모두: Ctrl+0')}">${I.panelRight()}</button>`;
@@ -53,7 +53,7 @@ function cvLabel() { const c = S?.canvasTheme ?? 'auto'; return c === 'auto' ? '
 function renderHeader() {
   if (!S) return; const app = S.app ?? {}; const f = S.file;
   const tool = (a: string, icon: string, label: string, title: string, disabled = false) => `<button type="button" class="tool" data-a="${a}" aria-label="${label}" title="${title}"${disabled ? ' disabled' : ''}>${icon}<span>${label}</span></button>`;
-  hdr.innerHTML = `<div class="hdr-brand"><div class="hdr-logo" data-a="about" title="About NexysDraft (F1)"><img src="brand/Logo.png" alt="Nexys"></div><div class="hdr-name"><b>NexysDraft</b><small>${esc((app.versionText || '').toUpperCase())}${app.libredwg ? ' · LIBREDWG ' + app.libredwg : ''}</small></div></div>
+  H(hdr).innerHTML = `<div class="hdr-brand"><div class="hdr-logo" data-a="about" title="About NexysDraft (F1)"><img src="brand/Logo.png" alt="Nexys"></div><div class="hdr-name"><b>NexysDraft</b><small>${esc((app.versionText || '').toUpperCase())}${app.libredwg ? ' · LIBREDWG ' + app.libredwg : ''}</small></div></div>
     <div class="hdr-tools">${tool('open', I.folder(), L('OPEN', '열기'), L('Open DWG / DXF (Ctrl+O)', 'DWG / DXF 열기 (Ctrl+O)'))}${tool('save', I.save(), L('SAVE', '저장'), L('Save (Ctrl+S)', '저장 (Ctrl+S)'), !f)}${tool('savedwg', I.save(), 'DWG', L('Save as DWG R2000 via LibreDWG (Ctrl+Shift+S)', 'DWG R2000으로 저장, LibreDWG (Ctrl+Shift+S)'), !f)}${tool('pdf', I.pdf(), 'PDF', L('Export searchable PDF: merged + per sheet + overview (Ctrl+P)', '검색 가능한 PDF 내보내기: 합본 + 시트별 + 개요 (Ctrl+P)'), !f)}<div class="vsep"></div>${tool('undo', I.undo(), L('UNDO', '실행 취소'), (S.undo?.can ? `${L('Undo', '실행 취소')} ${S.undo.name}` : L('Undo', '실행 취소')) + ' (Ctrl+Z)', !S.undo?.can)}${tool('redo', I.redo(), L('REDO', '다시 실행'), (S.undo?.canRedo ? `${L('Redo', '다시 실행')} ${S.undo.redoName}` : L('Redo', '다시 실행')) + ' (Ctrl+Y)', !S.undo?.canRedo)}<div class="vsep"></div>${tool('theme', S.theme === 'dark' ? I.sun() : I.theme(), L('THEME', '테마'), L('Light / dark (Ctrl+T)', '밝게 / 어둡게 (Ctrl+T)'))}${tool('lang', I.globe(), lang() === 'ko' ? '한국어' : 'ENGLISH', '언어 / Language: 한국어 ↔ English (LANG KO · LANG EN)')}</div>
     <button type="button" class="tool icon" data-a="help" aria-label="HELP" title="${L('Keys · how to use (F1)', '단축키 · 사용법 (F1)')}">${I.help()}</button>
     <div class="led-pill"><span class="led ${S.status?.led ?? 'idle'}"></span><span class="led-text">${(S.status?.led ?? 'idle').toUpperCase()}</span></div>`;
@@ -76,7 +76,7 @@ const modesEl = h(`<span class="modes"></span>`); ftr.insertBefore(modesEl, ftr.
 const MODES: [string, string, string][] = [['snap', 'SNAP', L('Grid snap (F9)', '그리드 스냅 (F9)')], ['grid', 'GRID', L('Grid display (F7)', '그리드 표시 (F7)')], ['ortho', 'ORTHO', L('Ortho (F8 · hold Shift = temporary)', '직교 (F8 · Shift 누르는 동안 임시)')], ['polar', 'POLAR', L('Polar tracking (F10)', '극좌표 추적 (F10)')], ['osnap', 'OSNAP', L('Object snap (F3)', '객체 스냅 (F3)')], ['otrack', 'OTRACK', L('Object snap tracking (F11) — rest the cursor on a snap point, then move along the dotted path', '객체 스냅 추적 (F11) — 스냅 점에 커서를 잠깐 올린 뒤 점선을 따라 이동')]];
 function renderModes() {
   const on: Record<string, boolean> = { snap: view.gridSnapOn, grid: view.gridOn, ortho: view.orthoOn, polar: view.polarOn, osnap: view.snapOn, otrack: view.otrackOn };
-  modesEl.innerHTML = MODES.map(([k, l, t]) => `<button type="button" class="${on[k] ? 'on' : ''}" data-mode="${k}" title="${t}">${l}${k === 'polar' && view.polarOn ? ' ' + view.polarInc + '°' : ''}</button>`).join('');
+  H(modesEl).innerHTML = MODES.map(([k, l, t]) => `<button type="button" class="${on[k] ? 'on' : ''}" data-mode="${k}" title="${t}">${l}${k === 'polar' && view.polarOn ? ' ' + view.polarInc + '°' : ''}</button>`).join('');
 }
 modesEl.addEventListener('click', e => { const k = ((e.target as HTMLElement).closest('[data-mode]') as HTMLElement | null)?.dataset.mode as any; if (k) { view.toggleMode(k); view.wrap.focus(); } });
 document.addEventListener('nx-frame', (e: any) => { const d = e.detail; frameInfo = `frame ${d.ms.toFixed(1)} ms · ${fmtInt(d.segs)} segs · ${d.texts} texts`; ftr.querySelector('.r')!.textContent = frameInfo; });
@@ -97,7 +97,7 @@ bridge.on('doc', m => {
   if (S) { layers.render(S, doc); props.render(S, doc, []); }
 });
 bridge.on('patch', m => { if (!doc) return; doc.patch(m.upsert ?? [], m.remove ?? [], m.blocks ?? null); view.invalidate(); if (S) { layers.render(S, doc); props.render(S, doc, Array.from(view.selection)); } });
-bridge.on('status', m => { if (!S) return; S.status = { text: m.text, led: m.led, saving: !!m.saving }; renderFooter(); if (typeof m.text === 'string' && m.text.startsWith('PDF:')) cmd.add(m.text); const led = hdr.querySelector('.led'); if (led) { led.className = 'led ' + m.led; (hdr.querySelector('.led-text') as HTMLElement).textContent = m.led.toUpperCase(); } });
+bridge.on('status', m => { if (!S) return; S.status = { text: m.text, led: m.led, saving: !!m.saving }; renderFooter(); if (typeof m.text === 'string' && m.text.startsWith('PDF:')) cmd.add(m.text); const led = hdr.querySelector('.led'); if (led) { Hreset(hdr); led.className = 'led ' + m.led; (hdr.querySelector('.led-text') as HTMLElement).textContent = m.led.toUpperCase(); } });
 ftr.addEventListener('click', e => { if ((e.target as HTMLElement).closest('[data-a=cancelSave]')) bridge.call('save.cancel'); });
 
 view.onSelectionChanged = () => { props.render(S ?? {}, doc, Array.from(view.selection)); bridge.call('select', { ids: Array.from(view.selection) }); };

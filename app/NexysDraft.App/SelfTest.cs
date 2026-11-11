@@ -199,6 +199,7 @@ public static class SelfTest
         await ShapesAsync(w);
         await DraftAidsAsync(w);
         await DraftingAsync(w);
+        await ClicksAsync(w);
         await LangPanelsAsync(w);
         await HostKeysAsync(w);
         await CanvasThemeAsync(w);
@@ -445,6 +446,32 @@ public static class SelfTest
         var r2 = await JS(w, $"await nx.test.settle(200); const p = nx.test.doc().geomOf('{hl}').parts[0]; return p.draw ? p.draw.length / 4 : 0;");
         GB("draft_ltscale", r2.GetInt32() >= 2 * cDraw - 2 && r2.GetInt32() <= 2 * cDraw + 2, $"LTSCALE 1 → 0.5: {cDraw} → {r2.GetInt32()} dashes");
         await Shot(w, "16_linetypes_hatch_dims");
+    }
+
+    // ================================================================== hurried clicks: nothing may be swallowed
+    static async Task ClicksAsync(MainWindow w)
+    {
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); nx.test.closeModal(); return true;");
+        var ed = e.Editor!; var hs = new List<string>();
+        for (int i = 0; i < 10; i++) hs.Add(ed.AddLine(20 * i, 0, 20 * i, 100, "0").Added[0].e.Handle);
+        e.Touch(); await Task.Delay(300);
+        var r = await JS(w, @"await nx.test.settle(200); await nx.test.zoomExtents(); const T = nx.test; const out = {};
+            T.sloppyClick(10, 50, 5, 0); out.emptySlide = T.box().boxClick; await T.clickWorld(10.5, 50);            // 5 px slide on empty space = a click (opens the click-click box), not a 5 px drag box
+            out.slide = T.sloppyClick(0, 50, 12, 3);                                                                  // pressed on a line, released 12 px off it
+            await T.clickWorld(10, 50); await T.clickWorld(10.5, 50); out.cleared = T.box().selection.length;
+            for (let i = 0; i < 10; i++) T.sloppyClick(20 * i, 50, i % 2 ? 11 : -11, i % 3 ? 7 : -7, { shift: true });  // ten hurried Shift+clicks in one burst, no pause between them
+            out.burst = T.box().selection;
+            await T.dragWorld(60, 50, -10, 62); out.dragFromObject = T.box().selection.length;                        // a real drag that starts on an object is still a crossing box
+            const tb = document.querySelector('button.tool[data-a=""zoomext""]'); const row = document.querySelector('.lrow');
+            await T.pick(100, 50); await T.settle(250);                                                               // the pick sends a state message back; the panels must not be rebuilt by it
+            out.toolbarKept = !!tb && tb.isConnected; out.layerRowKept = !!row && row.isConnected; return out;");
+        var slide = r.GetProperty("slide").EnumerateArray().Select(x => x.GetString()).ToList();
+        GB("click_press_picks_despite_slide", slide.Count == 1 && slide[0] == hs[0], $"pressed on a line and released 12 px away: selected {string.Join(",", slide)} (want {hs[0]})");
+        var burst = r.GetProperty("burst").EnumerateArray().Select(x => x.GetString()).ToHashSet();
+        GB("click_burst_of_ten", r.GetProperty("cleared").GetInt32() == 0 && burst.SetEquals(hs), $"10 hurried Shift+clicks (each sliding 13 px) with no pause: {burst.Count} of 10 selected");
+        GB("click_small_slide_is_a_click", r.GetProperty("emptySlide").GetBoolean(), "press on empty space, release 5 px away → treated as a click (click-click box opened), not as a 5 px drag box");
+        GB("click_drag_from_object_boxes", r.GetProperty("dragFromObject").GetInt32() == 4, $"crossing drag that starts on a line: {r.GetProperty("dragFromObject").GetInt32()} selected (want 4)");
+        GB("click_panels_not_rebuilt", r.GetProperty("toolbarKept").GetBoolean() && r.GetProperty("layerRowKept").GetBoolean(), $"after a pick on the canvas the same toolbar button and layer row are still in the page (toolbar {r.GetProperty("toolbarKept").GetBoolean()}, layer row {r.GetProperty("layerRowKept").GetBoolean()}) — a rebuilt button loses the click in progress");
     }
 
     static async Task RightClickAsync(MainWindow w)

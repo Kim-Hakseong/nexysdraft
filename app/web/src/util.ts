@@ -1,4 +1,9 @@
 export const h = (html: string): HTMLElement => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild as HTMLElement; };
+const htmlSeen = new WeakMap<Element, string>();
+/** `H(el).innerHTML = html` writes only when the markup changed. Rebuilding a panel between the press and the release of a mouse button swallows the click (the pressed button no longer exists), and a state message arrives after every pick on the canvas. */
+export const H = (el: Element) => ({ set innerHTML(s: string) { if (htmlSeen.get(el) === s) return; htmlSeen.set(el, s); el.innerHTML = s; } });
+/** Forget the remembered markup after the element was changed directly. */
+export const Hreset = (el: Element) => { htmlSeen.delete(el); };
 export const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 export const fmtInt = (n: number) => Math.round(n).toLocaleString('en-US');
 export const fmtBytes = (b: number) => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1024).toFixed(0) + ' KB';

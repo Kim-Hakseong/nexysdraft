@@ -1,5 +1,14 @@
 # 진행 현황 — NexysDraft
 
+## 2026-11-11 draft5i (사용자 보고: 빠르게 클릭·드래그하면 클릭이 씹힌다)
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 객체 선택을 버튼을 누르는 순간에 판정(전에는 뗄 때), 클릭/드래그 구분 4 → 6 px | 완료 | click_press_picks_despite_slide, click_burst_of_ten, click_small_slide_is_a_click |
+| 객체 위에서 시작한 진짜 드래그는 여전히 상자 선택 | 완료 | click_drag_from_object_boxes |
+| 캔버스 클릭마다 툴바·패널을 다시 만들던 것 제거(내용이 같으면 건너뜀), 레이어 개수 세기 캐시 | 완료 | click_panels_not_rebuilt |
+| 셀프테스트 | PASS 73 · FAIL 0 | work/gates/d5i_selftest.txt |
+| v0.4.9 배포 | 완료 | docs/report-draft5i.md |
+
 ## 2026-11-02 draft5e → v0.4.4 (기본 도형)
 
 | 항목 | 판정 | 근거 |
