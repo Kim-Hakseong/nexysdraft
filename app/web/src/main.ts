@@ -109,6 +109,7 @@ view.onFocusRail = which => { if (which === 'props') { props.el.scrollIntoView({
 view.onCommand = (name, arg) => {
   switch (name) {
     case 'lang': case 'language': { const a = (arg ?? '').trim().toLowerCase(); const to = a.startsWith('k') || a.startsWith('한') ? 'ko' : a.startsWith('e') ? 'en' : (lang() === 'ko' ? 'en' : 'ko'); if (to === lang()) cmd.add(`LANG = ${to}`); else setLang(to); return true; }
+    case 'skill': case 'installskill': installSkill().then(t => t.split('\n').slice(1, 4).forEach(l => cmd.add(l))); return true;
     case 'panels': case 'panel': { const a = (arg ?? '').trim().toLowerCase(); togglePanel(a.startsWith('l') ? 'left' : a.startsWith('r') ? 'right' : 'both'); cmd.add(`PANELS — left ${panels.left ? 'on' : 'off'}, right ${panels.right ? 'on' : 'off'}`); return true; }
     case 'open': bridge.call('openDialog'); return true; case 'save': bridge.call('save'); return true; case 'saveas': showLossThenSave(false); return true; case 'exportdwg': showLossThenSave(); return true; case 'pdf': bridge.call('exportPdfDialog'); return true;
     case 'layer': layers.input.focus(); cmd.add(xl('LAYER — rail focused (type a name + Enter = new layer)')); return true;
@@ -161,6 +162,12 @@ window.addEventListener('blur', () => { view.shiftDown = false; });
 document.addEventListener('dragover', e => { e.preventDefault(); });
 document.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer?.files?.length) bridge.postFiles(e.dataTransfer.files); });
 
+/** Copy the agent skill (SKILL.md with this program's path) to the per-user skill folders of Antigravity CLI, Claude Code and Gemini CLI. */
+async function installSkill(): Promise<string> {
+  const r: any = await bridge.call('installSkill').catch(() => null);
+  const head = r?.ok ? L('Installed. Open a new agent session and ask in plain words.', '설치했습니다. 에이전트를 새로 열고 말로 요청하세요.') : L('The skill could not be installed.', '스킬을 설치하지 못했습니다.');
+  const text = head + (r?.text ? '\n' + r.text : ''); cmd.add(head); return text;
+}
 function showHelp() {
   if (document.querySelector('.help')) return;
   const ko = `<h3>NexysDraft — 사용법</h3>
@@ -172,7 +179,9 @@ function showHelp() {
     <p><b>그리기 보조</b> <b>Shift</b> 누르는 동안 임시 직교 · F8 직교 · F10 극좌표 추적(90°, POLAR 45) · <b>F11 객체 스냅 추적</b>(스냅 점에 커서를 잠깐 올려 + 표시가 생기면 그 점의 수평·수직 점선을 따라감) · F3 객체 스냅(끝점 □ 중점 △ 중심 ○ 교차 × 사분점 ◇) · F7 그리드 · F9 그리드 스냅. 상태줄 알약으로도 전환. 전체 표: docs/keys.md. <b>문자</b> 더블클릭 = 편집.</p>
     <p><b>언어</b> 위쪽의 지구본 버튼 또는 명령 LANG KO / LANG EN.</p>
     <ul><li>제외: 필렛·동적 블록·해치 편집·3D·XREF 편집·플롯 스타일.</li><li>DWG 쓰기는 LibreDWG(소스 빌드) 한계로 R2000. 저장 전 사전 점검(읽기 가능 여부·DXF 권장 사유)을 보여준다.</li></ul>
-    <div class="btns"><button class="pill primary" data-b="ok">닫기</button></div>`;
+    <p><b>AI 에이전트로 그리기</b> 아래 버튼을 한 번 누르면 이 PC의 Antigravity CLI · Claude Code · Gemini CLI에 NexysDraft 스킬이 설치됩니다. 그 뒤 에이전트를 새로 열고 "200×120 판에 구멍 4개 그려서 DWG로 저장해줘"처럼 말로 시키면 됩니다. 프로그램 폴더를 옮기면 다시 누르세요.</p>
+    <p class="skill-out" hidden></p>
+    <div class="btns"><button class="pill" data-b="skill">AI 에이전트 스킬 설치</button><button class="pill primary" data-b="ok">닫기</button></div>`;
   const en = `<h3>NexysDraft — how to use</h3>
     <p><b>Open / save</b> Ctrl+O open (DWG is converted by LibreDWG) · Ctrl+S save · Ctrl+Shift+S save as (pre-check) · Ctrl+P PDF (merged + per sheet + overview).</p>
     <p><b>View</b> wheel = zoom at the cursor, wheel drag / Alt+drag = pan, <b>wheel double-click</b> = zoom extents (Z E), Z P = previous view. Toolbar BG button = drawing background (AUTO / LIGHT / DARK). <b>Hide panels</b>: the buttons at both ends of the toolbar, or Ctrl+2 (left) · Ctrl+1 (right) · Ctrl+0 (both).</p>
@@ -182,9 +191,15 @@ function showHelp() {
     <p><b>Drafting aids</b> hold <b>Shift</b> = temporary ortho · F8 ortho · F10 polar tracking (90°, POLAR 45) · <b>F11 object snap tracking</b> (rest the cursor on a snap point until a + appears, then follow the dotted horizontal / vertical path through it) · F3 object snap (end □ mid △ centre ○ intersection × quadrant ◇) · F7 grid · F9 grid snap. The status bar pills switch them too. Full table: docs/keys.md. Double-click a <b>text</b> = edit.</p>
     <p><b>Language</b> the globe button at the top, or the commands LANG KO / LANG EN.</p>
     <ul><li>Not included: fillet, dynamic blocks, hatch editing, 3D, XREF editing, plot styles.</li><li>DWG is written as R2000 (LibreDWG). A pre-check before saving shows whether other CAD programs will read it and why DXF may be the better choice.</li></ul>
-    <div class="btns"><button class="pill primary" data-b="ok">CLOSE</button></div>`;
+    <p><b>Drawing with an AI agent</b> One click on the button below installs the NexysDraft skill for Antigravity CLI · Claude Code · Gemini CLI on this PC. Then open a new agent session and ask in plain words, e.g. "draw a 200 × 120 plate with four holes and save it as DWG". Click again after moving the program folder.</p>
+    <p class="skill-out" hidden></p>
+    <div class="btns"><button class="pill" data-b="skill">INSTALL AI AGENT SKILL</button><button class="pill primary" data-b="ok">CLOSE</button></div>`;
   const dlg = h(`<div class="modal-bg help"><div class="modal">${L(en, ko)}</div></div>`);
-  dlg.addEventListener('click', e => { if ((e.target as HTMLElement).closest('[data-b]') || e.target === dlg) dlg.remove(); });
+  dlg.addEventListener('click', e => {
+    const b = ((e.target as HTMLElement).closest('[data-b]') as HTMLElement | null)?.dataset.b;
+    if (b === 'skill') { installSkill().then(t => { const o = dlg.querySelector('.skill-out') as HTMLElement; o.hidden = false; o.style.whiteSpace = 'pre-wrap'; o.textContent = t; }); return; }
+    if (b || e.target === dlg) dlg.remove();
+  });
   document.body.append(dlg);
 }
 

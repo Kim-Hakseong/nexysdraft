@@ -4,6 +4,10 @@ NexysDraft는 창 없이 돌아가는 명령줄(`NexysDraft.exe --script job.txt
 **스킬 파일(SKILL.md)** 하나만 읽으면 "200×120 판에 구멍 4개 그려서 DWG로 저장해줘" 같은 말을 작업 스크립트로 바꿔 실행한다.
 
 ## 설치 (한 번)
+셋 중 편한 방법 하나:
+1. 압축을 푼 폴더의 **`install-ai-skill.bat` 더블클릭**
+2. NexysDraft에서 **F1(도움말) → "AI 에이전트 스킬 설치" 버튼** (명령줄에 `SKILL`을 쳐도 됨)
+3. 명령 창에서:
 ```
 NexysDraft.exe --install-skill          # 세 에이전트 모두
 NexysDraft.exe --install-skill claude   # 하나만: claude | gemini | agy

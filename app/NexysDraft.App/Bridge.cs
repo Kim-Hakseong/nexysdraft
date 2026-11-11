@@ -131,6 +131,7 @@ public sealed class Bridge
             case "draw.dim": return e.Edit(ed => ed.AddLinearDimension(new Core.Model.V3(D(r, "x0"), D(r, "y0")), new Core.Model.V3(D(r, "x1"), D(r, "y1")), new Core.Model.V3(D(r, "dx"), D(r, "dy")), D(r, "angle"), e.CurrentLayer));
             case "layer.add": { var c = e.Edit(ed => ed.AddLayer(S(r, "name"), I(r, "color", 7))); if (B(r, "current")) { e.CurrentLayer = S(r, "name"); e.Touch(); } return c; }
             case "layer.set": return e.Edit(ed => ed.SetLayerState(S(r, "name"), BN(r, "off"), BN(r, "frozen"), BN(r, "locked"), IN(r, "color"), r.TryGetProperty("lt", out var lt) ? lt.GetString() : null));
+            case "installSkill": { var (ok, text) = B(r, "uninstall") ? SkillInstaller.RunToText("all", "--uninstall") : SkillInstaller.RunToText("all"); return new { ok, text }; }
             case "perf": e.PerfNote(S(r, "key"), D(r, "value")); return null;
             default: return _host(cmd, r);
         }

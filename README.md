@@ -6,7 +6,7 @@
 - 편집: 선택(창/교차)·이동·복사·회전·대칭·간격띄우기·신축·**자르기(TR)·연장(EX)**·삭제, 선/폴리선/원/선형 치수, 텍스트 편집, 레이어, Undo/Redo, AutoCAD식 명령줄.
 - 저장: DXF(원본 보존 또는 R2000, 순수 ASCII) / DWG R2000(LibreDWG `dxf2dwg`) / PDF(자체 라이터, 맑은 고딕 서브셋, 시트 분할).
 - CLI: `NexysDraft.exe --script job.txt --out dir --json` (skills/nexysdraft/SKILL.md).
-- AI 에이전트로 그리기: `NexysDraft.exe --install-skill` 한 번 실행하면 Claude Code · Gemini CLI · Antigravity CLI(agy)에 스킬이 설치되고, "200×120 판에 구멍 4개 그려서 DWG로 저장해줘"처럼 말로 시키면 된다(docs/agents.md).
+- AI 에이전트로 그리기: `install-ai-skill.bat` 더블클릭(또는 F1 → 스킬 설치 버튼, `NexysDraft.exe --install-skill`) 한 번이면 Claude Code · Gemini CLI · Antigravity CLI(agy)에 스킬이 설치되고, "200×120 판에 구멍 4개 그려서 DWG로 저장해줘"처럼 말로 시키면 된다(docs/agents.md).
 - 조작: AutoCAD 방식 키·마우스(Shift 임시 직교, F3/F7/F8/F9/F10, Enter/Space 반복, `@길이<각도`, 휠 더블클릭 전체 보기) — **[키·별칭 표 docs/keys.md](docs/keys.md)**. 도면 배경은 앱 테마와 따로 라이트/다크. PDF 구성: [docs/pdf-output.md](docs/pdf-output.md).
 
 빌드: `cd app/web && npm install && npm run build`, `dotnet build app/NexysDraft.App/NexysDraft.App.csproj -c Release`. 테스트: `dotnet test app/NexysDraft.Tests`.

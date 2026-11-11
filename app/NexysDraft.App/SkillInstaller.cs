@@ -31,9 +31,19 @@ public static class SkillInstaller
     }
     public static string ExeLine(string exe) => $"`{exe}` — run it as `& \"{exe}\" --script job.txt --out outdir --json | Out-String` (PowerShell: the pipe makes it wait) or `\"{exe}\" --script job.txt --out outdir --json` (cmd / bash).";
 
+    /// <summary>Command line: prints to the console and, with <c>--log FILE</c>, writes the same lines to a file (a batch file cannot read the output of a window program through a pipe).</summary>
     public static int Run(string[] args)
     {
-        var o = Console.Out; bool un = args.Contains("--uninstall");
+        var w = new StringWriter(); int rc = Run(args, w); string text = w.ToString();
+        try { Console.Out.Write(text); } catch { }
+        string? log = Arg(args, "--log"); if (log != null) try { File.WriteAllText(log, text, new UTF8Encoding(false)); } catch { }
+        return rc;
+    }
+    /// <summary>The same from inside the app (the help dialog button): returns what was done as text lines.</summary>
+    public static (bool ok, string text) RunToText(params string[] args) { var w = new StringWriter(); int rc = Run(new[] { "--install-skill" }.Concat(args).ToArray(), w); return (rc == 0, w.ToString().Trim()); }
+    public static int Run(string[] args, TextWriter o)
+    {
+        bool un = args.Contains("--uninstall");
         int i = Array.IndexOf(args, "--install-skill"); string which = i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[i + 1].ToLowerInvariant() : "all";
         string home = Arg(args, "--home") ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         string exe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "NexysDraft.exe");

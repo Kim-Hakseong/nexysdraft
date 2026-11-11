@@ -391,6 +391,9 @@ public static class SelfTest
         bool okEn = S(en, "lang") == "en" && S(en, "open") == "OPEN" && S(en, "line") == "Line (L)" && S(en, "file") == "FILE" && S(en, "props") == "PROPERTIES" && S(en, "prompt").Contains("Specify first point") && S(en, "help").Contains("how to use") && S(en, "stored") == "en" && en.GetProperty("toolbarH").GetInt32() <= 48 && en.GetProperty("ents").GetInt32() == ents && e.Doc!.Entities.Count == ents;
         GB("lang_switch_english_keeps_drawing", okEn, $"button click → lang {S(en, "lang")} (stored '{S(en, "stored")}'), OPEN '{S(en, "open")}', line tool '{S(en, "line")}', cards '{S(en, "file")}' / '{S(en, "props")}', LINE prompt '{S(en, "prompt")}', help '{S(en, "help")}', entities on the page {en.GetProperty("ents").GetInt32()} = engine {ents}");
 
+        // help dialog: the skill install button is there (not clicked here — it writes into the user's agent folders; the installer itself is checked by the zip smoke with --home)
+        var hb = await JS(w, "await nx.test.key('F1'); const b = document.querySelector('.help [data-b=skill]'); const t = b ? b.textContent : ''; nx.test.closeModal(); return t;");
+        GB("help_skill_install_button", (hb.GetString() ?? "").Contains("SKILL"), $"help dialog button '{hb.GetString()}'");
         // side panels: toolbar buttons and Ctrl+1 / Ctrl+2 / Ctrl+0; the drawing takes the freed width
         var p0 = await JS(w, "localStorage.removeItem('nx.panel.left'); localStorage.removeItem('nx.panel.right'); return nx.test.ui();");
         var p1 = await JS(w, "document.querySelector('.toolbar [data-a=pright]').dispatchEvent(new MouseEvent('click', { bubbles: true })); await nx.test.settle(80); return nx.test.ui();");
