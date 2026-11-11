@@ -17,3 +17,6 @@ docs/screens/09_pixel_diff_*.png
 
 # DWG TrueView console (dev check) drops this in the working folder
 ErrorReports/
+
+# user file — a capture of a user drawing, never commit (the repository is public)
+docs/screens/New_Thumbnail.png
