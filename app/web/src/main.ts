@@ -84,7 +84,7 @@ document.addEventListener('nx-frame', (e: any) => { const d = e.detail; frameInf
 function applyState(next: any) {
   S = next; (window as any).nxState = S; document.documentElement.dataset.theme = S.theme; view.setDark(canvasDark()); layers.dark = S.theme === 'dark';   // layer swatches sit on the app panel, not on the drawing
   renderHeader(); renderFooter(); files.render(S);
-  if (doc && S.layers) { if (doc.setLayers(S.layers)) { doc.computeBBox(); view.invalidate(); } }
+  if (doc && S.layers) { const a = doc.setLinetypes(S.ltypes, S.ltscale ?? 1); const b = doc.setLayers(S.layers); if (a || b) { doc.computeBBox(); view.rend.setDoc(doc); view.invalidate(); } }
   if (!S.file && doc) { doc = null; view.setDoc(null); }
   layers.render(S, doc); props.render(S, doc, Array.from(view.selection)); renderToolbar();
 }

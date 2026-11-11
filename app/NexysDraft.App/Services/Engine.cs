@@ -52,6 +52,7 @@ public sealed class Engine
         fontCompat = FontCompat,
         file = Doc == null ? null : new { path = Doc.Path, name = Doc.Path == "" ? "untitled.dxf" : Path.GetFileName(Doc.Path), version = Doc.Version, codepage = Doc.CodePage, dirty = Doc.Dirty, sourceDwg = SourceDwg, openMs = OpenMs, convertMs = ConvertMs, entities = Doc.Entities.Count, blocks = Doc.Blocks.Count, unknown = Doc.UnknownCount, warnings = OpenWarnings, counts = Doc.TypeCounts, size = File.Exists(Doc.Path) ? new FileInfo(Doc.Path).Length : 0 },
         layers = Doc?.Layers.Select(l => new { name = l.Name, color = l.Color, tc = l.TrueColor, off = l.Off, frozen = l.Frozen, locked = l.Locked, lt = l.Linetype, count = 0 }).ToList(),
+        ltypes = Doc?.Linetypes.Select(l => new { name = l.Name, pattern = l.Pattern }).ToList(), ltscale = Doc?.HeaderDouble("$LTSCALE", 1) ?? 1,
         currentLayer = CurrentLayer, selection = Selection,
         undo = new { can = Editor?.CanUndo ?? false, name = Editor?.UndoName, canRedo = Editor?.CanRedo ?? false, redoName = Editor?.RedoName },
         recent = Recent,

@@ -1,8 +1,8 @@
 # Build the portable release zip: dist\release\NexysDraft-v<ver>-win64.zip
 #   NexysDraft.exe (self-contained single file) + wwwroot\ + tools\libredwg\ (dwg2dxf, dxf2dwg, libiconv, COPYING, SOURCE.txt, build script;
 #   dwgread.exe stays in the repository for development only — draft3 decision) + skills\*\SKILL.md + README.md (Korean, 1 page) + LICENSES.md
-# Usage (PowerShell, repository root):  powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 0.4.7
-param([string]$Version = "0.4.7", [switch]$RefreshDist)   # -RefreshDist: also replace app\dist (off by default — draft5: never touch a deployed copy unasked)
+# Usage (PowerShell, repository root):  powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 0.4.8
+param([string]$Version = "0.4.8", [switch]$RefreshDist)   # -RefreshDist: also replace app\dist (off by default — draft5: never touch a deployed copy unasked)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"; $dotnet = "$env:DOTNET_ROOT\dotnet.exe"
@@ -38,6 +38,7 @@ New-Item -ItemType Directory -Force "$stage\skills\nexysdraft", "$stage\skills\c
 Copy-Item "$root\skills\nexysdraft\SKILL.md" "$stage\skills\nexysdraft\"
 Copy-Item "$root\skills\cad-headless\SKILL.md" "$stage\skills\cad-headless\"
 Copy-Item "$root\packaging\README.md", "$root\packaging\LICENSES.md", "$root\packaging\install-ai-skill.bat" $stage
+Copy-Item -Recurse "$root\examples" "$stage\examples"
 New-Item -ItemType Directory -Force "$stage\docs" | Out-Null
 Copy-Item "$root\docs\keys.md", "$root\docs\pdf-output.md" "$stage\docs\"
 if (Test-Path "$stage\tools\libredwg\dwgread.exe") { throw "dwgread.exe must not be in the release" }

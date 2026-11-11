@@ -25,6 +25,9 @@ public sealed class PdfWriter
         public void Stroke(int rgb) { string c = $"{N((rgb >> 16 & 255) / 255.0)} {N((rgb >> 8 & 255) / 255.0)} {N((rgb & 255) / 255.0)} RG\n"; if (c != _stroke) { S.Append(c); _stroke = c; } }
         public void Fill(int rgb) { string c = $"{N((rgb >> 16 & 255) / 255.0)} {N((rgb >> 8 & 255) / 255.0)} {N((rgb & 255) / 255.0)} rg\n"; if (c != _fill) { S.Append(c); _fill = c; } }
         public void LineWidth(double pt) { string c = N(pt) + " w\n"; if (c != _lw) { S.Append(c); _lw = c; } }
+        string _dash = "[] 0 d\n";
+        /// <summary>Stroke dash pattern in points (on, off, on, off …); null or empty = solid.</summary>
+        public void Dash(double[]? pattern) { string c = pattern == null || pattern.Length == 0 ? "[] 0 d\n" : "[" + string.Join(" ", pattern.Select(N)) + "] 0 d\n"; if (c != _dash) { S.Append(c); _dash = c; } }
         public void Line(double x0, double y0, double x1, double y1) { S.Append(N(x0)).Append(' ').Append(N(y0)).Append(" m ").Append(N(x1)).Append(' ').Append(N(y1)).Append(" l S\n"); }
         /// <summary>Polyline (xy pairs) stroked; closed when asked.</summary>
         public void Polyline(ReadOnlySpan<double> xy, bool closed)

@@ -5,12 +5,13 @@ export interface Ent {
   ht?: number; rot?: number; s?: string; ha?: number; va?: number; wf?: number; st?: string; font?: string; shx?: number; attr?: string; attdef?: number; ob?: number; bw?: number; ud?: number;
   at?: number; ls?: number; raw?: string; lines?: Run[][];
   blk?: string; attrs?: Ent[]; grid?: number[]; gridf?: number[];
-  solid?: number; pat?: string; loops?: number[][]; kind?: number; meas?: number; name?: string;
+  solid?: number; pat?: string; loops?: number[][]; hl?: number[]; lts?: number; kind?: number; meas?: number; name?: string;
 }
 export interface Layer { name: string; color: number; tc?: number | null; off: boolean; frozen: boolean; locked: boolean; lt: string; lw?: number }
 export interface Block { name: string; bx: number; by: number; ents: Ent[] }
 export interface TextItem { x: number; y: number; h: number; rot: number; text?: string; lines?: Run[][]; font: string; shx: boolean; ha: number; va: number; wf: number; ax: number; ay: number; w: number; at: number; ls: number; col: number; mtext: boolean; ob: number; bw: number; ud: number; h0: string }
-export interface Part { col: number; segs: Float32Array }
+/** segs = the geometry (hit test, snaps, selection highlight); draw = what is painted when the linetype is not continuous (the dashes). */
+export interface Part { col: number; segs: Float32Array; draw?: Float32Array }
 export interface Geom { parts: Part[]; fills: { col: number; poly: Float32Array }[]; texts: TextItem[]; bbox: [number, number, number, number] | null; snaps: number[] /* x,y,kind triples */ }
 export const SNAP_END = 1, SNAP_MID = 2, SNAP_CEN = 3, SNAP_INT = 4, SNAP_QUAD = 5, SNAP_INS = 6;
 
@@ -39,10 +40,13 @@ export class Doc {
   // grid index
   private cell = 1; private gx0 = 0; private gy0 = 0; private cols = 1; private rows = 1; private grid: string[][] = []; private indexed = new Set<string>();
   ver = 0;
+  /** Linetype patterns by lower-case name (dash > 0, gap < 0, dot 0) and the global scale $LTSCALE. */
+  ltypes = new Map<string, number[]>(); ltscale = 1;
 
   load(snap: any) {
     this.ents.clear(); this.order = []; this.blocks.clear(); this.geom.clear(); this.layers = snap.layers ?? []; this.layerMap.clear(); for (const l of this.layers) this.layerMap.set(l.name.toLowerCase(), l);
     for (const [k, b] of Object.entries<any>(snap.blocks ?? {})) this.blocks.set(k.toLowerCase(), b as Block);
+    this.ltypes.clear(); for (const t of (snap.ltypes ?? []) as { name: string; pattern: number[] }[]) if (t.pattern && t.pattern.length >= 2) this.ltypes.set(t.name.toLowerCase(), t.pattern); this.ltscale = snap.ltscale > 0 ? snap.ltscale : 1;
     for (const e of snap.ents as Ent[]) { this.ents.set(e.h, e); this.order.push(e.h); }
     this.counts = snap.counts ?? {}; this.unknown = snap.unknown ?? 0; this.path = snap.path ?? ''; this.version = snap.version ?? ''; this.codepage = snap.codepage ?? '';
     const t0 = performance.now(); this.computeBBox(); this.phase.geom = performance.now() - t0;
@@ -50,9 +54,9 @@ export class Doc {
   }
   phase = { geom: 0, index: 0 };
   setLayers(layers: Layer[]) {
-    const before = this.layers.map(l => `${l.name}|${l.off}|${l.frozen}|${l.color}`).join(';');
+    const before = this.layers.map(l => `${l.name}|${l.off}|${l.frozen}|${l.color}|${l.lt}`).join(';');
     this.layers = layers; this.layerMap.clear(); for (const l of layers) this.layerMap.set(l.name.toLowerCase(), l);
-    const after = layers.map(l => `${l.name}|${l.off}|${l.frozen}|${l.color}`).join(';');
+    const after = layers.map(l => `${l.name}|${l.off}|${l.frozen}|${l.color}|${l.lt}`).join(';');
     if (before !== after) { this.geom.clear(); this.ver++; return true; }
     return false;
   }
@@ -62,6 +66,13 @@ export class Doc {
     for (const e of upsert ?? []) { if (!this.ents.has(e.h)) this.order.push(e.h); this.ents.set(e.h, e); this.geom.delete(e.h); this.unindex(e.h); this.index(e.h); }
     if (blocks && Object.keys(blocks).length) for (const e of this.ents.values()) if ((e.t === 'I' || e.t === 'D') && e.blk && blocks[e.blk]) { this.geom.delete(e.h); }
     this.computeBBox(); this.ver++;
+  }
+  /** Linetype table from the engine state (a linetype may be added after the drawing was loaded). Returns true when the dashes must be rebuilt. */
+  setLinetypes(types: { name: string; pattern: number[] }[] | null | undefined, scale: number): boolean {
+    const sig = (m: Map<string, number[]>, s: number) => s + '|' + Array.from(m).map(([k, v]) => k + ':' + v.join(',')).join(';');
+    const before = sig(this.ltypes, this.ltscale); const next = new Map<string, number[]>(); for (const t of types ?? []) if (t.pattern && t.pattern.length >= 2) next.set(t.name.toLowerCase(), t.pattern);
+    const sc = scale > 0 ? scale : 1; if (sig(next, sc) === before) return false;
+    this.ltypes = next; this.ltscale = sc; this.geom.clear(); this.ver++; return true;
   }
   layer(name: string) { return this.layerMap.get(name.toLowerCase()); }
   visible(e: Ent): boolean { if (e.inv) return false; const l = this.layer(e.l); return !(l && (l.off || l.frozen)); }
@@ -79,8 +90,16 @@ export class Doc {
     return e.c;
   }
   private build(e: Ent, ctx: { col: number; layer: string; m: number[] } | null, depth: number): Geom {
-    if (!ctx) { const fast = this.buildFast(e); if (fast) return fast; }
+    if (!ctx) { const fast = this.buildFast(e); if (fast) { if (e.t !== 'T') { const pt = this.patternOf(e, null); if (pt) for (const part of fast.parts) { const d = dashSegs(part.segs, pt.pat, pt.scale); if (d) part.draw = d; } } return fast; } }
     return this.buildGeneral(e, ctx, depth);
+  }
+  /** The dash pattern an entity is drawn with, or null for a continuous line. BYLAYER takes the layer's linetype (the insert's layer for layer 0 inside a block). */
+  private patternOf(e: Ent, ctx: { layer: string } | null): { pat: number[]; scale: number } | null {
+    let name = e.lt;
+    if (!name) { const l = this.layer(ctx && e.l === '0' ? ctx.layer : e.l); name = l?.lt; }
+    if (!name) return null; const low = name.toLowerCase(); if (low === 'continuous' || low === 'bylayer' || low === 'byblock') return null;
+    const pat = this.ltypes.get(low); if (!pat) return null;
+    return { pat, scale: this.ltscale * (e.lts && e.lts > 0 ? e.lts : 1) };
   }
   /** Closure-free path for the common top-level entities (lines, circles, arcs, plain polylines, text): the 100k open gate. */
   private buildFast(e: Ent): Geom | null {
@@ -136,6 +155,7 @@ export class Doc {
       case 'S': { seg(p[0], p[1], p[2], p[3]); seg(p[2], p[3], p[6], p[7]); seg(p[6], p[7], p[4], p[5]); seg(p[4], p[5], p[0], p[1]); const q: number[] = []; for (const [x, y] of [[p[0], p[1]], [p[2], p[3]], [p[6], p[7]], [p[4], p[5]]]) { const t = T(x, y); q.push(t[0], t[1]); } g.fills.push({ col, poly: new Float32Array(q) }); for (let i = 0; i < 8; i += 2) snap(p[i], p[i + 1], SNAP_END); break; }
       case 'PT': { seg(p[0] - 1e-9, p[1], p[0] + 1e-9, p[1]); snap(p[0], p[1], SNAP_END); break; }
       case 'H': {
+        if (e.hl && e.hl.length >= 4) { for (let i = 0; i + 3 < e.hl.length; i += 4) seg(e.hl[i], e.hl[i + 1], e.hl[i + 2], e.hl[i + 3]); break; }   // pattern lines (computed by the engine); no outline, as in AutoCAD
         for (const loop of e.loops ?? []) { poly(loop, true); if (e.solid) { const q: number[] = []; for (let i = 0; i < loop.length; i += 2) { const t = T(loop[i], loop[i + 1]); q.push(t[0], t[1]); } g.fills.push({ col, poly: new Float32Array(q) }); } }
         break;
       }
@@ -181,7 +201,7 @@ export class Doc {
       }
       default: break;
     }
-    if (acc.length) g.parts.push({ col, segs: new Float32Array(acc) });
+    if (acc.length) { const part: Part = { col, segs: new Float32Array(acc) }; if (e.t === 'L' || e.t === 'C' || e.t === 'A' || e.t === 'E' || e.t === 'P') { const pt = this.patternOf(e, ctx); if (pt) { const d = dashSegs(part.segs, pt.pat, pt.scale * kscale); if (d) part.draw = d; } } g.parts.push(part); }
     // bbox from parts, fills and text anchors
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     const add = (x: number, y: number) => { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; };
@@ -280,6 +300,27 @@ export class Doc {
 }
 
 // ---------------------------------------------------------------- geometry helpers
+/** Cut a run of segments (x0,y0,x1,y1 …, consecutive ones continue the pattern) into the dashes of a linetype. Null = draw it continuous
+ *  (degenerate pattern, or more than 60 000 dashes — a pattern that small would look solid anyway). */
+export function dashSegs(segs: Float32Array, pattern: number[], scale: number): Float32Array | null {
+  const pat = pattern.map(v => v * scale); const period = pat.reduce((a, v) => a + Math.abs(v), 0); if (!(period > 1e-9)) return null;
+  let total = 0; for (let i = 0; i + 3 < segs.length; i += 4) total += Math.hypot(segs[i + 2] - segs[i], segs[i + 3] - segs[i + 1]);
+  if (total / period * pat.length > 60000 || total < period * 0.5) return null;
+  const dot = period * 0.02; const out: number[] = []; let k = 0, left = Math.abs(pat[0]) || dot, px = NaN, py = NaN;
+  for (let i = 0; i + 3 < segs.length; i += 4) {
+    const x0 = segs[i], y0 = segs[i + 1], x1 = segs[i + 2], y1 = segs[i + 3]; const len = Math.hypot(x1 - x0, y1 - y0); if (len <= 0) continue;
+    if (!(Math.abs(x0 - px) < 1e-6 * (1 + Math.abs(x0)) && Math.abs(y0 - py) < 1e-6 * (1 + Math.abs(y0)))) { k = 0; left = Math.abs(pat[0]) || dot; }   // a new run starts the pattern again
+    const ux = (x1 - x0) / len, uy = (y1 - y0) / len; let s = 0;
+    while (s < len - 1e-12) {
+      const step = Math.min(left, len - s);
+      if (pat[k] >= 0) out.push(x0 + ux * s, y0 + uy * s, x0 + ux * (s + step), y0 + uy * (s + step));
+      s += step; left -= step;
+      if (left <= 1e-12) { k = (k + 1) % pat.length; left = Math.abs(pat[k]) || dot; }
+    }
+    px = x1; py = y1;
+  }
+  return new Float32Array(out);
+}
 function polyToSegs(pts: number[], closed: boolean): Float32Array {
   const n = pts.length / 2; if (n < 2) return new Float32Array(0); const m = closed ? n : n - 1; const out = new Float32Array(m * 4);
   for (let i = 0; i < m; i++) { const j = (i + 1) % n; out[i * 4] = pts[i * 2]; out[i * 4 + 1] = pts[i * 2 + 1]; out[i * 4 + 2] = pts[j * 2]; out[i * 4 + 3] = pts[j * 2 + 1]; }

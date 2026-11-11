@@ -294,9 +294,9 @@ public sealed partial class Editor
     }
 
     /// <summary>Linear (rotated) dimension between p1 and p2 with the dimension line through <paramref name="dimLine"/>; angle 0 = horizontal, 90 = vertical.</summary>
-    public Change AddLinearDimension(V3 p1, V3 p2, V3 dimLine, double angleDeg, string layer)
+    public Change AddLinearDimension(V3 p1, V3 p2, V3 dimLine, double angleDeg, string layer, string? text = null)
     {
-        var d = new Dimension { Type = 0 | 32, P13 = p1, P14 = p2, Rotation = angleDeg, Style = Doc.HeaderString("$DIMSTYLE", "Standard"), Attach = 5, LineSpacingStyle = 1 };
+        var d = new Dimension { Text = text ?? "", Type = 0 | 32, P13 = p1, P14 = p2, Rotation = angleDeg, Style = Doc.HeaderString("$DIMSTYLE", "Standard"), Attach = 5, LineSpacingStyle = 1 };
         var blk = new Block { Name = NextAnonymous("*D"), Flags = 1, Handle = Doc.NewHandle(), EndHandle = Doc.NewHandle(), RecordHandle = Doc.NewHandle() };
         BuildLinearDim(d, blk, dimLine);
         d.Block = blk.Name; Doc.Blocks[blk.Name] = blk; Doc.BlockOrder.Add(blk.Name);
@@ -317,8 +317,7 @@ public sealed partial class Editor
         var q1 = ux * Dot(d.P13, ux) + uy * off; var q2 = ux * Dot(d.P14, ux) + uy * off;
         double meas = Math.Abs(Dot(d.P14, ux) - Dot(d.P13, ux)); d.Measurement = meas; d.HasMeasurement = true;
         d.DefPoint = q2; d.TextMid = (q1 + q2) * 0.5 + uy * (txt / 2 + gap);
-        string text = d.Text is { Length: > 0 } && d.Text != "<>" ? d.Text : meas.ToString("F" + dec, CultureInfo.InvariantCulture);
-        if (dec > 0) text = text.TrimEnd('0').TrimEnd('.');
+        string text = DimText(d, meas, dec);
         blk.Entities.Clear();
         var items = new List<Entity>();
         double dir1 = Math.Sign(off - Dot(d.P13, uy)), dir2 = Math.Sign(off - Dot(d.P14, uy)); if (dir1 == 0) dir1 = 1; if (dir2 == 0) dir2 = 1;
@@ -339,6 +338,11 @@ public sealed partial class Editor
     public int RegenerateDimensions()
     {
         int n = 0;
+        foreach (var d in Doc.Entities.OfType<Dimension>().Where(x => x.Kind is 3 or 4 && x.Block != "" && Doc.Blocks.ContainsKey(x.Block)).ToList())
+        {
+            var blk = Doc.Blocks[d.Block]; var nb = new Block { Name = blk.Name, Base = blk.Base, Flags = blk.Flags, Handle = blk.Handle, EndHandle = blk.EndHandle, RecordHandle = blk.RecordHandle, Layer = blk.Layer };
+            BuildRadialDim(d, nb); Doc.Blocks[blk.Name] = nb; d.Dirty = true; d.Raw = null; n++;
+        }
         foreach (var d in Doc.Entities.OfType<Dimension>().Where(x => x.Kind == 0 && x.Block != "" && Doc.Blocks.ContainsKey(x.Block)).ToList())
         {
             var blk = Doc.Blocks[d.Block];

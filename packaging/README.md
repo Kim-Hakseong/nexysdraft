@@ -54,13 +54,13 @@ AutoCAD에서 자주 쓰던 키를 그대로 씁니다. 전체 표는 **`docs\ke
 ```
 NexysDraft.exe --script job.txt --out 결과폴더 --json
 ```
-`job.txt` 예: `open C:\도면\a.dwg` / `replace PT-101 PT-201` / `save C:\도면\a_rev.dwg` / `save C:\도면\a_rev.dxf --ver keep` / `pdf C:\도면\a.pdf`. 결과는 `결과폴더\result.json`. **AI 에이전트로 그리기**: 압축을 푼 폴더의 **`install-ai-skill.bat`을 더블클릭**하거나, 프로그램에서 **F1(도움말) → "AI 에이전트 스킬 설치" 버튼**을 누르면 Antigravity CLI · Claude Code · Gemini CLI에 스킬이 설치됩니다(명령으로는 `NexysDraft.exe --install-skill`). 그 뒤 에이전트를 새로 열면, "200×120 판에 구멍 4개 그려서 DWG로 저장해줘"처럼 말로 시킬 수 있습니다(지우기: `--install-skill --uninstall`). 문법 전체: `skills\nexysdraft\SKILL.md`.
+`job.txt` 예: `open C:\도면\a.dwg` / `replace PT-101 PT-201` / `save C:\도면\a_rev.dwg` / `save C:\도면\a_rev.dxf --ver keep` / `pdf C:\도면\a.pdf`. 결과는 `결과폴더\result.json`. **AI 에이전트로 그리기**: 압축을 푼 폴더의 **`install-ai-skill.bat`을 더블클릭**하거나, 프로그램에서 **F1(도움말) → "AI 에이전트 스킬 설치" 버튼**을 누르면 Antigravity CLI · Claude Code · Gemini CLI에 스킬이 설치됩니다(명령으로는 `NexysDraft.exe --install-skill`). 그 뒤 에이전트를 새로 열면, "200×120 판에 구멍 4개 그려서 DWG로 저장해줘"처럼 말로 시킬 수 있습니다(지우기: `--install-skill --uninstall`). `examples\flange\`에 명령줄만으로 만든 A3 제작도 예제(표제란·단면도·치수 포함, `job.txt`와 결과 DWG·DXF·PDF)가 있습니다. 문법 전체: `skills\nexysdraft\SKILL.md`.
 
 ## 알려진 제한
 - DWG 쓰기는 R2000만(LibreDWG 소스 빌드 0.14.8679). 사내 실도면 7개 중 6개가 다른 CAD(ODA 기반 검사)에서 그대로 열렸고, 래스터 이미지가 든 1개는 열리지 않았습니다 → 사전 점검이 DXF를 권하고, 이미지를 뺀 DWG도 고를 수 있습니다.
 - 동적 블록은 DWG(R2000)로 저장하면 정적인 모양으로만 남습니다. 동적 블록 편집 기능은 없습니다.
 - 페이퍼 스페이스(배치)는 보존되지만 화면에는 모형 공간만 보입니다(배치 탭은 다음 버전).
-- 필렛·모따기·배열·해치 만들기·블록 편집·3D는 없습니다. 자르기·연장은 선·호·원·폴리선만 됩니다(타원·스플라인·블록 안의 선은 자를 수 없음).
+- 필렛·모따기·배열·블록 편집·3D는 없습니다. 해치·지름/반지름 치수·선 종류 지정은 명령줄(`--script`)과 AI 에이전트로 만들 수 있고, 화면에서는 보기만 됩니다. 자르기·연장은 선·호·원·폴리선만 됩니다(타원·스플라인·블록 안의 선은 자를 수 없음).
 
 ## 문의
 사내 담당자에게 도면 파일과 `%LOCALAPPDATA%\NexysDraft\` 폴더 위치를 알려 주세요.

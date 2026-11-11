@@ -181,3 +181,11 @@
 - WPF(창 프로그램)라서 파워셸은 `& NexysDraft.exe --script …`의 종료를 기다리지 않는다. 출력을 파이프(`| Out-String`)하거나 cmd·bash에서 실행하면 기다린다.
 - Claude Code·Gemini CLI·Antigravity CLI는 같은 SKILL.md 형식을 읽는다. 사용자 폴더는 각각 `~/.claude/skills`, `~/.gemini/skills`(또는 `~/.agents/skills`), `~/.gemini/config/skills`다. Gemini CLI 문서에는 2026-06-18에 Antigravity CLI로 대체됐다는 안내가 붙어 있다.
 - Antigravity CLI 1.1.12는 `agy -p "요청" --dangerously-skip-permissions`로 창 없이 실행된다. 같은 요청에서 Claude는 3점 호로, Antigravity는 원 2개 + `tr`로 장공을 그렸고 결과는 같았다(객체 11개).
+
+## 2026-11-11 draft5h
+- v0.4.7까지는 선 종류가 화면과 PDF에 그려지지 않았다(전부 실선). 무늬 해치도 테두리만 그렸다. DXF에는 그대로 보존되고 있었다.
+- 해치 무늬 정의는 HATCH의 78(선 무리 수) 뒤에 53(각도)·43/44(기준점)·45/46(다음 선까지의 벡터)·79/49(대시)로 온다. 45/46은 "선 방향 이동 + 선에 수직인 간격"을 선 각도만큼 돌린 벡터다.
+- 새로 만든 무늬 해치(다각형·원 경계, 섬 포함), 지름·반지름 치수, 선 종류가 있는 레이어를 dxf2dwg 0.14.8679로 DWG로 바꾼 것이 DWG TrueView 2027에서 보고 없이 열린다. DWG를 다시 읽어도 HATCH·DIMENSION 개수와 선 종류가 남는다.
+- 선 종류를 화면에서 대시로 자르면 선택·스냅용 기하가 끊긴다. 기하(segs)는 그대로 두고 그리는 데이터(draw)만 따로 만들어야 점선의 빈 곳도 선택된다.
+- 선 종류 표는 도면을 처음 보낼 때만 화면으로 갔다. 편집 중에 선 종류가 추가되면 화면이 모르므로 상태(state)에도 실어 보낸다.
+- 에이전트가 쇄선을 짧은 선으로 흉내 내면 같은 도면이 객체 338개, 선 종류를 쓰면 179개다.

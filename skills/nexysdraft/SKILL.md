@@ -25,15 +25,19 @@ the program path filled in.
 ## From a request to a drawing (how to work)
 1. Decide the geometry in numbers first: units are millimetres, X to the right, Y up, angles counter-clockwise from +X. Put the lower-left
    corner of the part at 0,0 unless the user says otherwise. Ask only when a dimension that changes the shape is missing.
-2. Use layers by purpose (outline, centre lines, DIM, TEXT) with `layer new NAME COLOR` + `layer current NAME` (colours: 1 red, 2 yellow,
-   3 green, 4 cyan, 5 blue, 6 magenta, 7 black/white).
+2. Use layers by purpose (outline, centre lines, hidden lines, hatch, DIM, TEXT) with `layer new NAME COLOR [LINETYPE]` + `layer current NAME`
+   (colours: 1 red, 2 yellow, 3 green, 4 cyan, 5 blue, 6 magenta, 7 black/white, 8 grey). Give centre lines the linetype `CENTER2` and hidden
+   lines `HIDDEN` — draw them as ordinary lines / circles on those layers, never as hand-made dashes. Set `ltscale` once so the dashes suit
+   the sheet: about 0.4 for an A3 / A4 drawing at 1:1, larger for big objects (dash length = pattern × ltscale in drawing units).
+   A formal drawing also has a frame, a title block (drawing name, number, scale, material, designer, date) and notes — build them from
+   `rec`, `l` and `dt`; `examples/flange/job.txt` next to the program is a complete A3 sheet to copy the layout from.
 3. Write the whole job into one text file (UTF-8), end it with `query extents`, `query entities`, `save …` and, when the user should see
    it, `pdf …`. Run it once; do not run the program line by line.
 4. Check `result.json`: `ok` must be true. Compare `query extents` with the size you intended (dimensions and text count too: a 200 × 120
    plate with dimensions outside it reports more — put a `query extents` before the dimensions when the bare size matters) and
    `query entities` → `byType` with the number of objects you drew (`rec` and `pol` are one LWPOLYLINE each). On an error, fix the line `errors[0].line` names and run the job again.
-5. Not available from the command line — say so instead of improvising: fillet / chamfer / array / hatch, dimensions other than linear
-   (`dli`), linetype assignment, PDF paper size or scale (the PDF is fitted to the detected sheet, A3 by default).
+5. Not available from the command line — say so instead of improvising: fillet / chamfer / array, angular and aligned dimensions,
+   leaders, PDF paper size or scale (the PDF is fitted to the detected sheet, A3 by default).
 6. Tell the user the output paths. A DWG is R2000 and opens in AutoCAD / DWG TrueView; a DXF opens in any CAD.
 
 ## Commands (one per line, `#` comments)
@@ -44,7 +48,8 @@ the program path filled in.
 | `save PATH.dxf [--ver r2000\|keep]` / `save PATH.dwg [--no-image]` | DXF: originals up to AC1027 keep their version and untouched bytes; newer originals (AC1032) are written as R2000 so nanoCAD 5 opens them (`--ver` forces either); pure ASCII (`\U+XXXX`). DWG = R2000 via dxf2dwg (about 1 s per 5 MB); `--no-image` leaves raster IMAGE entities out. The result reports `version` and `reason` |
 | `pdf PATH.pdf [--merged] [--sheets] [--overview]` | searchable PDF set (Malgun Gothic subset): `PATH.pdf` one page per detected sheet (+ rest page), `PATH__001.pdf` … one file per page (`__rest.pdf`), `PATH__overview.pdf` whole model space on one page. No flag = all three, except a single-page drawing gets the merged file only (`note: "single sheet — merged only"`); named flags are followed as given. The result lists `files` (path, kind, pages, paper) |
 | `select all\|none\|window X0,Y0 X1,Y1\|crossing X0,Y0 X1,Y1\|handles H…\|layer NAME\|type LINE` | selection for the edit commands |
-| `layer new NAME [COLOR]`, `layer current NAME`, `layer set NAME on|off|frozen|thawed|locked|unlocked|COLOR` | layers (`current` creates when missing) |
+| `layer new NAME [COLOR] [LINETYPE]`, `layer current NAME`, `layer set NAME on\|off\|frozen\|thawed\|locked\|unlocked\|COLOR\|LINETYPE` | layers (`current` creates when missing). Linetypes: Continuous, CENTER, CENTER2, HIDDEN, HIDDEN2, DASHED, DASHED2, PHANTOM, PHANTOM2, DASHDOT, DOT (the `2` variants are half size) |
+| `lt LINETYPE\|bylayer` · `ltscale N` | linetype of the selected objects · global linetype scale (default 1) |
 | `l X0,Y0 X1,Y1 [X2,Y2 …]` | line(s) through the points on the current layer |
 | `pl [c] X,Y X,Y …` | polyline, `c` = closed |
 | `c CX,CY R` | circle |
@@ -55,7 +60,10 @@ the program path filled in.
 | `po X,Y` | point |
 | `dt X,Y H TEXT` | single-line text, height H (everything after H is the text; no quotes needed) |
 | `mt X,Y W H TEXT` | MTEXT, top-left at X,Y, width W, height H (`\P` = new line) |
-| `dli X0,Y0 X1,Y1 DX,DY [ANGLE]` | linear dimension between two points, dimension line through DX,DY (angle 0 horizontal / 90 vertical, else automatic) |
+| `dli X0,Y0 X1,Y1 DX,DY [ANGLE] [--text STRING]` | linear dimension between two points, dimension line through DX,DY (angle 0 horizontal / 90 vertical, else automatic). `--text` replaces the text, `<>` stands for the measured value: `--text Ø<>` shows Ø60 on a side view, `--text <> H7` a fit |
+| `ddi CX,CY R [ANGLE] [--text STRING]` · `dra CX,CY R [ANGLE] [--text STRING]` | diameter (Ø) · radius (R) dimension of a circle or arc with that centre and radius; the dimension line runs through the centre at ANGLE (default 45°) and the text sits outside beyond the curve |
+| `hatch PATTERN [SCALE] [ANGLE] X,Y X,Y X,Y … [/ X,Y … \| / c CX,CY R]` | hatch a closed polygon; further loops after `/` are islands (holes) — `c CX,CY R` is a circular loop, also allowed as the only loop. Patterns: SOLID, ANSI31 (section lines 45°, 3.175 apart at scale 1), ANSI32, ANSI37 (crossed), LINE, NET, DASH |
+| `hatch PATTERN [SCALE] [ANGLE] sel` | hatch the closed polylines / circles of the selection (the largest is the outer boundary, the others are islands) |
 | `m DX,DY` · `co DX,DY` · `e` · `ro CX,CY DEG` · `mi X0,Y0 X1,Y1 [erase]` · `s X0,Y0 X1,Y1 DX,DY` | move / copy / erase / rotate / mirror / stretch the selection |
 | `o HANDLE DIST SX,SY` | offset one line/circle/arc/polyline towards the side point |
 | `tr X,Y [X,Y …]` | trim: each point lies on the part to remove; the object under it is cut at the nearest crossings with other objects on both sides (a circle becomes an arc, a closed polyline opens). Fails when the object crosses nothing there |

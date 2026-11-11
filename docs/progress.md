@@ -101,6 +101,15 @@
 | D4 UI | 완료 (순서 역전: 구현 뒤 목업) | design/mockup/draft.html·png, tools/pixel_diff.py, 라이트/다크 |
 | D5 출력·검증·배포 | 완료 | PDF(당시 dwg2spdf), `--selftest`, `--stress`, app/dist/NexysDraft.exe, docs/report-draft1.md |
 
+## 2026-11-11 draft5h (명령줄: 선 종류·지름/반지름 치수·해치, 예제 도면)
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 선 종류(레이어·객체·LTSCALE) + 화면·PDF에 대시로 그리기 | 완료 | D5hTests, draft_linetype_dashes_on_screen, draft_ltscale |
+| 지름·반지름 치수, 선형 치수 문자 지정(`--text Ø<>`) | 완료 | D5hTests, draft_diameter_radius_dims |
+| 해치(무늬 7종, 섬) + 화면·PDF에 무늬 선 그리기 | 완료 | D5hTests, draft_hatch_pattern_on_screen |
+| TrueView 2027에서 DXF·DWG 열림 | 완료 | work/gates/d5h_draft.txt |
+| 예제 도면 examples/flange (zip 포함), v0.4.8 | 완료 | docs/report-draft5h.md |
+
 ## 2026-11-11 draft5g (자르기·연장, 추적 가이드, 선택 상자, 패널, 한/영, 에이전트 스킬)
 | 항목 | 판정 | 근거 |
 |---|---|---|

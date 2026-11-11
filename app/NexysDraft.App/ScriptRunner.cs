@@ -16,6 +16,8 @@ namespace NexysDraft.App;
 /// Commands: new | open PATH | save PATH(.dxf|.dwg) [--ver r2000|keep] [--no-image] [--no-fontfix] | pdf PATH [--merged] [--sheets] [--overview] | select all|none|window X0,Y0 X1,Y1|crossing …|handles H1 H2 … | layer new NAME [COLOR] |
 /// layer current NAME | layer set NAME on|off|frozen|thawed|locked|unlocked | l X0,Y0 X1,Y1 [X2,Y2 …] | pl [c] X,Y … | c CX,CY R | dli X0,Y0 X1,Y1 DX,DY [angle] |
 /// rec X0,Y0 X1,Y1 | a X1,Y1 X2,Y2 X3,Y3 | el X0,Y0 X1,Y1 HALF | pol N CX,CY R [c] | po X,Y | dt X,Y H TEXT | mt X,Y W H TEXT |
+/// layer new NAME [COLOR] [LINETYPE] | layer set NAME LINETYPE | lt LINETYPE (selection) | ltscale N | ddi CX,CY R [ANGLE] | dra CX,CY R [ANGLE] | dli … [--text "Ø<>"] |
+/// hatch PATTERN [SCALE] [ANGLE] X,Y X,Y X,Y … [/ island …] [/ c CX,CY R] | hatch PATTERN [SCALE] [ANGLE] sel |
 /// tr X,Y [X,Y …] (trim the part under each point at the nearest crossings) | ex X,Y [X,Y …] (extend the end near each point to the next object) |
 /// m DX,DY | co DX,DY | e | ro CX,CY DEG | mi X0,Y0 X1,Y1 [erase] | o H DIST SX,SY | s X0,Y0 X1,Y1 DX,DY | text H STRING | replace OLD NEW | undo | redo |
 /// query entities|layers|extents|texts | echo TEXT. Lines starting with # are comments.
@@ -52,7 +54,7 @@ public static class ScriptRunner
     }
     static string Arg(string[] a, string name, string dflt = "") { int i = Array.IndexOf(a, name); return i >= 0 && i + 1 < a.Length ? a[i + 1] : dflt; }
 
-    static readonly Dictionary<string, string> Alias = new(StringComparer.OrdinalIgnoreCase) { ["line"] = "l", ["pline"] = "pl", ["circle"] = "c", ["move"] = "m", ["copy"] = "co", ["cp"] = "co", ["erase"] = "e", ["del"] = "e", ["rotate"] = "ro", ["mirror"] = "mi", ["offset"] = "o", ["stretch"] = "s", ["dimlinear"] = "dli", ["dim"] = "dli", ["u"] = "undo", ["ed"] = "text", ["sel"] = "select" };
+    static readonly Dictionary<string, string> Alias = new(StringComparer.OrdinalIgnoreCase) { ["line"] = "l", ["pline"] = "pl", ["circle"] = "c", ["move"] = "m", ["copy"] = "co", ["cp"] = "co", ["erase"] = "e", ["del"] = "e", ["rotate"] = "ro", ["mirror"] = "mi", ["offset"] = "o", ["stretch"] = "s", ["dimlinear"] = "dli", ["dim"] = "dli", ["dimdia"] = "ddi", ["dimdiameter"] = "ddi", ["dimrad"] = "dra", ["dimradius"] = "dra", ["h"] = "hatch", ["bhatch"] = "hatch", ["linetype"] = "lt", ["trim"] = "tr", ["extend"] = "ex", ["u"] = "undo", ["ed"] = "text", ["sel"] = "select" };
 
     static object? Exec(Engine e, List<string> sel, string raw, string outDir)
     {
@@ -103,10 +105,15 @@ public static class ScriptRunner
             case "layer":
                 {
                     string sub = a.Count > 0 ? a[0].ToLowerInvariant() : ""; var d = Doc();
-                    if (sub == "new") { Ed().AddLayer(a[1], a.Count > 2 ? int.Parse(a[2]) : 7); return new { layer = a[1] }; }
+                    if (sub == "new")
+                    {
+                        int color = 7; string lt = "Continuous"; foreach (var tok in a.Skip(2)) { if (int.TryParse(tok, out var ci0)) color = ci0; else lt = tok; }
+                        Ed().AddLayerWithLinetype(a[1], color, lt); return new { layer = a[1], color, linetype = d.LayerOf(a[1])?.Linetype };
+                    }
                     if (sub == "current") { if (d.LayerOf(a[1]) == null) Ed().AddLayer(a[1]); e.CurrentLayer = a[1]; return new { current = a[1] }; }
+                    if (sub == "set" && a.Count > 2 && (Core.Edit.StdLinetypes.All.ContainsKey(a[2]) || a[2].Equals("continuous", StringComparison.OrdinalIgnoreCase))) { var cl = Ed().SetLayerState(a[1], linetype: Ed().EnsureLinetype(a[2])) ?? throw new ArgumentException("unknown layer " + a[1]); return new { layer = a[1], linetype = d.LayerOf(a[1])?.Linetype }; }
                     if (sub == "set") { string st = a[2].ToLowerInvariant(); var c = Ed().SetLayerState(a[1], off: st == "off" ? true : st == "on" ? false : null, frozen: st == "frozen" ? true : st == "thawed" ? false : null, locked: st == "locked" ? true : st == "unlocked" ? false : null, color: int.TryParse(st, out var ci) ? ci : null) ?? throw new ArgumentException("unknown layer " + a[1]); return new { layer = a[1], state = st }; }
-                    throw new ArgumentException("layer new NAME [COLOR] | layer current NAME | layer set NAME on|off|frozen|thawed|locked|unlocked|COLOR");
+                    throw new ArgumentException("layer new NAME [COLOR] [LINETYPE] | layer current NAME | layer set NAME on|off|frozen|thawed|locked|unlocked|COLOR|LINETYPE");
                 }
             case "l": { if (a.Count < 2) throw new ArgumentException("l X0,Y0 X1,Y1 [X2,Y2 …]"); int n = 0; for (int i = 0; i + 1 < a.Count; i++) { var p = Pt(a[i]); var q = Pt(a[i + 1]); Ed().AddLine(p.x, p.y, q.x, q.y, e.CurrentLayer); n++; } return new { lines = n }; }
             case "pl": { bool closed = a.Count > 0 && a[0].Equals("c", StringComparison.OrdinalIgnoreCase); var pts = a.Where(x => x.Contains(',')).Select(Pt).Select(p => (p.x, p.y)).ToList(); if (pts.Count < 2) throw new ArgumentException("pl [c] X,Y X,Y …"); Ed().AddPolyline(pts, closed, e.CurrentLayer); return new { vertices = pts.Count, closed }; }
@@ -119,7 +126,59 @@ public static class ScriptRunner
             case "po": { var p = Pt(a[0]); Ed().AddPoint(p.x, p.y, e.CurrentLayer); return new { point = a[0] }; }
             case "dt": { var p = Pt(a[0]); double h = D(a[1]); string text = string.Join(" ", a.Skip(2)); if (text.Length == 0) throw new ArgumentException("dt X,Y HEIGHT TEXT"); Ed().AddText(p.x, p.y, h, 0, text, e.CurrentLayer); return new { handle = e.Doc!.Entities[^1].Handle, text }; }
             case "mt": { var p = Pt(a[0]); double w = D(a[1]), h = D(a[2]); string text = string.Join(" ", a.Skip(3)); if (text.Length == 0) throw new ArgumentException("mt X,Y WIDTH HEIGHT TEXT (\\P = new line)"); Ed().AddMText(p.x, p.y, h, w, text, e.CurrentLayer); return new { handle = e.Doc!.Entities[^1].Handle, text }; }
-            case "dli": { var p0 = Pt(a[0]); var p1 = Pt(a[1]); var pl = Pt(a[2]); double ang = a.Count > 3 ? D(a[3]) : (Math.Abs(pl.y - (p0.y + p1.y) / 2) >= Math.Abs(pl.x - (p0.x + p1.x) / 2) ? 0 : 90); var c = Ed().AddLinearDimension(new V3(p0.x, p0.y), new V3(p1.x, p1.y), new V3(pl.x, pl.y), ang, e.CurrentLayer); var dim = e.Doc!.Entities.OfType<Dimension>().Last(); return new { measurement = dim.Measurement, angle = ang }; }
+            case "dli":
+                {
+                    string? txt = TakeText(a); if (a.Count < 3) throw new ArgumentException("dli X0,Y0 X1,Y1 DX,DY [ANGLE] [--text STRING]");
+                    var p0 = Pt(a[0]); var p1 = Pt(a[1]); var pl = Pt(a[2]); double ang = a.Count > 3 ? D(a[3]) : (Math.Abs(pl.y - (p0.y + p1.y) / 2) >= Math.Abs(pl.x - (p0.x + p1.x) / 2) ? 0 : 90);
+                    Ed().AddLinearDimension(new V3(p0.x, p0.y), new V3(p1.x, p1.y), new V3(pl.x, pl.y), ang, e.CurrentLayer, txt); var dim = e.Doc!.Entities.OfType<Dimension>().Last();
+                    return new { measurement = dim.Measurement, angle = ang, text = DimShown(e.Doc!, dim) };
+                }
+            case "ddi":
+            case "dra":
+                {
+                    string? txt = TakeText(a); if (a.Count < 2) throw new ArgumentException(cmd + " CX,CY R [ANGLE] [--text STRING] — " + (cmd == "ddi" ? "diameter" : "radius") + " dimension of a circle / arc, the dimension line at ANGLE (default 45)");
+                    var c0 = Pt(a[0]); double r = D(a[1]); double ang = a.Count > 2 ? D(a[2]) : 45;
+                    Ed().AddRadialDimension(c0.x, c0.y, r, ang, cmd == "ddi", e.CurrentLayer, txt); var dim = e.Doc!.Entities.OfType<Dimension>().Last();
+                    return new { measurement = dim.Measurement, angle = ang, text = DimShown(e.Doc!, dim) };
+                }
+            case "lt": { if (a.Count < 1) throw new ArgumentException("lt LINETYPE|bylayer — linetype of the selection"); var c = Ed().SetLinetype(Sel(), a[0]); return new { changed = c.Replaced.Count, linetype = a[0].ToUpperInvariant() }; }
+            case "ltscale": { double v = D(a[0]); if (!(v > 0)) throw new ArgumentException("ltscale N (N > 0)"); Doc().Header["$LTSCALE"] = v.ToString("R", CultureInfo.InvariantCulture); Doc().Dirty = true; return new { ltscale = v }; }
+            case "hatch":
+                {
+                    const string usage = "hatch PATTERN [SCALE] [ANGLE] X,Y X,Y X,Y … [/ X,Y … | / c CX,CY R] — or: hatch PATTERN [SCALE] [ANGLE] sel (closed polylines / circles of the selection). Patterns: SOLID, ANSI31, ANSI32, ANSI37, LINE, NET, DASH";
+                    if (a.Count < 2) throw new ArgumentException(usage);
+                    string pat = a[0]; int k = 1; double scale = 1, ang = 0; var nums = new List<double>();
+                    while (k < a.Count && !a[k].Contains(',') && double.TryParse(a[k], NumberStyles.Float, CultureInfo.InvariantCulture, out var nv)) { nums.Add(nv); k++; }
+                    if (nums.Count > 0) scale = nums[0]; if (nums.Count > 1) ang = nums[1];
+                    var loops = new List<List<PVertex>>();
+                    if (k < a.Count && a[k].Equals("sel", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var withArea = new List<(double area, List<PVertex> loop)>();
+                        foreach (var h0 in Sel())
+                        {
+                            var en = Doc().Find(h0);
+                            if (en is Circle ci) withArea.Add((Math.PI * ci.Radius * ci.Radius, Core.Edit.Editor.CircleLoop(ci.Center.X, ci.Center.Y, ci.Radius)));
+                            else if (en is LwPolyline lp && lp.Closed && lp.Vertices.Count >= 2) { var b = Core.Geometry.Bounds.Of(lp, Doc(), 0); withArea.Add((b == null ? 0 : (b.Value.x1 - b.Value.x0) * (b.Value.y1 - b.Value.y0), new List<PVertex>(lp.Vertices))); }
+                        }
+                        if (withArea.Count == 0) throw new ArgumentException("hatch … sel: the selection holds no closed polyline or circle");
+                        loops.AddRange(withArea.OrderByDescending(x => x.area).Select(x => x.loop));   // the largest is the outer boundary
+                    }
+                    else
+                    {
+                        var cur = new List<PVertex>();
+                        void Flush() { if (cur.Count > 0) { if (cur.Count < 3 && cur.All(v => v.Bulge == 0)) throw new ArgumentException("hatch: a polygon loop needs at least 3 points"); loops.Add(cur); cur = new List<PVertex>(); } }
+                        for (; k < a.Count; k++)
+                        {
+                            if (a[k] == "/") { Flush(); continue; }
+                            if (a[k].Equals("c", StringComparison.OrdinalIgnoreCase)) { Flush(); if (k + 2 >= a.Count) throw new ArgumentException(usage); var cc = Pt(a[k + 1]); loops.Add(Core.Edit.Editor.CircleLoop(cc.x, cc.y, D(a[k + 2]))); k += 2; continue; }
+                            var q = Pt(a[k]); cur.Add(new PVertex { X = q.x, Y = q.y });
+                        }
+                        Flush();
+                    }
+                    if (loops.Count == 0) throw new ArgumentException(usage);
+                    Ed().AddHatch(pat, scale, ang, loops, e.CurrentLayer); var hh = e.Doc!.Entities.OfType<Hatch>().Last();
+                    return new { pattern = hh.Pattern, solid = hh.Solid, loops = hh.Loops.Count, scale, angle = ang, lines = Core.Edit.HatchPattern.Lines(hh).Count / 4 };
+                }
             case "m": { var d = Pt(a[0]); Ed().Move(Sel(), d.x, d.y); return new { moved = sel.Count }; }
             case "co": { var d = Pt(a[0]); var c = Ed().Copy(Sel(), d.x, d.y); return new { copied = c.Added.Count }; }
             case "e": { int n = Sel().Count; Ed().Delete(sel); sel.Clear(); return new { erased = n }; }
@@ -172,6 +231,10 @@ public static class ScriptRunner
         foreach (var c in s) { if (c == '"') { q = !q; continue; } if (char.IsWhiteSpace(c) && !q) { if (sb.Length > 0) { list.Add(sb.ToString()); sb.Clear(); } } else sb.Append(c); }
         if (sb.Length > 0) list.Add(sb.ToString()); return list;
     }
+    /// <summary>Remove a trailing "--text STRING…" from the arguments and return the string.</summary>
+    static string? TakeText(List<string> a) { int i = a.FindIndex(x => x.Equals("--text", StringComparison.OrdinalIgnoreCase)); if (i < 0) return null; string t = string.Join(" ", a.Skip(i + 1)); a.RemoveRange(i, a.Count - i); return t == "" ? null : t; }
+    /// <summary>The text a dimension shows (the TEXT inside its block).</summary>
+    static string DimShown(Document d, Dimension dim) => d.Blocks.TryGetValue(dim.Block, out var b) ? b.Entities.OfType<Text>().FirstOrDefault()?.Value ?? "" : "";
     static (double x, double y) Pt(string s) { var p = s.Split(','); if (p.Length < 2) throw new ArgumentException("point expected as X,Y: " + s); return (D(p[0]), D(p[1])); }
     static double D(string s) => double.Parse(s, NumberStyles.Float, CultureInfo.InvariantCulture);
     static IEnumerable<string> SelectRect(Document d, (double x, double y) p0, (double x, double y) p1, bool crossing)

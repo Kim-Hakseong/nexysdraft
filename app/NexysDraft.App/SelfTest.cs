@@ -198,6 +198,7 @@ public static class SelfTest
         await RightClickAsync(w);
         await ShapesAsync(w);
         await DraftAidsAsync(w);
+        await DraftingAsync(w);
         await LangPanelsAsync(w);
         await HostKeysAsync(w);
         await CanvasThemeAsync(w);
@@ -414,6 +415,36 @@ public static class SelfTest
         await JS(w, "await nx.test.key('0', { ctrl: true }); await nx.test.settle(120); return true;");
         await SetLang(w, "ko"); await JS(w, "await nx.test.cmd('tr'); await nx.test.settle(80); return true;"); await Shot(w, "15_korean_ui"); await JS(w, "await nx.test.key('Escape'); return true;");
         await SetLang(w, "en");
+    }
+
+    // ================================================================== draft5h: linetypes drawn as dashes, pattern hatches, diameter / radius dimensions — on the screen
+    static async Task DraftingAsync(MainWindow w)
+    {
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); nx.test.closeModal(); return true;");
+        var d = e.Doc!; var ed = e.Editor!;
+        ed.AddLayerWithLinetype("CEN", 1, "CENTER2"); ed.AddLayerWithLinetype("HID", 6, "HIDDEN2"); ed.AddLayer("DIM", 4); ed.AddLayer("HAT", 8);
+        ed.AddPolyline(Core.Edit.Shapes.Rectangle(0, 0, 120, 60), true, "0"); string hc = ed.AddCircle(40, 30, 15, "0").Added[0].e.Handle; ed.AddCircle(90, 30, 6, "0");
+        string hl = ed.AddLine(-10, 30, 130, 30, "CEN").Added[0].e.Handle; string hh = ed.AddLine(0, 45, 120, 45, "HID").Added[0].e.Handle; string hs = ed.AddLine(0, 15, 120, 15, "0").Added[0].e.Handle;
+        var sq = new List<Core.Model.PVertex> { new() { X = 0, Y = 0 }, new() { X = 120, Y = 0 }, new() { X = 120, Y = 60 }, new() { X = 0, Y = 60 } };
+        string hat = ed.AddHatch("ANSI31", 1, 0, new[] { sq, Core.Edit.Editor.CircleLoop(40, 30, 15), Core.Edit.Editor.CircleLoop(90, 30, 6) }, "HAT").Added[0].e.Handle;
+        ed.AddRadialDimension(40, 30, 15, 30, true, "DIM"); ed.AddRadialDimension(90, 30, 6, 60, false, "DIM");
+        ed.AddLinearDimension(new Core.Model.V3(120, 0), new Core.Model.V3(120, 60), new Core.Model.V3(135, 30), 90, "DIM", "Ø<>");
+        e.Touch(); await Task.Delay(300);
+        var r = await JS(w, $"await nx.test.settle(200); await nx.test.zoomExtents(); const doc = nx.test.doc(); const g = h => doc.geomOf(h); const n = h => {{ const p = g(h).parts[0]; return {{ segs: p.segs.length / 4, draw: p.draw ? p.draw.length / 4 : 0 }}; }}; return {{ centre: n('{hl}'), hidden: n('{hh}'), solid: n('{hs}'), circle: n('{hc}'), hatch: g('{hat}').parts.reduce((a, p) => a + p.segs.length / 4, 0), types: Array.from(doc.ltypes.keys()), hitGap: nx.test.hitAt(1.2, 45), texts: nx.test.texts().map(t => t.text) }};");
+        int engineLines = Core.Edit.HatchPattern.Lines((Core.Model.Hatch)d.Find(hat)!).Count / 4;
+        int cDraw = r.GetProperty("centre").GetProperty("draw").GetInt32(), hDraw = r.GetProperty("hidden").GetProperty("draw").GetInt32(), sDraw = r.GetProperty("solid").GetProperty("draw").GetInt32();
+        // CENTER2 at LTSCALE 1 over 140 units: period 28.575 → 5 long + 5 short dashes (±1); HIDDEN2 over 120: period 4.7625 → 25 or 26 dashes; a continuous line has none
+        bool okLt = cDraw >= 9 && cDraw <= 11 && hDraw >= 25 && hDraw <= 26 && sDraw == 0 && r.GetProperty("centre").GetProperty("segs").GetInt32() == 1 && r.GetProperty("hitGap").GetString() == hh;
+        GB("draft_linetype_dashes_on_screen", okLt, $"CENTER2 line drawn as {cDraw} dashes (9…11), HIDDEN2 as {hDraw} (25…26), continuous {sDraw}; geometry stays 1 segment; a click in a gap of the hidden line still picks it ({r.GetProperty("hitGap").GetString()} = {hh}); page linetypes {string.Join(",", r.GetProperty("types").EnumerateArray().Select(x => x.GetString()))}");
+        int pageLines = r.GetProperty("hatch").GetInt32();
+        GB("draft_hatch_pattern_on_screen", pageLines == engineLines && engineLines > 40, $"ANSI31 with two islands: {pageLines} pattern lines on the page = {engineLines} from the engine");
+        var tx = r.GetProperty("texts").EnumerateArray().Select(x => x.GetString()).ToList();
+        GB("draft_diameter_radius_dims", tx.Contains("Ø30") && tx.Contains("R6") && tx.Contains("Ø60"), "dimension texts on the page: " + string.Join(" · ", tx));
+        // LTSCALE 0.5 doubles the dashes
+        d.Header["$LTSCALE"] = "0.5"; e.Touch(); await Task.Delay(250);
+        var r2 = await JS(w, $"await nx.test.settle(200); const p = nx.test.doc().geomOf('{hl}').parts[0]; return p.draw ? p.draw.length / 4 : 0;");
+        GB("draft_ltscale", r2.GetInt32() >= 2 * cDraw - 2 && r2.GetInt32() <= 2 * cDraw + 2, $"LTSCALE 1 → 0.5: {cDraw} → {r2.GetInt32()} dashes");
+        await Shot(w, "16_linetypes_hatch_dims");
     }
 
     static async Task RightClickAsync(MainWindow w)

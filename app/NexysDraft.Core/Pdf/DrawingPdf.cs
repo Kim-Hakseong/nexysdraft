@@ -203,6 +203,7 @@ public static class DrawingPdf
             int texts = 0; int col = ColorOf(e, bctx); int rgb = PrintColor(col);
             _p.Stroke(rgb); _p.LineWidth(LineWidthPt(e) * (depth == 0 ? 1 : 1));
             double k = t.ScaleFactor;
+            _p.Dash(e is Line or Circle or Arc or Ellipse or LwPolyline or Polyline or Spline ? DashOf(e, bctx, k) : null);
             switch (e)
             {
                 case Line l: { var a = P(l.P0, t); var b = P(l.P1, t); _p.Line(a.x, a.y, b.x, b.y); break; }
@@ -217,7 +218,13 @@ public static class DrawingPdf
                 case Hatch h:
                     {
                         var loops = h.Loops.Select(l => Tess.HatchLoop(l)).Where(l => l.Count >= 6).Select(l => { var o = new double[l.Count]; for (int i = 0; i < l.Count; i += 2) { var q = t.Apply(new V3(l[i], l[i + 1])); o[i] = q.X * _k + _ox; o[i + 1] = q.Y * _k + _oy; } return o; }).ToList();
-                        if (h.Solid) { _p.Fill(rgb); _p.FillPolygons(loops); } else foreach (var lp in loops) _p.Polyline(lp, true);
+                        if (h.Solid) { _p.Fill(rgb); _p.FillPolygons(loops); }
+                        else
+                        {
+                            var hl = Edit.HatchPattern.Lines(h);   // the pattern lines; a hatch without pattern data (or too dense) keeps its outline
+                            if (hl.Count == 0) foreach (var lp in loops) _p.Polyline(lp, true);
+                            else { _p.LineWidth(0.18); for (int i = 0; i + 3 < hl.Count; i += 4) { var a = P(new V3(hl[i], hl[i + 1]), t); var b = P(new V3(hl[i + 2], hl[i + 3]), t); _p.Line(a.x, a.y, b.x, b.y); } }
+                        }
                         break;
                     }
                 case Text tx: { if (tx.IsAttdef && (tx.AttribFlags & 1) != 0) break; DrawText(tx, t, rgb); texts++; break; }
@@ -246,6 +253,17 @@ public static class DrawingPdf
                     }
             }
             return texts;
+        }
+        /// <summary>The entity's linetype as a PDF dash array (points), or null for a continuous line. BYLAYER takes the layer's linetype (the insert's layer for layer 0 inside a block).</summary>
+        double[]? DashOf(Entity e, (int col, string layer)? ctx, double k)
+        {
+            string name = e.Linetype;
+            if (name.Equals("BYLAYER", StringComparison.OrdinalIgnoreCase)) { string ln = ctx != null && e.Layer == "0" ? ctx.Value.layer : e.Layer; name = _doc.LayerOf(ln)?.Linetype ?? "Continuous"; }
+            if (Edit.StdLinetypes.IsContinuous(name)) return null;
+            var lt = _doc.Linetypes.FirstOrDefault(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase)); if (lt == null || lt.Pattern.Count < 2) return null;
+            double s = _doc.HeaderDouble("$LTSCALE", 1) * (e.LtScale > 0 ? e.LtScale : 1) * k * _k; if (!(s > 0)) return null;
+            var arr = lt.Pattern.Select(v => Math.Max(0.35, Math.Abs(v) * s)).ToArray(); if (arr.Length % 2 == 1) arr = arr.Concat(arr).ToArray();
+            return arr.Sum() < 1.2 ? null : arr;   // a pattern shorter than 1.2 pt would print as grey: keep it solid
         }
         static Xform Compose(Xform a, Xform b) => new(a.A * b.A + a.B * b.C, a.A * b.B + a.B * b.D, a.C * b.A + a.D * b.C, a.C * b.B + a.D * b.D, a.A * b.E + a.B * b.F + a.E, a.C * b.E + a.D * b.F + a.F);
         static List<double> PolyPts(List<PVertex> vs, bool closed)

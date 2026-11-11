@@ -20,6 +20,7 @@ public static class PageDoc
             ["layers"] = doc.Layers.Select(l => new { name = l.Name, color = l.Color, tc = l.TrueColor, off = l.Off, frozen = l.Frozen, locked = l.Locked, lt = l.Linetype, lw = l.Lineweight }).ToList(),
             ["styles"] = doc.Styles.Select(s => new { name = s.Name, font = s.Font, ttf = s.TrueTypeFamily, big = s.BigFont, wf = s.WidthFactor }).ToList(),
             ["ltypes"] = doc.Linetypes.Select(l => new { name = l.Name, pattern = l.Pattern }).ToList(),
+            ["ltscale"] = doc.HeaderDouble("$LTSCALE", 1),
             ["blocks"] = doc.Blocks.Where(kv => !kv.Value.IsLayout).ToDictionary(kv => kv.Key, kv => (object)new { name = kv.Value.Name, bx = kv.Value.Base.X, by = kv.Value.Base.Y, ents = kv.Value.Entities.Select(e => Record(e, doc, fontOf)).Where(r => r != null).ToList() }),
             ["ents"] = doc.Entities.Where(e => !e.PaperSpace).Select(e => Record(e, doc, fontOf)).Where(r => r != null).ToList(),
             ["counts"] = doc.TypeCounts,
@@ -32,7 +33,7 @@ public static class PageDoc
     public static Dictionary<string, object?>? Record(Entity e, Document doc, Dictionary<string, (string font, bool shx)> fontOf)
     {
         var r = new Dictionary<string, object?> { ["h"] = e.Handle, ["l"] = e.Layer, ["c"] = e.Color };
-        if (e.TrueColor != null) r["tc"] = e.TrueColor; if (!e.Linetype.Equals("BYLAYER", StringComparison.OrdinalIgnoreCase)) r["lt"] = e.Linetype; if (e.Invisible) r["inv"] = 1; if (e.Lineweight > 0) r["lw"] = e.Lineweight;
+        if (e.TrueColor != null) r["tc"] = e.TrueColor; if (!e.Linetype.Equals("BYLAYER", StringComparison.OrdinalIgnoreCase)) r["lt"] = e.Linetype; if (e.Invisible) r["inv"] = 1; if (e.Lineweight > 0) r["lw"] = e.Lineweight; if (e.LtScale > 0 && e.LtScale != 1) r["lts"] = e.LtScale;
         switch (e)
         {
             case Line l: r["t"] = "L"; r["p"] = new[] { l.P0.X, l.P0.Y, l.P1.X, l.P1.Y }; break;
@@ -66,6 +67,7 @@ public static class PageDoc
                 {
                     r["t"] = "H"; r["solid"] = h.Solid ? 1 : 0; r["pat"] = h.Pattern; r["ang"] = h.PatternAngle; r["sc"] = h.PatternScale;
                     r["loops"] = h.Loops.Select(l => Tess.HatchLoop(l).ToArray()).Where(a => a.Length >= 6).ToList();
+                    if (!h.Solid) { var hl = Edit.HatchPattern.Lines(h); if (hl.Count > 0) r["hl"] = hl; }
                     break;
                 }
             case Dimension d:

@@ -37,13 +37,13 @@ export class Renderer {
     if (!doc) { this.nVerts = 0; this.builtVer = -1; return; }
     const b = doc.bbox; this.origin = b ? [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] : [0, 0];
     let total = 0; const geoms: Geom[] = [];
-    for (const h of doc.order) { const e = doc.ents.get(h)!; if (!doc.visible(e)) continue; const g = doc.geomOf(h); if (!g) continue; geoms.push(g); for (const p of g.parts) total += p.segs.length / 2; }
+    for (const h of doc.order) { const e = doc.ents.get(h)!; if (!doc.visible(e)) continue; const g = doc.geomOf(h); if (!g) continue; geoms.push(g); for (const p of g.parts) total += (p.draw ?? p.segs).length / 2; }
     const pos = new Float32Array(total * 2); const col = new Uint8Array(total * 3); let vi = 0;
     const ox = this.origin[0], oy = this.origin[1];
     for (const g of geoms) {
       for (const p of g.parts) {
-        const c = aciRgb(p.col, this.dark); const r = c >> 16, gg = (c >> 8) & 255, bb = c & 255; const n = p.segs.length / 2;
-        for (let i = 0; i < n; i++) { pos[(vi + i) * 2] = p.segs[i * 2] - ox; pos[(vi + i) * 2 + 1] = p.segs[i * 2 + 1] - oy; col[(vi + i) * 3] = r; col[(vi + i) * 3 + 1] = gg; col[(vi + i) * 3 + 2] = bb; }
+        const c = aciRgb(p.col, this.dark); const r = c >> 16, gg = (c >> 8) & 255, bb = c & 255; const sg = p.draw ?? p.segs; const n = sg.length / 2;
+        for (let i = 0; i < n; i++) { pos[(vi + i) * 2] = sg[i * 2] - ox; pos[(vi + i) * 2 + 1] = sg[i * 2 + 1] - oy; col[(vi + i) * 3] = r; col[(vi + i) * 3 + 1] = gg; col[(vi + i) * 3 + 2] = bb; }
         vi += n;
       }
       for (const t of g.texts) this.texts.push(t);
@@ -80,7 +80,7 @@ export class Renderer {
   /** Fallback when WebGL is unavailable: Canvas2D lines (slower). */
   private drawLinesCanvas(ctx: CanvasRenderingContext2D, v: View) {
     const doc = this.doc; if (!doc) return;
-    for (const h of doc.order) { const e = doc.ents.get(h)!; if (!doc.visible(e)) continue; const g = doc.geomOf(h); if (!g) continue; for (const p of g.parts) { ctx.strokeStyle = rgbCss(aciRgb(p.col, this.dark)); ctx.beginPath(); for (let i = 0; i + 3 < p.segs.length; i += 4) { const a = w2s(v, p.segs[i], p.segs[i + 1]), b = w2s(v, p.segs[i + 2], p.segs[i + 3]); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); } ctx.stroke(); } }
+    for (const h of doc.order) { const e = doc.ents.get(h)!; if (!doc.visible(e)) continue; const g = doc.geomOf(h); if (!g) continue; for (const p of g.parts) { ctx.strokeStyle = rgbCss(aciRgb(p.col, this.dark)); ctx.beginPath(); const sg = p.draw ?? p.segs; for (let i = 0; i + 3 < sg.length; i += 4) { const a = w2s(v, sg[i], sg[i + 1]), b = w2s(v, sg[i + 2], sg[i + 3]); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); } ctx.stroke(); } }
   }
   private drawFills(ctx: CanvasRenderingContext2D, v: View) {
     const [wx0, wy0] = s2w(v, 0, v.h), [wx1, wy1] = s2w(v, v.w, 0);
