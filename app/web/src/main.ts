@@ -54,13 +54,13 @@ function renderHeader() {
   if (!S) return; const app = S.app ?? {}; const f = S.file;
   const tool = (a: string, icon: string, label: string, title: string, disabled = false) => `<button type="button" class="tool" data-a="${a}" aria-label="${label}" title="${title}"${disabled ? ' disabled' : ''}>${icon}<span>${label}</span></button>`;
   H(hdr).innerHTML = `<div class="hdr-brand"><div class="hdr-logo" data-a="about" title="About NexysDraft (F1)"><img src="brand/Logo.png" alt="Nexys"></div><div class="hdr-name"><b>NexysDraft</b><small>${esc((app.versionText || '').toUpperCase())}${app.libredwg ? ' · LIBREDWG ' + app.libredwg : ''}</small></div></div>
-    <div class="hdr-tools">${tool('open', I.folder(), L('OPEN', '열기'), L('Open DWG / DXF (Ctrl+O)', 'DWG / DXF 열기 (Ctrl+O)'))}${tool('save', I.save(), L('SAVE', '저장'), L('Save (Ctrl+S)', '저장 (Ctrl+S)'), !f)}${tool('savedwg', I.save(), 'DWG', L('Save as DWG R2000 via LibreDWG (Ctrl+Shift+S)', 'DWG R2000으로 저장, LibreDWG (Ctrl+Shift+S)'), !f)}${tool('pdf', I.pdf(), 'PDF', L('Export searchable PDF: merged + per sheet + overview (Ctrl+P)', '검색 가능한 PDF 내보내기: 합본 + 시트별 + 개요 (Ctrl+P)'), !f)}<div class="vsep"></div>${tool('undo', I.undo(), L('UNDO', '실행 취소'), (S.undo?.can ? `${L('Undo', '실행 취소')} ${S.undo.name}` : L('Undo', '실행 취소')) + ' (Ctrl+Z)', !S.undo?.can)}${tool('redo', I.redo(), L('REDO', '다시 실행'), (S.undo?.canRedo ? `${L('Redo', '다시 실행')} ${S.undo.redoName}` : L('Redo', '다시 실행')) + ' (Ctrl+Y)', !S.undo?.canRedo)}<div class="vsep"></div>${tool('theme', S.theme === 'dark' ? I.sun() : I.theme(), L('THEME', '테마'), L('Light / dark (Ctrl+T)', '밝게 / 어둡게 (Ctrl+T)'))}${tool('lang', I.globe(), lang() === 'ko' ? '한국어' : 'ENGLISH', '언어 / Language: 한국어 ↔ English (LANG KO · LANG EN)')}</div>
+    <div class="hdr-tools">${tool('new', I.file(15), L('NEW', '새 도면'), L('New drawing (Ctrl+N)', '새 도면 (Ctrl+N)'))}${tool('open', I.folder(), L('OPEN', '열기'), L('Open DWG / DXF (Ctrl+O)', 'DWG / DXF 열기 (Ctrl+O)'))}${tool('save', I.save(), L('SAVE', '저장'), L('Save (Ctrl+S)', '저장 (Ctrl+S)'), !f)}${tool('savedwg', I.save(), 'DWG', L('Save as DWG R2000 via LibreDWG (Ctrl+Shift+S)', 'DWG R2000으로 저장, LibreDWG (Ctrl+Shift+S)'), !f)}${tool('pdf', I.pdf(), 'PDF', L('Export searchable PDF: merged + per sheet + overview (Ctrl+P)', '검색 가능한 PDF 내보내기: 합본 + 시트별 + 개요 (Ctrl+P)'), !f)}<div class="vsep"></div>${tool('undo', I.undo(), L('UNDO', '실행 취소'), (S.undo?.can ? `${L('Undo', '실행 취소')} ${S.undo.name}` : L('Undo', '실행 취소')) + ' (Ctrl+Z)', !S.undo?.can)}${tool('redo', I.redo(), L('REDO', '다시 실행'), (S.undo?.canRedo ? `${L('Redo', '다시 실행')} ${S.undo.redoName}` : L('Redo', '다시 실행')) + ' (Ctrl+Y)', !S.undo?.canRedo)}<div class="vsep"></div>${tool('theme', S.theme === 'dark' ? I.sun() : I.theme(), L('THEME', '테마'), L('Light / dark (Ctrl+T)', '밝게 / 어둡게 (Ctrl+T)'))}${tool('lang', I.globe(), lang() === 'ko' ? '한국어' : 'ENGLISH', '언어 / Language: 한국어 ↔ English (LANG KO · LANG EN)')}</div>
     <button type="button" class="tool icon" data-a="help" aria-label="HELP" title="${L('Keys · how to use (F1)', '단축키 · 사용법 (F1)')}">${I.help()}</button>
     <div class="led-pill"><span class="led ${S.status?.led ?? 'idle'}"></span><span class="led-text">${(S.status?.led ?? 'idle').toUpperCase()}</span></div>`;
 }
 hdr.addEventListener('click', e => {
   const a = ((e.target as HTMLElement).closest('[data-a]') as HTMLElement | null)?.dataset.a; if (!a) return;
-  if (a === 'open') bridge.call('openDialog'); else if (a === 'save') bridge.call('save'); else if (a === 'savedwg') showLossThenSave(); else if (a === 'pdf') bridge.call('exportPdfDialog');
+  if (a === 'open') bridge.call('openDialog'); else if (a === 'new') bridge.call('newDrawing'); else if (a === 'save') bridge.call('save'); else if (a === 'savedwg') showLossThenSave(); else if (a === 'pdf') bridge.call('exportPdfDialog');
   else if (a === 'undo') bridge.call('undo'); else if (a === 'redo') bridge.call('redo'); else if (a === 'theme') bridge.call('setTheme', { theme: S?.theme === 'dark' ? 'light' : 'dark' });
   else if (a === 'lang') setLang(lang() === 'ko' ? 'en' : 'ko');
   else if (a === 'help' || a === 'about') showHelp();
@@ -113,7 +113,7 @@ view.onCommand = (name, arg) => {
     case 'panels': case 'panel': { const a = (arg ?? '').trim().toLowerCase(); togglePanel(a.startsWith('l') ? 'left' : a.startsWith('r') ? 'right' : 'both'); cmd.add(`PANELS — left ${panels.left ? 'on' : 'off'}, right ${panels.right ? 'on' : 'off'}`); return true; }
     case 'open': bridge.call('openDialog'); return true; case 'save': bridge.call('save'); return true; case 'saveas': showLossThenSave(false); return true; case 'exportdwg': showLossThenSave(); return true; case 'pdf': bridge.call('exportPdfDialog'); return true;
     case 'layer': layers.input.focus(); cmd.add(xl('LAYER — rail focused (type a name + Enter = new layer)')); return true;
-    case 'new': bridge.call('new'); return true;
+    case 'new': bridge.call('newDrawing'); return true;
   }
   return false;
 };
@@ -131,6 +131,7 @@ cmd.onEscape = () => { view.cancel(); renderToolbar(); view.wrap.focus(); };
 document.addEventListener('keydown', e => {
   const t = e.target as HTMLElement; const typing = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
   if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'o') { e.preventDefault(); bridge.call('openDialog'); return; }
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); bridge.call('newDrawing'); return; }
   if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); bridge.call('save'); return; }
   if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); showLossThenSave(); return; }
   if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); bridge.call('undo'); return; }
@@ -175,6 +176,8 @@ function showHelp() {
     <p><b>보기</b> 휠 = 커서 기준 줌, 휠 드래그/Alt+드래그 = 팬, <b>휠 더블클릭</b> = 전체 보기(Z E), Z P = 이전 보기. 툴바 배경 버튼 = 도면 배경(AUTO/LIGHT/DARK). <b>패널 숨기기</b>: 툴바 양 끝 버튼 또는 Ctrl+2(왼쪽) · Ctrl+1(오른쪽) · Ctrl+0(양쪽).</p>
     <p><b>선택</b> 클릭 · 빈 곳을 클릭하고 마우스를 옮긴 뒤 다시 클릭(또는 드래그): <b>오른쪽으로 = 파란 실선 창</b>(완전히 안에 든 것만), <b>왼쪽으로 = 초록 점선 교차</b>(조금이라도 걸친 것 전부) · Shift = 추가/제거 · Ctrl+A 전체 · Del 삭제 · Esc 취소.</p>
     <p><b>명령줄</b> 글자를 치면 바로 명령줄로 · Enter/Space = 확정·마지막 명령 반복 · Esc = 취소 · 우클릭 짧게(&lt;250 ms) = 확정·반복, 길게 = 메뉴(RIGHTCLICK TIMED/ENTER/MENU) · <code>x,y</code> · <code>@dx,dy</code> · <code>@길이&lt;각도</code> · 숫자 = 직접 거리. L · PL · C · <b>REC</b> 사각형 · <b>A</b> 호(3점) · <b>EL</b> 타원 · <b>POL</b> 다각형 · <b>PO</b> 점 · <b>DT</b> 문자 · <b>T</b> 여러 줄 문자 · DLI · M · CO · RO · MI · O · S · <b>TR</b> 자르기 · <b>EX</b> 연장 · E · U · Z(A/E/W/P) · RE 재생성 · R 다시 그리기 · LA · PR · DI 거리 · ID 좌표.</p>
+    <p><b>새 도면</b> Ctrl+N · NEW (파일 없이 실행하면 새 도면으로 시작)</p>
+    <p><b>자르기/연장 모드</b> 빠른 모드(기본): 바로 클릭 · 끌기 · 빈 곳 두 번 클릭 = 울타리 · 안 만나는 객체는 지움 / 표준 모드: 기준 객체 선택 → Enter 후 클릭 · 옵션 O 모드 전환, T 기준, F 울타리, C 교차, R 지우기, U 취소</p>
     <p><b>자르기/연장</b> TR: 지울 부분을 클릭(다른 객체와 만나는 곳까지 잘림) · EX: 늘릴 끝 쪽을 클릭(가장 가까운 객체까지) · Shift+클릭 = 반대 동작 · 드래그 = 선에 걸친 것 한꺼번에 · T = 기준 객체 직접 지정.</p>
     <p><b>그리기 보조</b> <b>Shift</b> 누르는 동안 임시 직교 · F8 직교 · F10 극좌표 추적(90°, POLAR 45) · <b>F11 객체 스냅 추적</b>(스냅 점에 커서를 잠깐 올려 + 표시가 생기면 그 점의 수평·수직 점선을 따라감) · F3 객체 스냅(끝점 □ 중점 △ 중심 ○ 교차 × 사분점 ◇) · F7 그리드 · F9 그리드 스냅. 상태줄 알약으로도 전환. 전체 표: docs/keys.md. <b>문자</b> 더블클릭 = 편집.</p>
     <p><b>언어</b> 위쪽의 지구본 버튼 또는 명령 LANG KO / LANG EN.</p>

@@ -1,4 +1,4 @@
-# next — NexysDraft 다음 런 후보 (draft5i 종료 시점, 2026-11-11, v0.4.9)
+# next — NexysDraft 다음 런 후보 (draft5j 종료 시점, 2026-11-11, v0.4.10)
 
 ## 사용자 확인이 먼저
 - docs/report-draft5h.md §사용자 확인: 평소 도면의 점선·해치 모양, 예제 도면 수준과 표제란 양식.

@@ -110,6 +110,8 @@ public sealed class TrimResult
     /// <summary>The removed (TRIM) or added (EXTEND) part as a world polyline x,y,x,y… for the hover preview.</summary>
     public List<double> Preview = new();
     public string Reason = "";
+    /// <summary>Not trimmed because no cutting edge crosses the object (Quick mode erases such an object).</summary>
+    public bool Uncut;
     public bool Ok => Pieces.Count > 0;
 }
 
@@ -246,7 +248,7 @@ public sealed partial class Editor
         double tolU = 1e-9;
         if (closed) for (int i = 0; i < cuts.Count; i++) if (cuts[i] >= n - tolU) cuts[i] -= n;   // the seam of a closed curve is one point
         cuts.Sort(); var uniq = new List<double>(); foreach (var c in cuts) { if (!closed && (c < tolU || c > n - tolU)) continue; if (uniq.Count == 0 || c - uniq[^1] > tolU) uniq.Add(Math.Max(0, c)); }
-        if (uniq.Count == 0 || (closed && uniq.Count < 2)) { res.Reason = closed && uniq.Count == 1 ? "a closed object needs two cutting points" : "the object does not cross a cutting edge"; return res; }
+        if (uniq.Count == 0 || (closed && uniq.Count < 2)) { res.Reason = closed && uniq.Count == 1 ? "a closed object needs two cutting points" : "the object does not cross a cutting edge"; res.Uncut = uniq.Count == 0; return res; }
         double? lo = null, hi = null;
         foreach (var c in uniq) { if (c < up) lo = c; else if (c > up && hi == null) hi = c; }
         if (closed)
@@ -310,8 +312,9 @@ public sealed partial class Editor
     }
 
     /// <summary>TRIM / EXTEND at the pick points (one undo step). Each pick names an entity and a point on the part to remove (TRIM) or near the
-    /// end to lengthen (EXTEND). <paramref name="edges"/> null = every visible curve is a cutting edge.</summary>
-    public Change TrimExtend(IEnumerable<(string handle, V3 pick)> picks, ICollection<string>? edges, bool extend, List<string>? messages = null)
+    /// end to lengthen (EXTEND). <paramref name="edges"/> null = every visible curve is a cutting edge.
+    /// <paramref name="eraseUncut"/> (TRIM in Quick mode, AutoCAD 2021+): an object that no edge cuts is erased instead of reported.</summary>
+    public Change TrimExtend(IEnumerable<(string handle, V3 pick)> picks, ICollection<string>? edges, bool extend, List<string>? messages = null, bool eraseUncut = false)
     {
         var c = Begin(extend ? "Extend" : "Trim");
         var family = new Dictionary<string, List<string>>();   // picked handle → the pieces it was split into during this command
@@ -324,6 +327,14 @@ public sealed partial class Editor
             if (target == null) { messages?.Add("object not found"); continue; }
             var l = Doc.LayerOf(target.Layer); if (l != null && l.Locked) { messages?.Add("the object is on a locked layer"); continue; }
             var r = ComputeTrim(target, pick, edgeSet, extend);
+            if (!r.Ok && eraseUncut && !extend && r.Uncut)
+            {
+                int di = Doc.Entities.IndexOf(target); Doc.Entities.RemoveAt(di); fam.Remove(target.Handle);
+                int ai = c.Added.FindIndex(x => ReferenceEquals(x.e, target));
+                if (ai >= 0) c.Added.RemoveAt(ai);   // a piece made earlier in this command: it simply never existed
+                else { int ri = c.Replaced.FindIndex(x => ReferenceEquals(x.after, target)); if (ri >= 0) { var was = c.Replaced[ri]; c.Replaced.RemoveAt(ri); c.Removed.Add((was.index, was.before)); } else c.Removed.Add((di, target)); }
+                continue;
+            }
             if (!r.Ok) { messages?.Add(r.Reason); continue; }
             int idx = Doc.Entities.IndexOf(target);
             var first = r.Pieces[0]; first.Handle = target.Handle; Doc.Entities[idx] = first; Replace(c, idx, target, first);

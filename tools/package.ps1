@@ -1,8 +1,8 @@
 # Build the portable release zip: dist\release\NexysDraft-v<ver>-win64.zip
 #   NexysDraft.exe (self-contained single file) + wwwroot\ + tools\libredwg\ (dwg2dxf, dxf2dwg, libiconv, COPYING, SOURCE.txt, build script;
 #   dwgread.exe stays in the repository for development only — draft3 decision) + skills\*\SKILL.md + README.md (Korean, 1 page) + LICENSES.md
-# Usage (PowerShell, repository root):  powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 0.4.9
-param([string]$Version = "0.4.9", [switch]$RefreshDist)   # -RefreshDist: also replace app\dist (off by default — draft5: never touch a deployed copy unasked)
+# Usage (PowerShell, repository root):  powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 0.4.10
+param([string]$Version = "0.4.10", [switch]$RefreshDist)   # -RefreshDist: also replace app\dist (off by default — draft5: never touch a deployed copy unasked)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $env:DOTNET_ROOT = "$env:LOCALAPPDATA\Microsoft\dotnet"; $dotnet = "$env:DOTNET_ROOT\dotnet.exe"

@@ -39,7 +39,7 @@ public partial class MainWindow : Window
             }
             LayoutStore.Save(this);
         };
-        Engine.TitleChanged += () => Dispatcher.BeginInvoke(() => Title = $"{(Engine.Doc != null ? Path.GetFileName(Engine.Doc.Path) + (Engine.Doc.Dirty ? " *" : "") + " — " : "")}{AppInfo.Name} {AppInfo.VersionText}");
+        Engine.TitleChanged += () => Dispatcher.BeginInvoke(() => Title = $"{(Engine.Doc != null ? (Engine.Doc.Path == "" ? "untitled" : Path.GetFileName(Engine.Doc.Path)) + (Engine.Doc.Dirty ? " *" : "") + " — " : "")}{AppInfo.Name} {AppInfo.VersionText}");
     }
 
     async Task InitAsync()
@@ -97,6 +97,16 @@ public partial class MainWindow : Window
     {
         switch (cmd)
         {
+            case "newDrawing":
+                {
+                    if (Engine.Doc?.Dirty == true && !SelfTest.Enabled)
+                    {
+                        var r = MessageBox.Show(this, "저장하지 않은 변경이 있습니다. 저장할까요?", AppInfo.Name, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                        if (r == MessageBoxResult.Cancel) return false;
+                        if (r == MessageBoxResult.Yes && !await SaveWithDialog(false)) return false;
+                    }
+                    Engine.New(); return true;
+                }
             case "openDialog":
                 {
                     var dlg = new OpenFileDialog { Filter = OpenFilter };

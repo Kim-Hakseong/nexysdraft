@@ -69,6 +69,10 @@ export class CanvasView {
   otrackOn = true; trackPts: Pt[] = []; trk: TrackRes | null = null; private hoverSnap: { x: number; y: number } | null = null; private hoverTimer = 0;
   /** Selection box opened by a click on empty space (AutoCAD implied window): the next click closes it. */
   boxClick = false; private downS: Pt | null = null; private pressPicked = 0;
+  /** TRIM / EXTEND mode (AutoCAD TRIMEXTENDMODE): quick = every object is an edge, pick at once; standard = choose the edges first. */
+  trimMode: 'quick' | 'standard' = (() => { try { return localStorage.getItem('nx.trimmode') === 'standard' ? 'standard' : 'quick'; } catch { return 'quick'; } })() as 'quick' | 'standard';
+  /** Freehand fence of a TRIM / EXTEND drag (world points after the press point). */
+  fencePath: Pt[] = [];
   private previewSeq = 0; private previewKey = '';
   onModes: (() => void) | null = null; onFocusRail: ((which: 'layers' | 'props') => void) | null = null;
   viewStack: { cx: number; cy: number; scale: number }[] = []; lastWheelPush = 0; lastMiddleDown = 0; menuEl: HTMLElement | null = null;
@@ -127,7 +131,7 @@ export class CanvasView {
       // select tool / selection step: click pick or start box
       // An object under the cursor is taken at the press (AutoCAD): a fast click that slides before the release still picks it.
       this.pending.shift = e.shiftKey;
-      this.pressPicked = 0;
+      this.pressPicked = 0; this.fencePath = [];
       if (this.doc && this.doc.hit(p[0], p[1], this.pxTol())) {
         this.dragStart = null; this.dragMode = 'none'; this.pick(p, e.shiftKey);
         if (!this.canBox() || this.isTrim()) return;
@@ -140,6 +144,7 @@ export class CanvasView {
       if (this.dragMode === 'pan' && this.panStart) { this.view.cx = this.panStart.cx - (s[0] - this.panStart.x) / this.view.scale; this.view.cy = this.panStart.cy + (s[1] - this.panStart.y) / this.view.scale; this.invalidate(); return; }
       if (this.doc && this.snapOn && this.toolWantsPoint() && this.dragMode !== 'box') this.snapPt = this.doc.snap(p[0], p[1], this.pxTol(10), this.tool === 'move' || this.tool === 'copy' || this.tool === 'stretch' ? new Set(this.toolSel) : null); else this.snapPt = null;
       this.acquireWatch(); if (this.isTrim() && this.step === 0 && this.dragMode === 'none') this.trimHover(p, e.shiftKey);
+      if (this.isTrim() && this.step === 0 && this.dragMode === 'box' && !this.boxClick && this.dragStart) { const q = this.fencePath[this.fencePath.length - 1] ?? this.dragStart; if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= this.pxTol(3)) this.fencePath.push(p); }
       const ep = this.toolWantsPoint() ? this.effectivePoint(p, e.shiftKey) : p; const base = this.basePoint();
       this.coord.textContent = `${fmtNum(ep[0], 3)}, ${fmtNum(ep[1], 3)}` + (this.snapPt && this.snapOn && this.toolWantsPoint() ? `  ${snapName(this.snapPt.k)}` : '') + (base && this.toolWantsPoint() ? `  ${fmtNum(Math.hypot(ep[0] - base[0], ep[1] - base[1]), 3)} < ${fmtNum(Math.atan2(ep[1] - base[1], ep[0] - base[0]) * 180 / Math.PI, 2)}°` : '');
       this.invalidate();
@@ -251,7 +256,7 @@ export class CanvasView {
     if (!this.doc) return true; const id = this.doc.hit(p[0], p[1], this.pxTol());
     if (this.isTrim()) {
       if (this.step === 1) { if (id) { this.toolSel.includes(id) ? this.toolSel.splice(this.toolSel.indexOf(id), 1) : this.toolSel.push(id); this.say(`${this.toolSel.length} edge(s) — Enter to continue`); } this.invalidate(); return !!id; }
-      if (id) this.trimAt([[id, p]], add); return true;
+      if (id) this.trimAt([[id, p]], add); return !!id;   // a click on empty space starts a two-click fence (Quick) / crossing box (Standard)
     }
     if (this.tool !== 'select' && this.step === 0 && this.needsSelection()) { if (id) { this.toolSel.includes(id) ? this.toolSel.splice(this.toolSel.indexOf(id), 1) : this.toolSel.push(id); this.say(`${this.toolSel.length} selected — Enter to continue`); } this.invalidate(); return !!id; }
     if (this.tool === 'offset' && this.step === 1) { if (id) { this.pending.id = id; this.step = 2; this.prompt('Specify point on side to offset:'); } return true; }
@@ -261,7 +266,10 @@ export class CanvasView {
   }
   box(a: Pt, b: Pt, add: boolean) {
     if (!this.doc) return;
-    if (this.isTrim() && this.step === 0) { this.trimAt(this.fencePicks(a, b), add); return; }
+    if (this.isTrim() && this.step === 0) {
+      const path = this.fencePath.length ? [a, ...this.fencePath, b] : this.trimCrossing() ? [a, [b[0], a[1]] as Pt, b, [a[0], b[1]] as Pt, a] : [a, b]; this.fencePath = [];
+      this.trimAt(this.fencePathPicks(path), add); return;
+    }
     const crossing = b[0] < a[0]; const ids = this.doc.select(a[0], a[1], b[0], b[1], crossing);
     if (this.isTrim()) { for (const id of ids) if (!this.toolSel.includes(id)) this.toolSel.push(id); this.say(`${this.toolSel.length} edge(s) — Enter to continue`); this.invalidate(); return; }
     if (this.tool !== 'select' && this.step === 0 && this.needsSelection()) { for (const id of ids) if (!this.toolSel.includes(id)) this.toolSel.push(id); if (this.tool === 'stretch') this.pending.window = [a, b]; this.say(`${this.toolSel.length} selected — Enter to continue`); this.invalidate(); return; }
@@ -269,16 +277,29 @@ export class CanvasView {
     this.onSelectionChanged?.(); this.invalidate();
   }
   /** A click on empty space opens a window / crossing box here (object selection, cutting-edge selection). */
-  canBox() { return this.tool === 'select' || (this.needsSelection() && this.step === 0) || (this.isTrim() && this.step === 1); }
+  canBox() { return this.tool === 'select' || (this.needsSelection() && this.step === 0) || this.isTrim(); }
   endBox() { this.boxClick = false; this.dragStart = null; if (this.dragMode === 'box') this.dragMode = 'none'; this.invalidate(); }
 
   // ---------------------------------------------------------------- trim / extend
   isTrim() { return this.tool === 'trim' || this.tool === 'extend'; }
   /** TRIM removes, EXTEND lengthens; Shift swaps the two for one pick (AutoCAD). */
   private trimExtends(shift: boolean) { return (this.tool === 'extend') !== shift; }
-  private trimPrompt() { const ex = this.tool === 'extend'; return `${ex ? 'EXTEND' : 'TRIM'} — Select object to ${ex ? 'extend' : 'trim'} (Shift+click = ${ex ? 'trim' : 'extend'}, drag = fence, T = choose ${ex ? 'boundary' : 'cutting'} edges${this.pending.edges ? ` [${this.pending.edges.length} chosen]` : ''}, Enter = end):`; }
+  private trimPrompt() {
+    const ex = this.tool === 'extend'; const name = ex ? 'EXTEND' : 'TRIM';
+    if (this.pending.erase) return `${name} — Select objects to erase (click / fence), Enter = back:`;
+    return `${name} [${this.trimMode === 'quick' ? 'Quick' : 'Standard'}] — Select object to ${ex ? 'extend' : 'trim'}, Shift = ${ex ? 'trim' : 'extend'}${this.pending.edges ? ` [${this.pending.edges.length} edges]` : ''}  [T edges / F fence / C crossing / O mode / R erase / U undo], Enter = end:`;
+  }
+  private edgePrompt() { return `${this.tool.toUpperCase()} — Select ${this.tool === 'extend' ? 'boundary' : 'cutting'} edges (click / window / crossing), Enter when done (none = every object):`; }
+  /** Two clicks on empty space: a crossing box (Standard mode, or after C) or a fence line (Quick mode, or after F). */
+  trimCrossing(): boolean { return this.pending.crossing ?? (this.trimMode === 'standard'); }
+  setTrimMode(m: 'quick' | 'standard') { this.trimMode = m; try { localStorage.setItem('nx.trimmode', m); } catch { } }
+  /** One pick per object crossed by the path (the first crossing counts). */
+  fencePathPicks(path: Pt[]): [string, Pt][] { const out: [string, Pt][] = []; const seen = new Set<string>(); for (let i = 0; i + 1 < path.length; i++) for (const k of this.fencePicks(path[i], path[i + 1])) if (!seen.has(k[0])) { seen.add(k[0]); out.push(k); } return out; }
   trimAt(picks: [string, Pt][], shift: boolean) {
-    if (!picks.length) return; const extend = this.trimExtends(shift); const args: any = { ids: picks.map(k => k[0]), pts: picks.flatMap(k => k[1]), extend }; if (this.pending.edges) args.edges = this.pending.edges;
+    if (!picks.length) return;
+    if (this.pending.erase) { bridge.call('edit.delete', { ids: picks.map(k => k[0]) }); this.say(`ERASE ${picks.length}`); this.pending.did = true; this.invalidate(); return; }
+    const extend = this.trimExtends(shift); const args: any = { ids: picks.map(k => k[0]), pts: picks.flatMap(k => k[1]), extend }; if (this.pending.edges) args.edges = this.pending.edges;
+    if (this.trimMode === 'quick' && !this.pending.edges) args.quick = true;   // Quick mode: an object that nothing cuts is erased (AutoCAD 2021+)
     this.pending.did = true; this.pending.preview = null; this.previewKey = '';
     bridge.call('edit.trim', args).then((r: any) => {
       const m: string[] = r?.messages ?? []; const n = picks.length - m.length;
@@ -303,7 +324,8 @@ export class CanvasView {
     if (!this.doc) return; const id = this.doc.hit(p[0], p[1], this.pxTol()); const extend = this.trimExtends(shift);
     if (!id) { if (this.pending.preview) { this.pending.preview = null; this.invalidate(); } this.previewKey = ''; this.previewSeq++; return; }
     const q = this.pxTol(3); const key = `${id}|${Math.round(p[0] / q)}|${Math.round(p[1] / q)}|${extend}|${this.doc.ver}`; if (key === this.previewKey) return; this.previewKey = key;
-    const seq = ++this.previewSeq; const args: any = { h: id, x: p[0], y: p[1], extend };   // not 'id': that key is the request number of the bridge message if (this.pending.edges) args.edges = this.pending.edges;
+    const seq = ++this.previewSeq; const args: any = { h: id, x: p[0], y: p[1], extend };   // not 'id': that key is the request number of the bridge message
+    if (this.pending.edges) args.edges = this.pending.edges;
     bridge.call('edit.trimPreview', args).then((r: any) => { if (seq !== this.previewSeq || !this.isTrim()) return; this.pending.preview = r?.ok ? { pts: r.pts, extend } : null; this.invalidate(); }).catch(() => { });
   }
   setSelection(ids: string[]) { this.selection = new Set(ids); this.onSelectionChanged?.(); this.invalidate(); }
@@ -366,7 +388,7 @@ export class CanvasView {
     if (name === 'erase' && this.toolSel.length) { this.finishErase(); return; }
     if (this.needsSelection()) { if (this.toolSel.length) { this.step = 1; this.afterSelection(); } else this.prompt(`${name.toUpperCase()} — Select objects (click / window / crossing), Enter to continue:`); return; }
     switch (name) {
-      case 'trim': case 'extend': this.prompt(this.trimPrompt()); break;
+      case 'trim': case 'extend': if (this.trimMode === 'standard') { this.step = 1; this.prompt(this.edgePrompt()); } else this.prompt(this.trimPrompt()); break;
       case 'line': this.prompt('LINE — Specify first point:'); break;
       case 'pline': this.prompt('PLINE — Specify start point:'); break;
       case 'circle': this.prompt('CIRCLE — Specify center point:'); break;
@@ -399,8 +421,10 @@ export class CanvasView {
   /** Enter / right click: finish the selection step or the current polyline etc. */
   enter() {
     if (this.isTrim()) {
+      if (this.boxClick) { this.endBox(); return; }
+      if (this.pending.erase) { this.pending.erase = false; this.prompt(this.trimPrompt()); return; }
       if (this.step === 1) { this.pending.edges = this.toolSel.length ? this.toolSel.slice() : null; this.step = 0; this.say(this.pending.edges ? `${this.pending.edges.length} edge(s) chosen` : 'every object is an edge'); this.prompt(this.trimPrompt()); this.invalidate(); return; }
-      if (!this.pending.did && !this.pending.entered) { this.pending.entered = true; this.say('Every visible object is a cutting edge — pick the part to ' + (this.tool === 'extend' ? 'extend' : 'trim')); return; }   // classic habit: TR Enter Enter
+      if (this.trimMode === 'quick' && !this.pending.edges && !this.pending.did && !this.pending.entered) { this.pending.entered = true; this.say('Every visible object is a cutting edge — pick the part to ' + (this.tool === 'extend' ? 'extend' : 'trim')); return; }   // classic habit: TR Enter Enter
       this.cancel(); return;
     }
     if (this.needsSelection() && this.step === 0) { if (!this.toolSel.length) { this.cancel(); return; } this.step = 1; this.afterSelection(); return; }
@@ -422,7 +446,16 @@ export class CanvasView {
     const low = t.toLowerCase();
     if (this.tool === 'zoomopt') { this.zoomOption(low); return true; }
     if (this.isTrim()) {
-      if (this.step === 0 && (low === 't' || low === 'b' || low === 'edges')) { this.step = 1; this.toolSel = []; this.pending.preview = null; this.prompt(`${this.tool.toUpperCase()} — Select ${this.tool === 'extend' ? 'boundary' : 'cutting'} edges (click / window / crossing), Enter when done (none = every object):`); this.invalidate(); return true; }
+      if (this.step === 0 && (low === 't' || low === 'b' || low === 'edges')) { this.endBox(); this.step = 1; this.toolSel = []; this.pending.preview = null; this.pending.erase = false; this.prompt(this.edgePrompt()); this.invalidate(); return true; }
+      if (low === 'o' || low === 'mode' || low === 'q' || low === 'quick' || low === 's' || low === 'standard') {
+        const to = low.startsWith('q') ? 'quick' : low.startsWith('s') ? 'standard' : this.trimMode === 'quick' ? 'standard' : 'quick'; this.setTrimMode(to); this.endBox();
+        this.say(to === 'quick' ? 'Mode = Quick: every object is an edge; an object that nothing cuts is erased' : 'Mode = Standard: choose the edges first (Enter = every object)');
+        this.toolSel = []; this.pending = {}; if (to === 'standard') { this.step = 1; this.prompt(this.edgePrompt()); } else { this.step = 0; this.prompt(this.trimPrompt()); } this.invalidate(); return true;
+      }
+      if (this.step === 0 && (low === 'f' || low === 'fence')) { this.pending.crossing = false; this.say('Fence: click two points on empty space, or drag across the objects'); return true; }
+      if (this.step === 0 && (low === 'c' || low === 'crossing')) { this.pending.crossing = true; this.say('Crossing: click two corners on empty space'); return true; }
+      if (this.step === 0 && (low === 'r' || low === 'erase')) { this.endBox(); this.pending.erase = true; this.pending.preview = null; this.prompt(this.trimPrompt()); this.invalidate(); return true; }
+      if (low === 'u' || low === 'undo') { bridge.call('undo'); this.say('UNDO'); return true; }
       return false;
     }
     if (this.tool === 'pline' && (low === 'c' || low === 'close')) { this.finishPline(true); return true; }
@@ -625,9 +658,10 @@ export class CanvasView {
     // TRIM / EXTEND hover preview: the part that goes (dashed) or comes (solid)
     if (this.isTrim() && this.pending.preview && this.dragMode === 'none') { const pv = this.pending.preview; const pts: Pt[] = []; for (let i = 0; i + 1 < pv.pts.length; i += 2) pts.push([pv.pts[i], pv.pts[i + 1]]); ctx.strokeStyle = sel; ctx.lineWidth = 3; ctx.setLineDash(pv.extend ? [] : [3, 4]); this.strokeWorld(ctx, pts, false); ctx.setLineDash([]); ctx.lineWidth = 1; }
     // fence (TRIM / EXTEND drag)
-    if (this.isTrim() && this.step === 0 && this.dragMode === 'box' && this.dragStart && this.cursor) { const a = w2s(v, this.dragStart[0], this.dragStart[1]), b = w2s(v, this.cursor[0], this.cursor[1]); ctx.strokeStyle = T.crossing; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); }
+    const fenceRect = this.isTrim() && this.step === 0 && this.boxClick && this.trimCrossing();
+    if (this.isTrim() && this.step === 0 && this.dragMode === 'box' && this.dragStart && this.cursor && !fenceRect) { ctx.strokeStyle = T.crossing; ctx.setLineDash([4, 3]); ctx.beginPath(); const a = w2s(v, this.dragStart[0], this.dragStart[1]); ctx.moveTo(a[0], a[1]); for (const q of this.boxClick ? [] : this.fencePath) { const s = w2s(v, q[0], q[1]); ctx.lineTo(s[0], s[1]); } const b = w2s(v, this.cursor[0], this.cursor[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); }
     // selection box
-    if (this.dragMode === 'box' && this.dragStart && this.cursor && !(this.isTrim() && this.step === 0)) { const a = w2s(v, this.dragStart[0], this.dragStart[1]), b = w2s(v, this.cursor[0], this.cursor[1]); const crossing = this.cursor[0] < this.dragStart[0]; ctx.strokeStyle = crossing ? T.crossing : T.window; ctx.setLineDash(crossing ? [4, 3] : []); ctx.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); ctx.setLineDash([]); ctx.fillStyle = crossing ? T.crossingFill : T.windowFill; ctx.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); }
+    if (this.dragMode === 'box' && this.dragStart && this.cursor && (fenceRect || !(this.isTrim() && this.step === 0))) { const a = w2s(v, this.dragStart[0], this.dragStart[1]), b = w2s(v, this.cursor[0], this.cursor[1]); const crossing = this.cursor[0] < this.dragStart[0]; ctx.strokeStyle = crossing ? T.crossing : T.window; ctx.setLineDash(crossing ? [4, 3] : []); ctx.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); ctx.setLineDash([]); ctx.fillStyle = crossing ? T.crossingFill : T.windowFill; ctx.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); }
     // snap marker
     if (this.snapPt && this.snapOn && this.toolWantsPoint()) { const p = w2s(v, this.snapPt.x, this.snapPt.y); ctx.strokeStyle = snapCol; ctx.lineWidth = 2; const k = this.snapPt.k; ctx.beginPath();
       if (k === SNAP_END) ctx.rect(p[0] - 6, p[1] - 6, 12, 12); else if (k === SNAP_MID) { ctx.moveTo(p[0], p[1] - 7); ctx.lineTo(p[0] + 7, p[1] + 6); ctx.lineTo(p[0] - 7, p[1] + 6); ctx.closePath(); } else if (k === SNAP_CEN) ctx.arc(p[0], p[1], 6, 0, Math.PI * 2); else if (k === SNAP_INT) { ctx.moveTo(p[0] - 6, p[1] - 6); ctx.lineTo(p[0] + 6, p[1] + 6); ctx.moveTo(p[0] + 6, p[1] - 6); ctx.lineTo(p[0] - 6, p[1] + 6); } else if (k === SNAP_QUAD) { ctx.moveTo(p[0], p[1] - 7); ctx.lineTo(p[0] + 7, p[1]); ctx.lineTo(p[0], p[1] + 7); ctx.lineTo(p[0] - 7, p[1]); ctx.closePath(); } else { ctx.rect(p[0] - 5, p[1] - 5, 10, 10); ctx.moveTo(p[0] - 8, p[1]); ctx.lineTo(p[0] + 8, p[1]); }

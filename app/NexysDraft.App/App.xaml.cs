@@ -15,7 +15,7 @@ public partial class App : Application
         MainWindow = win;
         win.WhenReady.ContinueWith(_ => Diag.StartWatchdog(win.Dispatcher));   // stalls while WebView2 boots are not user-facing; count from the first page frame
         if (SelfTest.Enabled) win.WhenReady.ContinueWith(_ => win.Dispatcher.BeginInvoke(async () => await SelfTest.RunAsync(win)));
-        else win.WhenReady.ContinueWith(_ => win.Dispatcher.BeginInvoke(() => { foreach (var a in e.Args) if (!a.StartsWith("--") && System.IO.File.Exists(a)) win.Engine.Open(a); }));
+        else win.WhenReady.ContinueWith(_ => win.Dispatcher.BeginInvoke(() => { bool any = false; foreach (var a in e.Args) if (!a.StartsWith("--") && System.IO.File.Exists(a)) { win.Engine.Open(a); any = true; } if (!any && win.Engine.Doc == null) win.Engine.New(); }));   // nothing to open: start on an empty drawing, ready to draw
         win.Show();
     }
 }

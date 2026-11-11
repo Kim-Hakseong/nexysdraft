@@ -200,6 +200,7 @@ public static class SelfTest
         await DraftAidsAsync(w);
         await DraftingAsync(w);
         await ClicksAsync(w);
+        await TrimModesAsync(w);
         await LangPanelsAsync(w);
         await HostKeysAsync(w);
         await CanvasThemeAsync(w);
@@ -335,7 +336,7 @@ public static class SelfTest
         GB("aid_window_inside_crossing_touching", b2.GetProperty("win").GetInt32() == 0 && b2.GetProperty("cross").GetInt32() == 4 && b2.GetProperty("dragWin").GetInt32() == 0 && b2.GetProperty("dragCross").GetInt32() == 4, b2.GetRawText() + " (expected window 0, crossing 4, by click-click and by drag)");
 
         // (2) TRIM: hover preview, click the middle part, one undo step
-        var pv = await JS(w, "await nx.test.cmd('tr'); await nx.test.moveWorld(50, 0, { wait: 250 }); const m = await nx.test.moveWorld(50, 0, { wait: 150 }); return m.preview;");
+        var pv = await JS(w, "nx.test.view.setTrimMode('quick'); await nx.test.cmd('tr'); await nx.test.moveWorld(50, 0, { wait: 250 }); const m = await nx.test.moveWorld(50, 0, { wait: 150 }); return m.preview;");
         bool okPv = pv.ValueKind == JsonValueKind.Object && Math.Abs(pv.GetProperty("pts")[0].GetDouble() - 30) < T9 && Math.Abs(pv.GetProperty("pts")[pv.GetProperty("pts").GetArrayLength() - 2].GetDouble() - 70) < T9;
         await JS(w, "await nx.test.clickWorld(50, 0); return true;"); await Task.Delay(200);
         var r0 = Row(0);
@@ -472,6 +473,42 @@ public static class SelfTest
         GB("click_small_slide_is_a_click", r.GetProperty("emptySlide").GetBoolean(), "press on empty space, release 5 px away → treated as a click (click-click box opened), not as a 5 px drag box");
         GB("click_drag_from_object_boxes", r.GetProperty("dragFromObject").GetInt32() == 4, $"crossing drag that starts on a line: {r.GetProperty("dragFromObject").GetInt32()} selected (want 4)");
         GB("click_panels_not_rebuilt", r.GetProperty("toolbarKept").GetBoolean() && r.GetProperty("layerRowKept").GetBoolean(), $"after a pick on the canvas the same toolbar button and layer row are still in the page (toolbar {r.GetProperty("toolbarKept").GetBoolean()}, layer row {r.GetProperty("layerRowKept").GetBoolean()}) — a rebuilt button loses the click in progress");
+    }
+
+    // ================================================================== TRIM / EXTEND the AutoCAD way: Quick and Standard mode, two-click fence, erase option; NEW drawing
+    static async Task TrimModesAsync(MainWindow w)
+    {
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); nx.test.closeModal(); nx.test.view.setTrimMode('quick'); return true;");
+        var d = e.Doc!; var ed = e.Editor!;
+        void Ln(double x0, double y0, double x1, double y1) => ed.AddLine(x0, y0, x1, y1, "0");
+        Ln(0, 0, 100, 0); Ln(30, -20, 30, 20); Ln(70, -20, 70, 20);          // H1 crossed by two verticals
+        Ln(0, 10, 20, 10);                                                    // E: short line that EXTEND takes to x = 30
+        Ln(0, 60, 100, 60); Ln(0, 70, 100, 70);                               // two lines that nothing crosses
+        Ln(0, 100, 100, 100); Ln(30, 90, 30, 110); Ln(70, 90, 70, 110);       // H2 crossed by two verticals
+        e.Touch(); await Task.Delay(300);
+        string Spans(double y) => string.Join(" ", d.Entities.OfType<Core.Model.Line>().Where(l => Math.Abs(l.P0.Y - y) < 1e-9 && Math.Abs(l.P1.Y - y) < 1e-9).OrderBy(l => Math.Min(l.P0.X, l.P1.X)).Select(l => $"{Math.Min(l.P0.X, l.P1.X):G9}..{Math.Max(l.P0.X, l.P1.X):G9}"));
+        // Quick mode: a click on an object that nothing cuts erases it; one undo brings it back
+        await JS(w, "await nx.test.settle(200); await nx.test.zoomExtents(); await nx.test.cmd('tr'); await nx.test.clickWorld(50, 60); return true;"); await Task.Delay(200);
+        string q1 = Spans(60); e.Undo(); await Task.Delay(150); string q1u = Spans(60); e.Redo(); await Task.Delay(150);
+        GB("trim_quick_erases_uncut", q1 == "" && q1u == "0..100", $"Quick mode, click on a line that crosses nothing: row '{q1}' (want erased), after undo '{q1u}'");
+        // Quick mode: two clicks on empty space = a fence line; everything it crosses is trimmed there
+        var f = await JS(w, "await nx.test.clickWorld(50, -12); const open = nx.test.box().boxClick; await nx.test.clickWorld(50, 8); return { open, still: nx.test.box().boxClick, tool: nx.test.view.tool };"); await Task.Delay(200);
+        GB("trim_quick_two_click_fence", f.GetProperty("open").GetBoolean() && !f.GetProperty("still").GetBoolean() && Spans(0) == "0..30 70..100" && f.GetProperty("tool").GetString() == "trim", $"fence (50,-12)→(50,8): y=0 row {Spans(0)} (want 0..30 70..100), command still {f.GetProperty("tool").GetString()}");
+        // O = Standard mode: cutting edges first; only the chosen edge cuts; an uncut object is left alone
+        var st = await JS(w, "await nx.test.cmd('o'); const step = nx.test.view.step; await nx.test.clickWorld(30, 105); await nx.test.cmd(''); const step2 = nx.test.view.step; await nx.test.clickWorld(10, 100); await nx.test.clickWorld(50, 70); await nx.test.settle(150); return { step, step2, mode: nx.test.view.trimMode, stored: localStorage.getItem('nx.trimmode') };"); await Task.Delay(200);
+        GB("trim_standard_edges_first", st.GetProperty("step").GetInt32() == 1 && st.GetProperty("step2").GetInt32() == 0 && st.GetProperty("mode").GetString() == "standard" && Spans(100) == "30..100" && Spans(70) == "0..100",
+            $"O → Standard (edge selection step {st.GetProperty("step").GetInt32()}), edge = the vertical at x 30 only: y=100 row {Spans(100)} (want 30..100 — the vertical at x 70 is not an edge); the uncut line at y=70 stays: {Spans(70)}; mode remembered: {st.GetProperty("stored").GetString()}");
+        // a new TRIM in Standard mode starts at the edge prompt; Enter = every object
+        var st2 = await JS(w, "await nx.test.key('Escape'); await nx.test.cmd('tr'); const step = nx.test.view.step; await nx.test.cmd(''); await nx.test.clickWorld(90, 100); await nx.test.settle(150); return { step };"); await Task.Delay(200);
+        GB("trim_standard_enter_selects_all", st2.GetProperty("step").GetInt32() == 1 && Spans(100) == "30..70", $"TR in Standard mode opens the edge prompt (step {st2.GetProperty("step").GetInt32()}), Enter = all: click at x 90 → y=100 row {Spans(100)} (want 30..70)");
+        // EXTEND shares the modes and options: Q back to Quick, extend E to x = 30, then R (erase) removes it
+        var ex = await JS(w, "await nx.test.key('Escape'); await nx.test.cmd('ex'); await nx.test.cmd('q'); const mode = nx.test.view.trimMode; await nx.test.clickWorld(18, 10); await nx.test.settle(200); return { mode, tool: nx.test.view.tool };"); await Task.Delay(200);
+        string e1 = Spans(10);
+        await JS(w, "await nx.test.cmd('r'); await nx.test.clickWorld(15, 10); await nx.test.settle(150); await nx.test.cmd(''); const t = nx.test.view.tool; await nx.test.key('Escape'); return t;"); await Task.Delay(200);
+        GB("extend_modes_and_erase_option", ex.GetProperty("mode").GetString() == "quick" && e1 == "0..30" && Spans(10) == "" && Spans(70) == "0..100", $"EXTEND, Q → {ex.GetProperty("mode").GetString()}: y=10 row {e1} (want 0..30); R + click erases it: '{Spans(10)}'; EXTEND never erases an uncut object: y=70 {Spans(70)}");
+        // NEW from the header button: an empty, untitled drawing that takes a line at once
+        var nw = await JS(w, "document.querySelector('.hdr-tools [data-a=new]').click(); await nx.test.settle(400); const n0 = nx.test.doc() ? nx.test.doc().order.length : -1; const name = nx.test.state().file ? nx.test.state().file.name : null; await nx.test.cmd('l'); await nx.test.cmd('0,0'); await nx.test.cmd('50,20'); await nx.test.key('Escape'); await nx.test.settle(250); return { n0, name, n1: nx.test.doc().order.length, rail: !!document.querySelector('[data-a=new].pill') };");
+        GB("new_drawing_button", nw.GetProperty("n0").GetInt32() == 0 && nw.GetProperty("n1").GetInt32() == 1 && nw.GetProperty("name").GetString() == "untitled.dxf" && nw.GetProperty("rail").GetBoolean() && e.Doc!.Entities.Count == 1, nw.GetRawText());
     }
 
     static async Task RightClickAsync(MainWindow w)

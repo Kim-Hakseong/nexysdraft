@@ -1,5 +1,15 @@
 # 진행 현황 — NexysDraft
 
+## 2026-11-11 draft5j (사용자 요청: TRIM / EXTEND를 보통 CAD 방식으로, 파일 없이 시작하면 새 도면)
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| TRIM / EXTEND 빠른 모드·표준 모드(O), 옵션 T / F / C / R / U | 완료 | trim_standard_edges_first, trim_standard_enter_selects_all, extend_modes_and_erase_option |
+| 빠른 모드: 빈 곳 두 번 클릭 = 울타리, 드래그 = 자유 곡선 울타리, 아무것과도 안 만나는 객체는 지움 | 완료 | trim_quick_two_click_fence, trim_quick_erases_uncut |
+| 미리보기가 지정한 기준 객체를 무시하던 결함 | 수정 (주석에 삼켜진 코드) | view.ts trimHover |
+| 파일 없이 실행하면 빈 새 도면으로 시작, 새 도면 버튼·Ctrl+N·NEW | 완료 | new_drawing_button, 창 제목 "untitled — NexysDraft 0.4.10" |
+| 셀프테스트 | PASS 76 · FAIL 0 (draft5i까지 보고한 68·73은 PASS라는 글자가 든 줄을 센 값 — 관문 수로는 65·70이었다) | work/gates/d5j_selftest.txt |
+| v0.4.10 배포 | 완료 | docs/report-draft5j.md |
+
 ## 2026-11-11 draft5i (사용자 보고: 빠르게 클릭·드래그하면 클릭이 씹힌다)
 | 항목 | 판정 | 근거 |
 |---|---|---|

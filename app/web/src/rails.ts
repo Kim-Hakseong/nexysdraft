@@ -11,7 +11,7 @@ export class FileRail {
   render(S: any) {
     const f = S.file; const m = this.el.querySelector('.m') as HTMLElement; m.textContent = f ? `${fmtInt(f.entities)} ${L('ents', '객체')} · ${S.layers?.length ?? 0} ${L('layers', '레이어')}` : '';
     const counts = f?.counts ?? {}; const top = Object.entries<number>(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
-    H(this.body).innerHTML = `<div class="btn-row"><button class="pill primary" data-a="open">${I.folder(13)} ${L('OPEN', '열기')}</button><button class="pill" data-a="save" ${f ? '' : 'disabled'}>${I.save(13)} ${L('SAVE', '저장')}</button><button class="pill" data-a="saveas" ${f ? '' : 'disabled'}>DXF…</button><button class="pill" data-a="savedwg" ${f ? '' : 'disabled'}>DWG…</button><button class="pill" data-a="pdf" ${f ? '' : 'disabled'}>${I.pdf(13)} PDF</button></div>` +
+    H(this.body).innerHTML = `<div class="btn-row"><button class="pill" data-a="new">${I.file(13)} ${L('NEW', '새 도면')}</button><button class="pill primary" data-a="open">${I.folder(13)} ${L('OPEN', '열기')}</button><button class="pill" data-a="save" ${f ? '' : 'disabled'}>${I.save(13)} ${L('SAVE', '저장')}</button><button class="pill" data-a="saveas" ${f ? '' : 'disabled'}>DXF…</button><button class="pill" data-a="savedwg" ${f ? '' : 'disabled'}>DWG…</button><button class="pill" data-a="pdf" ${f ? '' : 'disabled'}>${I.pdf(13)} PDF</button></div>` +
       (f ? `<div class="file-card"><div class="fn">${esc(f.name)}${f.dirty ? ` <span class="chip">${L('modified', '수정됨')}</span>` : ''}</div><div class="chips"><span class="chip">${esc(f.sourceDwg ? 'DWG' : 'DXF')}</span><span class="chip">${esc(f.version)}</span><span class="chip">${esc(f.codepage)}</span><span class="chip">${fmtBytes(f.size)}</span></div>
         <div class="big">${fmtInt(f.entities)}<small>${L('entities', '객체')}</small></div>
         <div class="kv"><span class="k">${L('LAYERS', '레이어')}</span><span class="v">${S.layers?.length ?? 0}</span><span class="k">${L('BLOCKS', '블록')}</span><span class="v">${f.blocks}</span><span class="k">${L('OPEN', '열기')}</span><span class="v">${f.openMs.toFixed(0)} ms</span>${f.sourceDwg ? `<span class="k">LIBREDWG</span><span class="v">${f.convertMs.toFixed(0)} ms</span>` : ''}${f.unknown ? `<span class="k">${L('UNSUPPORTED', '미지원')}</span><span class="v">${f.unknown}</span>` : ''}</div></div>
@@ -23,7 +23,7 @@ export class FileRail {
     this.body.addEventListener('click', e => {
       const t = e.target as HTMLElement; const a = (t.closest('[data-a]') as HTMLElement | null)?.dataset.a; const o = (t.closest('[data-open]') as HTMLElement | null)?.dataset.open;
       if (o) { bridge.call('open', { paths: [o] }); return; }
-      if (a === 'open') bridge.call('openDialog'); else if (a === 'save') bridge.call('save'); else if (a === 'saveas') showLossThenSave(false); else if (a === 'savedwg') showLossThenSave(true); else if (a === 'pdf') bridge.call('exportPdfDialog');
+      if (a === 'open') bridge.call('openDialog'); else if (a === 'new') bridge.call('newDrawing'); else if (a === 'save') bridge.call('save'); else if (a === 'saveas') showLossThenSave(false); else if (a === 'savedwg') showLossThenSave(true); else if (a === 'pdf') bridge.call('exportPdfDialog');
     });
   }
 }

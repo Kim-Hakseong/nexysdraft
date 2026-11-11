@@ -84,7 +84,7 @@ public sealed class Bridge
             case "doc": return e.PageSnapshot();
             case "open": return Task.Run(async () => { foreach (var p in SL(r, "paths")) await e.OpenAsync(p); return (object?)null; });
             case "close": e.Close(); return null;
-            case "new": e.New(); return null;
+            case "new": e.New(); return null;   // no question asked (tests, scripts); the UI goes through the host command newDrawing
             case "save.cancel": e.CancelSave(); return null;
             case "saveTo": return e.SaveAsync(S(r, "path")).ContinueWith(t => (object?)t.Result, TaskScheduler.FromCurrentSynchronizationContext());
             case "exportPdfTo": return e.ExportPdfAsync(S(r, "path")).ContinueWith(t => (object?)t.Result, TaskScheduler.FromCurrentSynchronizationContext());
@@ -109,7 +109,7 @@ public sealed class Bridge
                 {
                     var ids = SL(r, "ids"); var pts = DL(r, "pts"); var picks = new List<(string, Core.Model.V3)>(); for (int i = 0; i < ids.Count && i * 2 + 1 < pts.Count; i++) picks.Add((ids[i], new Core.Model.V3(pts[i * 2], pts[i * 2 + 1])));
                     var msgs = new List<string>(); ICollection<string>? edges = r.TryGetProperty("edges", out var ev) && ev.ValueKind == JsonValueKind.Array ? SL(r, "edges") : null;
-                    if (e.Editor == null) return null; var c = e.Editor.TrimExtend(picks, edges, B(r, "extend"), msgs);
+                    if (e.Editor == null) return null; var c = e.Editor.TrimExtend(picks, edges, B(r, "extend"), msgs, r.TryGetProperty("quick", out var qv) && qv.ValueKind == JsonValueKind.True);
                     return new { name = c.Name, touched = c.Touched.ToList(), messages = msgs };
                 }
             case "edit.trimPreview":
