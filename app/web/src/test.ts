@@ -25,10 +25,13 @@ export function installTests(ctx: { view: CanvasView; cmd: any; getDoc: () => Do
     async zoomSteps(n: number) { return frames(n, () => v.zoomAt(v.view.w / 2, v.view.h / 2, 1.05)); },
     async dragPan(px: number) { const r = rect(); const cx = r.width / 2, cy = r.height / 2; const out: number[] = []; ptr('pointerdown', cx, cy, { button: 1, buttons: 4 }); for (let i = 1; i <= 10; i++) { ptr('pointermove', cx + px * i / 10, cy + px * i / 20, { buttons: 4 }); const t0 = performance.now(); v.drawNow(); v.needDraw = false; out.push(performance.now() - t0); await nextFrame(); } ptr('pointerup', cx + px, cy + px / 2, { button: 1, buttons: 0 }); return out; },
     clickWorld, dragWorld,
+    /** One raw pointer event at a world point (no waiting): for timing the handlers. */
+    raw(type: string, x: number, y: number, opts: any = {}) { const [sx, sy] = w2s(v.view, x, y); ptr(type, sx, sy, opts); },
     /** A hurried click: pressed at the world point, released `dx`,`dy` screen pixels away with no pause. */
     sloppyClick(x: number, y: number, dx: number, dy: number, opts: any = {}) { const [sx, sy] = w2s(v.view, x, y); ptr('pointermove', sx, sy, { buttons: 0 }); ptr('pointerdown', sx, sy, opts); ptr('pointermove', sx + dx, sy + dy, opts); ptr('pointerup', sx + dx, sy + dy, opts); return Array.from(v.selection); },
     /** Pointer move to a world point without a click → the point a click would pick and the tracking state. */
     async moveWorld(x: number, y: number, opts: any = {}) { const [sx, sy] = w2s(v.view, x, y); ptr('pointermove', sx, sy, { buttons: 0, shift: opts.shift }); await settle(opts.wait ?? 20); const ep = v.cursor && v.toolWantsPoint() ? v.effectivePoint(v.cursor, !!opts.shift) : v.cursor; return { pt: ep, trk: v.trk, trackPts: v.trackPts, snap: v.snapPt, box: v.boxClick, preview: v.pending.preview ?? null }; },
+    hover() { return v.hoverId; },
     box() { return { boxClick: v.boxClick, dragMode: v.dragMode, start: v.dragStart, toolSel: v.toolSel.slice(), selection: Array.from(v.selection) }; },
     /** Wheel (middle button) double-click on the canvas centre — AutoCAD zoom extents. */
     async middleDouble() { const r = rect(); const cx = r.width / 2, cy = r.height / 2; for (let i = 0; i < 2; i++) { ptr('pointerdown', cx, cy, { button: 1, buttons: 4 }); ptr('pointerup', cx, cy, { button: 1, buttons: 0 }); await new Promise(res => setTimeout(res, 60)); } await settle(30); return { cx: v.view.cx, cy: v.view.cy, scale: v.view.scale }; },

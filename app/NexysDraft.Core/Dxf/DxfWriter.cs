@@ -171,10 +171,10 @@ public sealed class DxfWriter
         if (false && vp != null && vp.Entries.Count > 0) foreach (var e in vp.Entries) Raw(e);   // R2000: VPORT regenerated
         else
         {
-            var (mn, mx) = Extents();
+            var (vcx, vcy, vh, va) = ActiveView(vp);
             W(0, "VPORT"); W(5, _doc.NewHandle()); W(330, _tVport); W(100, "AcDbSymbolTableRecord"); W(100, "AcDbViewportTableRecord"); W(2, "*Active"); W(70, 0);
-            W(10, 0.0); W(20, 0.0); W(11, 1.0); W(21, 1.0); W(12, (mn.X + mx.X) / 2); W(22, (mn.Y + mx.Y) / 2); W(13, 0.0); W(23, 0.0); W(14, 10.0); W(24, 10.0); W(15, 10.0); W(25, 10.0); W(16, 0.0); W(26, 0.0); W(36, 1.0); W(17, 0.0); W(27, 0.0); W(37, 0.0);
-            W(40, Math.Max(1, mx.Y - mn.Y) * 1.1); W(41, 1.5); W(42, 50.0); W(43, 0.0); W(44, 0.0); W(50, 0.0); W(51, 0.0); W(71, 0); W(72, 100); W(73, 1); W(74, 3); W(75, 0); W(76, 0); W(77, 0); W(78, 0);
+            W(10, 0.0); W(20, 0.0); W(11, 1.0); W(21, 1.0); W(12, vcx); W(22, vcy); W(13, 0.0); W(23, 0.0); W(14, 10.0); W(24, 10.0); W(15, 10.0); W(25, 10.0); W(16, 0.0); W(26, 0.0); W(36, 1.0); W(17, 0.0); W(27, 0.0); W(37, 0.0);
+            W(40, vh); W(41, va); W(42, 50.0); W(43, 0.0); W(44, 0.0); W(50, 0.0); W(51, 0.0); W(71, 0); W(72, 100); W(73, 1); W(74, 3); W(75, 0); W(76, 0); W(77, 0); W(78, 0);
         }
         W(0, "ENDTAB");
         // LTYPE
@@ -307,6 +307,32 @@ public sealed class DxfWriter
     void HeaderVar(string name, int code, string value) { W(9, name); W(code, value); }
     void HeaderPoint(string name, V3 p, bool z = true) { W(9, name); P(10, p, z); }
 
+    /// <summary>Centre, height and aspect of the model view other programs open the drawing with. The view the file came with is kept (draft5k:
+    /// the header extents of real drawings are stale — u06's cover 36 842 units for a 1 000 unit drawing — and a view made from them shows the
+    /// drawing as a dot, which nanoCAD and TrueView users read as "the file does not open"). Without one, the view frames the geometry itself.</summary>
+    (double cx, double cy, double h, double aspect) ActiveView(RawTable? vp)
+    {
+        var rec = vp?.Entries.FirstOrDefault(e => e.Any(g => g.Code == 2 && g.Value.Trim().Equals("*Active", StringComparison.OrdinalIgnoreCase)));
+        if (rec != null)
+        {
+            double? F(int code) { foreach (var g in rec) if (g.Code == code) { double v = DxfCodec.ParseDouble(g.Value); return double.IsFinite(v) ? v : null; } return null; }
+            double? cx = F(12), cy = F(22), h = F(40), a = F(41);
+            // 12/22 is the centre in display coordinates, measured from the target point 17/27 (u04: centre −1800,−2337 + target 5680,697 = the drawing);
+            // the record written here has its target at the origin, so the two are added. Only a plan view (direction 0,0,z) is kept.
+            bool plan = Math.Abs(F(16) ?? 0) < 1e-9 && Math.Abs(F(26) ?? 0) < 1e-9 && Math.Abs(F(51) ?? 0) < 1e-9;
+            if (plan && cx != null && cy != null && h is > 1e-9 and < 1e12)
+            {
+                double x = cx.Value + (F(17) ?? 0), y = cy.Value + (F(27) ?? 0), asp = a is > 0.05 and < 50 ? a.Value : 1.5;
+                var gb = Geometry.Bounds.Of(_doc);
+                // a view that shows none of the geometry (saved while a layout was current, or a stale record) would open as an empty screen
+                bool sees = gb == null || (x + h.Value * asp / 2 >= gb.Value.x0 && x - h.Value * asp / 2 <= gb.Value.x1 && y + h.Value / 2 >= gb.Value.y0 && y - h.Value / 2 <= gb.Value.y1);
+                if (sees && Math.Abs(x) < 1e12 && Math.Abs(y) < 1e12) return (x, y, h.Value, asp);
+            }
+        }
+        var bb = Geometry.Bounds.Of(_doc);
+        if (bb != null) { var q = bb.Value; double w = Math.Max(1e-6, q.x1 - q.x0), hh = Math.Max(1e-6, q.y1 - q.y0); return ((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2, Math.Max(hh, w / 1.5) * 1.1, 1.5); }
+        return (50, 50, 110, 1.5);
+    }
     (V3 min, V3 max) Extents()
     {
         if (_doc.Header.TryGetValue("$EXTMIN", out var a) && _doc.Header.TryGetValue("$EXTMAX", out var b))

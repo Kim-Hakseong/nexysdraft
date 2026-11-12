@@ -1,5 +1,17 @@
 # 진행 현황 — NexysDraft
 
+## 2026-11-12 draft5k (동료 보고: 저장한 DWG가 TrueView·nanoCAD에서 안 열린다 / 그립 편집 / 트림 방식 / 클릭)
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| 재현: 저장한 DWG·DXF가 nanoCAD 5와 TrueView 2027에서 빈 화면 | 완료 | work/dwgrep (tools/nanocheck.py, tools/trueview_gui.ps1 캡처) |
+| 원인: 저장할 때 모형 뷰를 헤더의 낡은 범위($EXTMIN/$EXTMAX)로 새로 만듦 → 도면이 점 크기 | 수정: 원본 뷰 유지(중심 + 목표점), 안 보이는 뷰면 실제 도형 범위 | D5kTests 3건, 사용자 도면 7/7 + 새 도면 nanoCAD GOOD (work/gates/d5k_nanocad.txt) |
+| 그립 편집(선 끝 늘이기·줄이기, 중간 = 이동, 원 사분점 = 반지름, 호 끝 = 각도, 폴리선 꼭짓점) | 완료 | grip_* 관문 3건, D5kTests |
+| TRIM / EXTEND 기본을 표준 모드로(기준 선택 → Enter → 연속 클릭, Esc까지 유지) | 완료 | trim_standard_* |
+| 클릭: 급한 탭(220 ms 안, 18 px까지 미끄러져도 클릭), 커서 아래 객체 강조 | 완료 | click_hurried_tap_is_a_click, click_rollover_highlight |
+| 클릭 비용 측정(--perf): u03 25,652객체 클릭 처리 중앙값 16 ms, 프레임 3.5 ms | 측정 | work/perf_k |
+| 셀프테스트 / dotnet test | PASS 81 · FAIL 0 / 61 | work/gates/d5k_selftest.txt |
+| v0.4.11 배포 | 완료 | docs/report-draft5k.md |
+
 ## 2026-11-11 draft5j (사용자 요청: TRIM / EXTEND를 보통 CAD 방식으로, 파일 없이 시작하면 새 도면)
 | 항목 | 판정 | 근거 |
 |---|---|---|

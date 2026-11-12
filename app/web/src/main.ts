@@ -82,6 +82,9 @@ modesEl.addEventListener('click', e => { const k = ((e.target as HTMLElement).cl
 document.addEventListener('nx-frame', (e: any) => { const d = e.detail; frameInfo = `frame ${d.ms.toFixed(1)} ms · ${fmtInt(d.segs)} segs · ${d.texts} texts`; ftr.querySelector('.r')!.textContent = frameInfo; });
 
 function applyState(next: any) {
+  const t0 = performance.now(); try { applyStateCore(next); } finally { const ms = performance.now() - t0; const w = window as any; w.nxApply = { last: ms, max: Math.max(w.nxApply?.max ?? 0, ms), n: (w.nxApply?.n ?? 0) + 1 }; }
+}
+function applyStateCore(next: any) {
   S = next; (window as any).nxState = S; document.documentElement.dataset.theme = S.theme; view.setDark(canvasDark()); layers.dark = S.theme === 'dark';   // layer swatches sit on the app panel, not on the drawing
   renderHeader(); renderFooter(); files.render(S);
   if (doc && S.layers) { const a = doc.setLinetypes(S.ltypes, S.ltscale ?? 1); const b = doc.setLayers(S.layers); if (a || b) { doc.computeBBox(); view.rend.setDoc(doc); view.invalidate(); } }
@@ -177,7 +180,8 @@ function showHelp() {
     <p><b>선택</b> 클릭 · 빈 곳을 클릭하고 마우스를 옮긴 뒤 다시 클릭(또는 드래그): <b>오른쪽으로 = 파란 실선 창</b>(완전히 안에 든 것만), <b>왼쪽으로 = 초록 점선 교차</b>(조금이라도 걸친 것 전부) · Shift = 추가/제거 · Ctrl+A 전체 · Del 삭제 · Esc 취소.</p>
     <p><b>명령줄</b> 글자를 치면 바로 명령줄로 · Enter/Space = 확정·마지막 명령 반복 · Esc = 취소 · 우클릭 짧게(&lt;250 ms) = 확정·반복, 길게 = 메뉴(RIGHTCLICK TIMED/ENTER/MENU) · <code>x,y</code> · <code>@dx,dy</code> · <code>@길이&lt;각도</code> · 숫자 = 직접 거리. L · PL · C · <b>REC</b> 사각형 · <b>A</b> 호(3점) · <b>EL</b> 타원 · <b>POL</b> 다각형 · <b>PO</b> 점 · <b>DT</b> 문자 · <b>T</b> 여러 줄 문자 · DLI · M · CO · RO · MI · O · S · <b>TR</b> 자르기 · <b>EX</b> 연장 · E · U · Z(A/E/W/P) · RE 재생성 · R 다시 그리기 · LA · PR · DI 거리 · ID 좌표.</p>
     <p><b>새 도면</b> Ctrl+N · NEW (파일 없이 실행하면 새 도면으로 시작)</p>
-    <p><b>자르기/연장 모드</b> 빠른 모드(기본): 바로 클릭 · 끌기 · 빈 곳 두 번 클릭 = 울타리 · 안 만나는 객체는 지움 / 표준 모드: 기준 객체 선택 → Enter 후 클릭 · 옵션 O 모드 전환, T 기준, F 울타리, C 교차, R 지우기, U 취소</p>
+    <p><b>그립 편집</b> 객체를 선택하면 나오는 네모 점을 끌거나, 클릭 → 이동 → 클릭 · 선의 끝 = 늘이기/줄이기 · 선의 중간·원의 중심 = 이동 · 원의 사분점 = 반지름 · Esc = 취소</p>
+    <p><b>자르기/연장 모드</b> 표준 모드(기본): TR → 기준 객체 선택 → Enter → 자를 곳을 계속 클릭, Esc = 끝 (선택 없이 Enter = 모든 객체가 기준) / 빠른 모드: 바로 클릭 · 끌기 · 빈 곳 두 번 클릭 = 울타리 · 옵션 O 모드 전환, T 기준, F 울타리, C 교차, R 지우기, U 취소</p>
     <p><b>자르기/연장</b> TR: 지울 부분을 클릭(다른 객체와 만나는 곳까지 잘림) · EX: 늘릴 끝 쪽을 클릭(가장 가까운 객체까지) · Shift+클릭 = 반대 동작 · 드래그 = 선에 걸친 것 한꺼번에 · T = 기준 객체 직접 지정.</p>
     <p><b>그리기 보조</b> <b>Shift</b> 누르는 동안 임시 직교 · F8 직교 · F10 극좌표 추적(90°, POLAR 45) · <b>F11 객체 스냅 추적</b>(스냅 점에 커서를 잠깐 올려 + 표시가 생기면 그 점의 수평·수직 점선을 따라감) · F3 객체 스냅(끝점 □ 중점 △ 중심 ○ 교차 × 사분점 ◇) · F7 그리드 · F9 그리드 스냅. 상태줄 알약으로도 전환. 전체 표: docs/keys.md. <b>문자</b> 더블클릭 = 편집.</p>
     <p><b>언어</b> 위쪽의 지구본 버튼 또는 명령 LANG KO / LANG EN.</p>

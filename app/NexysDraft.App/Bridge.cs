@@ -105,6 +105,7 @@ public sealed class Bridge
             case "edit.mirror": return e.Edit(ed => ed.Mirror(SL(r, "ids"), D(r, "x0"), D(r, "y0"), D(r, "x1"), D(r, "y1"), B(r, "keep", true)));
             case "edit.offset": return e.Edit(ed => ed.Offset(S(r, "id"), D(r, "dist"), new Core.Model.V3(D(r, "sx"), D(r, "sy"))));
             case "edit.stretch": return e.Edit(ed => ed.Stretch(SL(r, "ids"), D(r, "x0"), D(r, "y0"), D(r, "x1"), D(r, "y1"), D(r, "dx"), D(r, "dy")));
+            case "edit.grip": return e.Edit(ed => ed.MoveGrip(S(r, "h"), new Core.Model.V3(D(r, "gx"), D(r, "gy")), new Core.Model.V3(D(r, "x"), D(r, "y")), D(r, "tol")));
             case "edit.trim":
                 {
                     var ids = SL(r, "ids"); var pts = DL(r, "pts"); var picks = new List<(string, Core.Model.V3)>(); for (int i = 0; i < ids.Count && i * 2 + 1 < pts.Count; i++) picks.Add((ids[i], new Core.Model.V3(pts[i * 2], pts[i * 2 + 1])));

@@ -23,6 +23,7 @@ const PHRASES: [string, string][] = [
   ['Every visible object is a cutting edge — pick the part to trim', '보이는 모든 객체가 자르는 기준입니다 — 지울 부분을 클릭하세요'],
   ['edge(s) chosen', '개 기준 객체 지정'], ['every object is an edge', '모든 객체가 기준'], ['edge(s) — Enter to continue', '개 기준 객체 — Enter = 계속'],
   ['object(s)', '개 객체'],
+  ['Specify new point (drag or click, Esc = cancel):', '새 위치 지정 (끌거나 클릭, Esc = 취소):'],
   ['[Quick]', '[빠른 모드]'], ['[Standard]', '[표준 모드]'], ['Select object to trim, Shift = extend', '자를 부분 선택, Shift = 연장'], ['Select object to extend, Shift = trim', '늘릴 끝 선택, Shift = 자르기'], [' edges]', '개 기준]'],
   ['[T edges / F fence / C crossing / O mode / R erase / U undo], Enter = end:', '[T 기준 지정 / F 울타리 / C 교차 / O 모드 / R 지우기 / U 취소], Enter = 끝:'],
   ['Select objects to erase (click / fence), Enter = back:', '지울 객체 선택 (클릭 / 울타리), Enter = 돌아가기:'],

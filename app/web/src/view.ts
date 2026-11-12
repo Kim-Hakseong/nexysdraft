@@ -15,6 +15,8 @@ const POLAR_INCS = [90, 45];
 export const RIGHT_MS = 250;
 /** A press that moves less than this many screen pixels before the release is a click, not a drag box (a fast click always slides a little). */
 export const DRAG_PX = 6;
+/** A quick tap (released within TAP_MS) may slide up to TAP_PX and is still a click: a hurried hand moves while it clicks. */
+export const TAP_MS = 220, TAP_PX = 18;
 /** After a press that picked an object, the gesture becomes a drag box only when it is clearly a drag: held this long, or moved this far. */
 export const PICK_DRAG_MS = 200, PICK_DRAG_PX = 24;
 
@@ -68,9 +70,11 @@ export class CanvasView {
   /** Object snap tracking (F11): osnap points acquired by resting the cursor on them; alignment paths run through them. */
   otrackOn = true; trackPts: Pt[] = []; trk: TrackRes | null = null; private hoverSnap: { x: number; y: number } | null = null; private hoverTimer = 0;
   /** Selection box opened by a click on empty space (AutoCAD implied window): the next click closes it. */
-  boxClick = false; private downS: Pt | null = null; private pressPicked = 0;
+  boxClick = false; private downS: Pt | null = null; private pressPicked = 0; private downAt = 0;
+  /** Object under the cursor while a pick is expected (rollover highlight): shows what a click will take. */
+  hoverId: string | null = null; private hoverDirty = false;
   /** TRIM / EXTEND mode (AutoCAD TRIMEXTENDMODE): quick = every object is an edge, pick at once; standard = choose the edges first. */
-  trimMode: 'quick' | 'standard' = (() => { try { return localStorage.getItem('nx.trimmode') === 'standard' ? 'standard' : 'quick'; } catch { return 'quick'; } })() as 'quick' | 'standard';
+  trimMode: 'quick' | 'standard' = (() => { try { return localStorage.getItem('nx.trimmode') === 'quick' ? 'quick' : 'standard'; } catch { return 'standard'; } })() as 'quick' | 'standard';
   /** Freehand fence of a TRIM / EXTEND drag (world points after the press point). */
   fencePath: Pt[] = [];
   private previewSeq = 0; private previewKey = '';
@@ -126,12 +130,16 @@ export class CanvasView {
       if (e.button === 1 || (e.button === 0 && e.altKey) || (e.button === 0 && this.tool === 'pan')) { this.dragMode = 'pan'; this.panStart = { x: s[0], y: s[1], cx: this.view.cx, cy: this.view.cy }; w.setPointerCapture(e.pointerId); return; }
       if (e.button === 2) { this.rightDownAt = performance.now(); try { w.setPointerCapture(e.pointerId); } catch { } return; }   // decided on release (time-sensitive right click)
       if (e.button !== 0) return;
+      if (this.tool === 'select' && !this.boxClick && this.selection.size && !e.shiftKey) {
+        const gr = this.gripAt(p);
+        if (gr) { this.tool = 'grip'; this.step = 1; this.pts = [gr.pt]; this.toolSel = []; this.pending = { grip: gr, gripDown: s }; this.dragMode = 'none'; this.dragStart = null; this.prompt('GRIP — Specify new point (drag or click, Esc = cancel):'); try { w.setPointerCapture(e.pointerId); } catch { } this.invalidate(); return; }
+      }
       if (this.toolWantsPoint()) { this.point(this.effectivePoint(p, e.shiftKey), e.shiftKey); return; }
       if (this.boxClick && this.dragStart) { const a = this.dragStart; this.boxClick = false; this.dragStart = null; this.dragMode = 'none'; this.box(a, p, this.pending.shift); this.invalidate(); return; }   // second click of a click-click box
       // select tool / selection step: click pick or start box
       // An object under the cursor is taken at the press (AutoCAD): a fast click that slides before the release still picks it.
       this.pending.shift = e.shiftKey;
-      this.pressPicked = 0; this.fencePath = [];
+      this.pressPicked = 0; this.fencePath = []; this.downAt = performance.now();
       if (this.doc && this.doc.hit(p[0], p[1], this.pxTol())) {
         this.dragStart = null; this.dragMode = 'none'; this.pick(p, e.shiftKey);
         if (!this.canBox() || this.isTrim()) return;
@@ -142,8 +150,9 @@ export class CanvasView {
     w.addEventListener('pointermove', e => {
       const s = this.toScreen(e); const p = this.toWorld(e); this.cursorScreen = s; this.cursor = p; this.shiftDown = e.shiftKey;
       if (this.dragMode === 'pan' && this.panStart) { this.view.cx = this.panStart.cx - (s[0] - this.panStart.x) / this.view.scale; this.view.cy = this.panStart.cy + (s[1] - this.panStart.y) / this.view.scale; this.invalidate(); return; }
-      if (this.doc && this.snapOn && this.toolWantsPoint() && this.dragMode !== 'box') this.snapPt = this.doc.snap(p[0], p[1], this.pxTol(10), this.tool === 'move' || this.tool === 'copy' || this.tool === 'stretch' ? new Set(this.toolSel) : null); else this.snapPt = null;
+      if (this.doc && this.snapOn && this.toolWantsPoint() && this.dragMode !== 'box') this.snapPt = this.doc.snap(p[0], p[1], this.pxTol(10), this.tool === 'move' || this.tool === 'copy' || this.tool === 'stretch' ? new Set(this.toolSel) : this.tool === 'grip' ? new Set([this.pending.grip.id as string]) : null); else this.snapPt = null;
       this.acquireWatch(); if (this.isTrim() && this.step === 0 && this.dragMode === 'none') this.trimHover(p, e.shiftKey);
+      this.hoverDirty = true;
       if (this.isTrim() && this.step === 0 && this.dragMode === 'box' && !this.boxClick && this.dragStart) { const q = this.fencePath[this.fencePath.length - 1] ?? this.dragStart; if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= this.pxTol(3)) this.fencePath.push(p); }
       const ep = this.toolWantsPoint() ? this.effectivePoint(p, e.shiftKey) : p; const base = this.basePoint();
       this.coord.textContent = `${fmtNum(ep[0], 3)}, ${fmtNum(ep[1], 3)}` + (this.snapPt && this.snapOn && this.toolWantsPoint() ? `  ${snapName(this.snapPt.k)}` : '') + (base && this.toolWantsPoint() ? `  ${fmtNum(Math.hypot(ep[0] - base[0], ep[1] - base[1]), 3)} < ${fmtNum(Math.atan2(ep[1] - base[1], ep[0] - base[0]) * 180 / Math.PI, 2)}°` : '');
@@ -152,11 +161,13 @@ export class CanvasView {
     w.addEventListener('pointerup', e => {
       if (e.button === 2) { if (this.rightDownAt) { const held = performance.now() - this.rightDownAt; this.rightDownAt = 0; this.rightRelease(held, this.toScreen(e)); } return; }
       if (this.dragMode === 'pan') { this.dragMode = this.boxClick ? 'box' : 'none'; this.panStart = null; return; }
+      if (this.tool === 'grip' && this.pending.gripDown) { const s = this.toScreen(e); const g0: Pt = this.pending.gripDown; this.pending.gripDown = null; if (Math.hypot(s[0] - g0[0], s[1] - g0[1]) >= DRAG_PX) this.point(this.effectivePoint(this.toWorld(e), e.shiftKey), e.shiftKey); return; }
       if (this.dragMode === 'box' && this.dragStart) {
         if (this.boxClick) return;   // click-click box: waits for the second click
         const p = this.toWorld(e); const s = this.toScreen(e); const d = this.downS ? Math.hypot(s[0] - this.downS[0], s[1] - this.downS[1]) : Math.hypot(p[0] - this.dragStart[0], p[1] - this.dragStart[1]) * this.view.scale;
+        const tap = performance.now() - this.downAt < TAP_MS && d < TAP_PX;
         if (this.pressPicked) { const held = performance.now() - this.pressPicked; this.pressPicked = 0; if (d >= DRAG_PX && (held >= PICK_DRAG_MS || d >= PICK_DRAG_PX)) this.box(this.dragStart, p, this.pending.shift); }
-        else if (d < DRAG_PX) { const start = this.dragStart; const hit = this.pick(p, this.pending.shift); if (!hit && this.canBox()) { this.boxClick = true; this.dragStart = start; this.dragMode = 'box'; this.invalidate(); return; } }
+        else if (d < DRAG_PX || tap) { const start = this.dragStart; const hit = this.pick(p, this.pending.shift); if (!hit && this.canBox()) { this.boxClick = true; this.dragStart = start; this.dragMode = 'box'; this.invalidate(); return; } }
         else if (this.canBox() || this.isTrim()) this.box(this.dragStart, p, this.pending.shift);
         this.dragStart = null; this.dragMode = 'none'; this.invalidate();
       }
@@ -164,7 +175,7 @@ export class CanvasView {
     // the system took the pointer away (window switch, native drag): no release will come, so forget the half-made gesture
     w.addEventListener('pointercancel', () => { this.rightDownAt = 0; this.panStart = null; if (this.dragMode === 'pan') this.dragMode = this.boxClick ? 'box' : 'none'; else if (this.dragMode === 'box' && !this.boxClick) { this.dragStart = null; this.dragMode = 'none'; } this.invalidate(); });
     w.addEventListener('dblclick', e => { if (this.tool !== 'select' || !this.doc) return; const p = this.toWorld(e); const id = this.doc.hit(p[0], p[1], this.pxTol()); const ent = id ? this.doc.ents.get(id) : null; if (ent && (ent.t === 'T' || ent.t === 'M')) this.editText(id!); });
-    w.addEventListener('pointerleave', () => { this.cursor = null; this.snapPt = null; this.acquireWatch(); this.invalidate(); });
+    w.addEventListener('pointerleave', () => { this.hoverId = null; this.cursor = null; this.snapPt = null; this.acquireWatch(); this.invalidate(); });
     // keys reach key() through the document handler in main.ts (a second listener here ran Enter / Space twice)
   }
   key(e: KeyboardEvent) {
@@ -210,7 +221,7 @@ export class CanvasView {
   basePoint(): Pt | null {
     if (!this.pts.length) return null;
     switch (this.tool) {
-      case 'line': case 'pline': case 'dist': return this.pts[this.pts.length - 1];
+      case 'line': case 'pline': case 'dist': case 'grip': return this.pts[this.pts.length - 1];
       case 'move': case 'copy': case 'stretch': case 'rotate': return this.step === 2 ? this.pts[0] : null;
       case 'mirror': return this.step === 2 ? this.pts[0] : null;
       case 'dim': return this.pts.length === 1 ? this.pts[0] : null;
@@ -277,6 +288,13 @@ export class CanvasView {
     this.onSelectionChanged?.(); this.invalidate();
   }
   /** A click on empty space opens a window / crossing box here (object selection, cutting-edge selection). */
+  /** The grip of a selected object under the point (ends, middles, centres, quadrants, insertion points), or null. */
+  gripAt(p: Pt): { id: string; pt: Pt } | null {
+    if (!this.doc) return null; const tol = this.pxTol(7); let best: { id: string; pt: Pt } | null = null; let bd = tol; let n = 0;
+    for (const id of this.selection) { if (++n > 200) break; const e = this.doc.ents.get(id); if (!e || this.doc.layer(e.l)?.locked) continue; const g = this.doc.geomOf(id); if (!g) continue;
+      for (let i = 0; i + 2 < g.snaps.length; i += 3) { if (!isGrip(g.snaps[i + 2])) continue; const d = Math.hypot(g.snaps[i] - p[0], g.snaps[i + 1] - p[1]); if (d <= bd) { bd = d; best = { id, pt: [g.snaps[i], g.snaps[i + 1]] }; } } }
+    return best;
+  }
   canBox() { return this.tool === 'select' || (this.needsSelection() && this.step === 0) || this.isTrim(); }
   endBox() { this.boxClick = false; this.dragStart = null; if (this.dragMode === 'box') this.dragMode = 'none'; this.invalidate(); }
 
@@ -481,7 +499,7 @@ export class CanvasView {
       // distance typed while a tracking path shows: measured from the acquired point toward the cursor
       const g = this.trk.guides[0]; const sgn = (this.cursor[0] - g.ax) * g.dx + (this.cursor[1] - g.ay) * g.dy >= 0 ? 1 : -1; this.point([g.ax + g.dx * n * sgn, g.ay + g.dy * n * sgn], false); return true;
     }
-    if (isFinite(n) && /^-?[\d.]+$/.test(t) && base && this.cursor && ['line', 'pline', 'move', 'copy', 'stretch', 'dist', 'dim'].includes(this.tool)) {
+    if (isFinite(n) && /^-?[\d.]+$/.test(t) && base && this.cursor && ['line', 'pline', 'move', 'copy', 'stretch', 'dist', 'dim', 'grip'].includes(this.tool)) {
       // direct distance entry: the number goes along the rubber band as constrained now (ortho / polar / Shift)
       const c = this.constrain(this.cursor, this.shiftDown); const dx = c[0] - base[0], dy = c[1] - base[1]; const len = Math.hypot(dx, dy) || 1; this.point([base[0] + dx / len * n, base[1] + dy / len * n], false); return true;
     }
@@ -501,6 +519,7 @@ export class CanvasView {
   point(p: Pt, shift: boolean) {
     this.trackPts = []; this.trk = null;   // acquired points last until the point is picked (AutoCAD)
     switch (this.tool) {
+      case 'grip': { const g = this.pending.grip; if (g && (p[0] !== g.pt[0] || p[1] !== g.pt[1])) { bridge.call('edit.grip', { h: g.id, gx: g.pt[0], gy: g.pt[1], x: p[0], y: p[1], tol: this.pxTol(2) }); this.say(`GRIP ${fmtNum(g.pt[0], 3)},${fmtNum(g.pt[1], 3)} → ${fmtNum(p[0], 3)},${fmtNum(p[1], 3)}`); } this.cancel(); break; }
       case 'line':
         this.pts.push(p);
         if (this.pts.length >= 2) { const a = this.pts[this.pts.length - 2]; bridge.call('draw.line', { x0: a[0], y0: a[1], x1: p[0], y1: p[1] }); this.say(`LINE ${fmtNum(a[0], 3)},${fmtNum(a[1], 3)} → ${fmtNum(p[0], 3)},${fmtNum(p[1], 3)}`); }
@@ -619,11 +638,15 @@ export class CanvasView {
     // selection highlight (thicker, accent2)
     if (doc) {
       ctx.lineWidth = 2; ctx.strokeStyle = sel; ctx.fillStyle = sel; let n = 0;
-      const ids = this.tool !== 'select' && this.toolSel.length ? this.toolSel : Array.from(this.selection);
+      const ids = this.tool !== 'select' && this.tool !== 'grip' && this.toolSel.length ? this.toolSel : Array.from(this.selection);
       for (const id of ids) { if (++n > 5000) break; const g = doc.geomOf(id); if (!g) continue; this.strokeGeom(ctx, g, v, 0, 0, 1, 0, 0); for (const t of g.texts) { const b = textBox(t); const a = w2s(v, b[0], b[3]), c = w2s(v, b[2], b[1]); ctx.strokeRect(a[0], a[1], c[0] - a[0], c[1] - a[1]); } }
+      // rollover: the object a click would take (once per frame, not per mouse event)
+      if (this.hoverDirty) { this.hoverDirty = false; this.hoverId = this.cursor && this.dragMode === 'none' && !this.toolWantsPoint() && this.tool !== 'pan' && this.tool !== 'grip' ? doc.hit(this.cursor[0], this.cursor[1], this.pxTol()) : null; }
+      if (this.hoverId && !this.selection.has(this.hoverId) && !this.toolSel.includes(this.hoverId)) { const g = doc.geomOf(this.hoverId); if (g) { ctx.lineWidth = 3; ctx.globalAlpha = 0.55; this.strokeGeom(ctx, g, v, 0, 0, 1, 0, 0); for (const t of g.texts) { const b = textBox(t); const a = w2s(v, b[0], b[3]), c = w2s(v, b[2], b[1]); ctx.strokeRect(a[0], a[1], c[0] - a[0], c[1] - a[1]); } ctx.globalAlpha = 1; ctx.lineWidth = 2; } }
       // grips
       ctx.fillStyle = T.grip;
-      for (const id of ids.slice(0, 200)) { const g = doc.geomOf(id); if (!g) continue; for (let i = 0; i + 2 < g.snaps.length; i += 3) if (g.snaps[i + 2] === SNAP_END || g.snaps[i + 2] === SNAP_INS || g.snaps[i + 2] === SNAP_CEN) { const p = w2s(v, g.snaps[i], g.snaps[i + 1]); ctx.fillRect(p[0] - 3, p[1] - 3, 6, 6); } }
+      for (const id of ids.slice(0, 200)) { const g = doc.geomOf(id); if (!g) continue; for (let i = 0; i + 2 < g.snaps.length; i += 3) if (isGrip(g.snaps[i + 2])) { const p = w2s(v, g.snaps[i], g.snaps[i + 1]); ctx.fillRect(p[0] - 3.5, p[1] - 3.5, 7, 7); } }
+      if (this.tool === 'grip' && this.pending.grip) { const p = w2s(v, this.pending.grip.pt[0], this.pending.grip.pt[1]); ctx.fillStyle = sel; ctx.fillRect(p[0] - 4.5, p[1] - 4.5, 9, 9); }
     }
     // rubber band / previews
     ctx.lineWidth = 1; ctx.setLineDash([]);
@@ -631,6 +654,15 @@ export class CanvasView {
     if (cur && this.pts.length && doc) {
       const last = this.pts[this.pts.length - 1]; const a = w2s(v, last[0], last[1]), b = w2s(v, cur[0], cur[1]); ctx.strokeStyle = sel;
       if (this.tool === 'line' || this.tool === 'pline' || this.tool === 'mirror' || this.tool === 'dim' && this.pts.length < 2) { ctx.beginPath(); if (this.tool === 'pline') { for (let i = 0; i < this.pts.length; i++) { const p = w2s(v, this.pts[i][0], this.pts[i][1]); if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); } } else ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+      else if (this.tool === 'grip') {
+        ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);
+        const ge = doc.ents.get(this.pending.grip?.id); const q = ge?.p; const tol = this.pxTol(2); const near = (x: number, y: number) => Math.hypot(last[0] - x, last[1] - y) <= tol;
+        ctx.globalAlpha = 0.7;
+        if (ge && q && ge.t === 'L') { const o: Pt | null = near(q[0], q[1]) ? [q[2], q[3]] : near(q[2], q[3]) ? [q[0], q[1]] : null; if (o) this.strokeWorld(ctx, [o, cur], false); else { const dx = cur[0] - last[0], dy = cur[1] - last[1]; this.strokeWorld(ctx, [[q[0] + dx, q[1] + dy], [q[2] + dx, q[3] + dy]], false); } }
+        else if (ge && q && ge.t === 'C' && !near(q[0], q[1])) { const c = w2s(v, q[0], q[1]); ctx.beginPath(); ctx.arc(c[0], c[1], Math.hypot(cur[0] - q[0], cur[1] - q[1]) * v.scale, 0, Math.PI * 2); ctx.stroke(); }
+        else if (ge) { const g = doc.geomOf(ge.h); const rigid = !q || ge.t !== 'P'; if (g && rigid && !(ge.t === 'A' && !near(q![0], q![1]))) this.strokeGeom(ctx, g, v, cur[0] - last[0], cur[1] - last[1], 1, 0, 0); }
+        ctx.globalAlpha = 1;
+      }
       else if (this.tool === 'circle') { const r = Math.hypot(cur[0] - last[0], cur[1] - last[1]) * v.scale; ctx.beginPath(); ctx.arc(a[0], a[1], r, 0, Math.PI * 2); ctx.stroke(); }
       else if ((this.tool === 'rect' || this.tool === 'mtext' && this.step === 1) && this.pts.length === 1) { ctx.strokeRect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])); }
       else if (this.tool === 'arc') { const g = this.pts.length === 2 ? arc3(this.pts[0], this.pts[1], cur) : null; if (g) this.strokeWorld(ctx, arcPts(g), false); else { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); } }
@@ -698,5 +730,6 @@ export class CanvasView {
     ctx.beginPath(); for (const p of g.parts) for (let i = 0; i + 3 < p.segs.length; i += 4) { const s = T(p.segs[i], p.segs[i + 1]), e = T(p.segs[i + 2], p.segs[i + 3]); ctx.moveTo(s[0], s[1]); ctx.lineTo(e[0], e[1]); } ctx.stroke();
   }
 }
+function isGrip(k: number) { return k === SNAP_END || k === SNAP_MID || k === SNAP_CEN || k === SNAP_QUAD || k === SNAP_INS; }
 export function snapName(k: number) { return k === SNAP_END ? 'END' : k === SNAP_MID ? 'MID' : k === SNAP_CEN ? 'CEN' : k === SNAP_INT ? 'INT' : k === SNAP_QUAD ? 'QUA' : k === SNAP_INS ? 'INS' : ''; }
 export { drawText, aciRgb };

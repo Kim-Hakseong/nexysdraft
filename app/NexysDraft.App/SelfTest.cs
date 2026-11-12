@@ -94,7 +94,24 @@ public static class SelfTest
         await JS(w, "nx.test.view.zoomWindow([1000,1000],[1400,1300]); await nx.test.settle(); return true;"); await Shot(w, "perf_100k_zoomed");
         ReportFrames("pan_100k_zoomed_60", Arr(await JS(w, "return await nx.test.pan(60);")));
         var st2 = await JS(w, "return nx.test.stats();"); L("zoomed stats " + st2.GetRawText());
+        await ClickCostAsync(w);
         G("memory_ws_mb", Process.GetCurrentProcess().WorkingSet64 / 1048576.0, "MB");
+    }
+    /// <summary>What one click costs on the open drawing: the handlers of move / press+release, the frame after each, the state message that follows a pick, a box over everything.</summary>
+    static async Task ClickCostAsync(MainWindow w)
+    {
+        var r = await JS(w, @"const T = nx.test, v = T.view, d = T.doc(); await T.zoomExtents(); await T.key('Escape'); const ids = d.order.filter(h => d.visible(d.ents.get(h)));
+            const out = { move: [], moveDraw: [], click: [], clickDraw: [], apply: [], n: ids.length }; window.nxApply = { last: 0, max: 0, n: 0 };
+            for (let k = 0; k < 30; k++) { const g = d.geomOf(ids[Math.floor(k * ids.length / 30)]); if (!g || !g.parts.length || g.parts[0].segs.length < 4) continue; const x = (g.parts[0].segs[0] + g.parts[0].segs[2]) / 2, y = (g.parts[0].segs[1] + g.parts[0].segs[3]) / 2;
+              let t = performance.now(); T.raw('pointermove', x, y, { buttons: 0 }); out.move.push(performance.now() - t); t = performance.now(); v.drawNow(); v.needDraw = false; out.moveDraw.push(performance.now() - t);
+              t = performance.now(); T.raw('pointerdown', x, y); T.raw('pointerup', x, y); out.click.push(performance.now() - t); t = performance.now(); v.drawNow(); v.needDraw = false; out.clickDraw.push(performance.now() - t);
+              await T.settle(60); out.apply.push(window.nxApply.last); }
+            const b = d.bbox; let t = performance.now(); T.raw('pointerdown', b[2] + (b[2] - b[0]) * 0.02, b[3] + (b[3] - b[1]) * 0.02); T.raw('pointermove', b[0], b[1]); T.raw('pointerup', b[0] - (b[2] - b[0]) * 0.02, b[1] - (b[3] - b[1]) * 0.02); out.box = performance.now() - t; out.boxN = v.selection.size;
+            t = performance.now(); v.drawNow(); v.needDraw = false; out.boxDraw = performance.now() - t; await T.settle(300); out.boxApply = window.nxApply.last; await T.key('Escape'); return out;", 300000);
+        double Med(string k) { var a = r.GetProperty(k).EnumerateArray().Select(x => x.GetDouble()).OrderBy(x => x).ToList(); return a.Count == 0 ? 0 : a[a.Count / 2]; }
+        double Max(string k) { var a = r.GetProperty(k).EnumerateArray().Select(x => x.GetDouble()).ToList(); return a.Count == 0 ? 0 : a.Max(); }
+        foreach (var k in new[] { "move", "moveDraw", "click", "clickDraw", "apply" }) L($"clickcost_{k}_ms\tmedian {Med(k):F1}\tmax {Max(k):F1}");
+        L($"clickcost_box_all\thandlers {r.GetProperty("box").GetDouble():F1} ms\tframe {r.GetProperty("boxDraw").GetDouble():F1} ms\tstate {r.GetProperty("boxApply").GetDouble():F1} ms\tselected {r.GetProperty("boxN").GetInt32()} of {r.GetProperty("n").GetInt32()}");
     }
 
     // ================================================================== --selftest (D5 user path)
@@ -201,6 +218,7 @@ public static class SelfTest
         await DraftingAsync(w);
         await ClicksAsync(w);
         await TrimModesAsync(w);
+        await GripsAsync(w);
         await LangPanelsAsync(w);
         await HostKeysAsync(w);
         await CanvasThemeAsync(w);
@@ -462,7 +480,7 @@ public static class SelfTest
             await T.clickWorld(10, 50); await T.clickWorld(10.5, 50); out.cleared = T.box().selection.length;
             for (let i = 0; i < 10; i++) T.sloppyClick(20 * i, 50, i % 2 ? 11 : -11, i % 3 ? 7 : -7, { shift: true });  // ten hurried Shift+clicks in one burst, no pause between them
             out.burst = T.box().selection;
-            await T.dragWorld(60, 50, -10, 62); out.dragFromObject = T.box().selection.length;                        // a real drag that starts on an object is still a crossing box
+            await T.dragWorld(60, 30, -10, 42); out.dragFromObject = T.box().selection.length;                        // a real drag that starts on an object is still a crossing box
             const tb = document.querySelector('button.tool[data-a=""zoomext""]'); const row = document.querySelector('.lrow');
             await T.pick(100, 50); await T.settle(250);                                                               // the pick sends a state message back; the panels must not be rebuilt by it
             out.toolbarKept = !!tb && tb.isConnected; out.layerRowKept = !!row && row.isConnected; return out;");
@@ -509,6 +527,42 @@ public static class SelfTest
         // NEW from the header button: an empty, untitled drawing that takes a line at once
         var nw = await JS(w, "document.querySelector('.hdr-tools [data-a=new]').click(); await nx.test.settle(400); const n0 = nx.test.doc() ? nx.test.doc().order.length : -1; const name = nx.test.state().file ? nx.test.state().file.name : null; await nx.test.cmd('l'); await nx.test.cmd('0,0'); await nx.test.cmd('50,20'); await nx.test.key('Escape'); await nx.test.settle(250); return { n0, name, n1: nx.test.doc().order.length, rail: !!document.querySelector('[data-a=new].pill') };");
         GB("new_drawing_button", nw.GetProperty("n0").GetInt32() == 0 && nw.GetProperty("n1").GetInt32() == 1 && nw.GetProperty("name").GetString() == "untitled.dxf" && nw.GetProperty("rail").GetBoolean() && e.Doc!.Entities.Count == 1, nw.GetRawText());
+    }
+
+    // ================================================================== grips: drag the end of a line to make it shorter / longer; rollover highlight; a hurried tap on empty space
+    static async Task GripsAsync(MainWindow w)
+    {
+        var e = w.Engine; e.New(); await JS(w, "await nx.test.settle(150); nx.test.closeModal(); return true;");
+        var d = e.Doc!; var ed = e.Editor!;
+        string hl = ed.AddLine(0, 0, 100, 0, "0").Added[0].e.Handle; string hc = ed.AddCircle(50, 50, 10, "0").Added[0].e.Handle; ed.AddLine(-40, -40, 140, -40, "0"); ed.AddLine(-40, 80, 140, 80, "0");
+        e.Touch(); await Task.Delay(300);
+        Core.Model.Line Ln() => (Core.Model.Line)d.Find(hl)!; Core.Model.Circle Ci() => (Core.Model.Circle)d.Find(hc)!;
+        string F(Core.Model.Line l) => $"{l.P0.X:0.###},{l.P0.Y:0.###} → {l.P1.X:0.###},{l.P1.Y:0.###}"; bool Eq(double a, double b) => Math.Abs(a - b) < 1e-6;
+        // rollover: the object under the cursor is announced before the click
+        var hv = await JS(w, "await nx.test.settle(200); await nx.test.zoomExtents(); await nx.test.key('Escape'); await nx.test.moveWorld(30, 0, { wait: 80 }); const on = nx.test.hover(); await nx.test.moveWorld(30, 20, { wait: 80 }); return { on, off: nx.test.hover() };");
+        GB("click_rollover_highlight", hv.GetProperty("on").GetString() == hl && hv.GetProperty("off").ValueKind == JsonValueKind.Null, $"cursor on the line → highlighted {hv.GetProperty("on").GetString()} (want {hl}); on empty space → {hv.GetProperty("off").GetRawText()}");
+        // end grip, press – drag – release: 0..100 becomes 0..60 (shorter)
+        var g1 = await JS(w, "const T = nx.test; await T.pick(30, 0); T.raw('pointermove', 100, 0, { buttons: 0 }); T.raw('pointerdown', 100, 0); const tool = T.view.tool; T.raw('pointermove', 80, 0); T.raw('pointermove', 60, 0); T.raw('pointerup', 60, 0); await T.settle(200); return { tool, after: T.view.tool, sel: T.box().selection };"); await Task.Delay(150);
+        string s1 = F(Ln()); bool ok1 = Eq(Ln().P0.X, 0) && Eq(Ln().P1.X, 60) && Eq(Ln().P1.Y, 0);
+        // end grip, click – move – click: the other end goes from 0 to −20 (longer); then Esc on a picked grip changes nothing
+        await JS(w, "const T = nx.test; await T.clickWorld(0, 0); await T.clickWorld(-20, 0); await T.settle(200); return true;"); await Task.Delay(150);
+        string s2 = F(Ln()); bool ok2 = Eq(Ln().P0.X, -20) && Eq(Ln().P1.X, 60);
+        var esc = await JS(w, "const T = nx.test; await T.clickWorld(60, 0); const tool = T.view.tool; await T.moveWorld(90, 0); await T.key('Escape'); await T.settle(100); return { tool, after: T.view.tool, sel: T.box().selection.length };"); await Task.Delay(100);
+        bool ok3 = F(Ln()) == s2 && esc.GetProperty("tool").GetString() == "grip" && esc.GetProperty("after").GetString() == "select" && esc.GetProperty("sel").GetInt32() == 1;
+        GB("grip_line_end_shorter_longer", g1.GetProperty("tool").GetString() == "grip" && g1.GetProperty("after").GetString() == "select" && ok1 && ok2 && ok3, $"drag the end 100 → 60: {s1}; click the other end, click at −20: {s2}; Esc on a picked grip: unchanged {F(Ln()) == s2}, object still selected ({esc.GetProperty("sel").GetInt32()})");
+        // middle grip moves the line; one undo step per grip edit
+        await JS(w, "const T = nx.test; await T.clickWorld(20, 0); await T.clickWorld(20, 10); await T.settle(200); return true;"); await Task.Delay(150);
+        string s4 = F(Ln()); bool ok4 = Eq(Ln().P0.X, -20) && Eq(Ln().P0.Y, 10) && Eq(Ln().P1.X, 60) && Eq(Ln().P1.Y, 10);
+        e.Undo(); await Task.Delay(150); string s4u = F(Ln()); e.Redo(); await Task.Delay(150);
+        GB("grip_line_middle_moves", ok4 && s4u == s2, $"middle grip 20,0 → 20,10: {s4}; one undo: {s4u}");
+        // circle: quadrant grip changes the radius, centre grip moves it
+        await JS(w, "const T = nx.test; await T.key('Escape'); await T.pick(50, 60); await T.clickWorld(60, 50); await T.clickWorld(70, 50); await T.settle(200); return true;"); await Task.Delay(150);
+        double r1 = Ci().Radius;
+        await JS(w, "const T = nx.test; await T.clickWorld(50, 50); await T.clickWorld(50, 40); await T.settle(200); await T.key('Escape'); return true;"); await Task.Delay(150);
+        GB("grip_circle_radius_and_centre", Eq(r1, 20) && Eq(Ci().Center.X, 50) && Eq(Ci().Center.Y, 40) && Eq(Ci().Radius, 20), $"quadrant 60,50 → 70,50: radius {r1:0.###} (want 20); centre 50,50 → 50,40: centre {Ci().Center.X:0.###},{Ci().Center.Y:0.###}");
+        // a hurried tap on empty space that slides 13 px is still a click (it opens the click-click box); a slow 13 px drag is a drag box
+        var tp = await JS(w, "const T = nx.test; await T.key('Escape'); T.sloppyClick(120, 30, 12, 5); const tap = T.box().boxClick; await T.key('Escape'); T.raw('pointermove', 120, 30, { buttons: 0 }); T.raw('pointerdown', 120, 30); await new Promise(r => setTimeout(r, 300)); const s = T.screenOf(120, 30); const w0 = T.view.toWorld({ clientX: s.x + 12, clientY: s.y + 5 }); T.raw('pointermove', w0[0], w0[1]); T.raw('pointerup', w0[0], w0[1]); const slow = T.box().boxClick; await T.key('Escape'); return { tap, slow };");
+        GB("click_hurried_tap_is_a_click", tp.GetProperty("tap").GetBoolean() && !tp.GetProperty("slow").GetBoolean(), $"released at once after sliding 13 px → click (box opened: {tp.GetProperty("tap").GetBoolean()}); held 300 ms, same slide → drag box (box opened: {tp.GetProperty("slow").GetBoolean()})");
     }
 
     static async Task RightClickAsync(MainWindow w)

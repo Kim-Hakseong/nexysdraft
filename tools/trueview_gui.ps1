@@ -1,5 +1,5 @@
 # open a drawing in the DWG TrueView window, report the windows it shows, close it. usage: gui.ps1 file [seconds]
-param([string]$File, [int]$Seconds = 60)
+param([string]$File, [int]$Seconds = 60, [string]$Png = "")
 Add-Type @"
 using System; using System.Text; using System.Collections.Generic; using System.Runtime.InteropServices;
 public static class W {
@@ -43,4 +43,10 @@ while (((Get-Date) - $t0).TotalSeconds -lt $Seconds) {
 }
 if (-not $p.HasExited) { Write-Output ("  at end: " + (([W]::Titles([uint32]$p.Id)) -join " ; ")) }
 Write-Output ("verdict: " + $verdict + "  (" + [int]((Get-Date) - $t0).TotalSeconds + " s)")
+if ($Png -and -not $p.HasExited) {   # the window's own content (PrintWindow, full content) — never the screen: other windows of the user must not be captured, and focus is not taken
+  Add-Type -AssemblyName System.Drawing; $p.Refresh(); $h = $p.MainWindowHandle
+  Add-Type 'using System; using System.Runtime.InteropServices; public static class TVW { [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out R r); [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint f); public struct R { public int L, T, R2, B; } }'
+  $r = New-Object TVW+R; [void][TVW]::GetWindowRect($h, [ref]$r); $w = $r.R2 - $r.L; $hh = $r.B - $r.T
+  if ($w -gt 0 -and $hh -gt 0) { $bmp = New-Object System.Drawing.Bitmap $w, $hh; $g = [System.Drawing.Graphics]::FromImage($bmp); $dc = $g.GetHdc(); [void][TVW]::PrintWindow($h, $dc, 2); $g.ReleaseHdc($dc); $bmp.Save($Png); Write-Output "capture $Png ${w}x$hh" }
+}
 if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }

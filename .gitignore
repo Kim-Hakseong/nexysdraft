@@ -20,3 +20,4 @@ ErrorReports/
 
 # user file — a capture of a user drawing, never commit (the repository is public)
 docs/screens/New_Thumbnail.png
+*.mp4
