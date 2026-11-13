@@ -519,6 +519,12 @@ public static class SelfTest
         // a new TRIM in Standard mode starts at the edge prompt; Enter = every object
         var st2 = await JS(w, "await nx.test.key('Escape'); await nx.test.cmd('tr'); const step = nx.test.view.step; await nx.test.cmd(''); await nx.test.clickWorld(90, 100); await nx.test.settle(150); return { step };"); await Task.Delay(200);
         GB("trim_standard_enter_selects_all", st2.GetProperty("step").GetInt32() == 1 && Spans(100) == "30..70", $"TR in Standard mode opens the edge prompt (step {st2.GetProperty("step").GetInt32()}), Enter = all: click at x 90 → y=100 row {Spans(100)} (want 30..70)");
+        // Standard mode: a drag shows the ordinary selection rectangle (no freehand path) and trims what the rectangle crosses; the command stays
+        var sd = await JS(w, "const T = nx.test; T.raw('pointermove', 22, 104, { buttons: 0 }); T.raw('pointerdown', 22, 104); for (let i = 1; i <= 5; i++) T.raw('pointermove', 22 + 3.2 * i, 104 + 0.8 * i); const mid = { mode: T.view.dragMode, path: T.view.fencePath.length, rect: T.view.trimCrossing() }; T.raw('pointerup', 38, 108); await T.settle(200); return { mid, tool: T.view.tool };"); await Task.Delay(200);
+        string v30 = string.Join(" ", d.Entities.OfType<Core.Model.Line>().Where(l => Math.Abs(l.P0.X - 30) < 1e-9 && Math.Abs(l.P1.X - 30) < 1e-9 && Math.Min(l.P0.Y, l.P1.Y) > 80).Select(l => $"{Math.Min(l.P0.Y, l.P1.Y):G9}..{Math.Max(l.P0.Y, l.P1.Y):G9}"));
+        var sm = sd.GetProperty("mid");
+        GB("trim_standard_drag_is_a_rectangle", sm.GetProperty("mode").GetString() == "box" && sm.GetProperty("path").GetInt32() == 0 && sm.GetProperty("rect").GetBoolean() && v30 == "90..100" && sd.GetProperty("tool").GetString() == "trim",
+            $"drag (22,104)→(38,108) in Standard mode: {sm.GetRawText()} (want box, freehand points 0, rectangle), vertical at x 30: {v30} (want 90..100), command still {sd.GetProperty("tool").GetString()}");
         // EXTEND shares the modes and options: Q back to Quick, extend E to x = 30, then R (erase) removes it
         var ex = await JS(w, "await nx.test.key('Escape'); await nx.test.cmd('ex'); await nx.test.cmd('q'); const mode = nx.test.view.trimMode; await nx.test.clickWorld(18, 10); await nx.test.settle(200); return { mode, tool: nx.test.view.tool };"); await Task.Delay(200);
         string e1 = Spans(10);

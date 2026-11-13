@@ -153,7 +153,7 @@ export class CanvasView {
       if (this.doc && this.snapOn && this.toolWantsPoint() && this.dragMode !== 'box') this.snapPt = this.doc.snap(p[0], p[1], this.pxTol(10), this.tool === 'move' || this.tool === 'copy' || this.tool === 'stretch' ? new Set(this.toolSel) : this.tool === 'grip' ? new Set([this.pending.grip.id as string]) : null); else this.snapPt = null;
       this.acquireWatch(); if (this.isTrim() && this.step === 0 && this.dragMode === 'none') this.trimHover(p, e.shiftKey);
       this.hoverDirty = true;
-      if (this.isTrim() && this.step === 0 && this.dragMode === 'box' && !this.boxClick && this.dragStart) { const q = this.fencePath[this.fencePath.length - 1] ?? this.dragStart; if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= this.pxTol(3)) this.fencePath.push(p); }
+      if (this.isTrim() && this.step === 0 && this.dragMode === 'box' && !this.boxClick && this.dragStart && !this.trimCrossing()) { const q = this.fencePath[this.fencePath.length - 1] ?? this.dragStart; if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= this.pxTol(3)) this.fencePath.push(p); }
       const ep = this.toolWantsPoint() ? this.effectivePoint(p, e.shiftKey) : p; const base = this.basePoint();
       this.coord.textContent = `${fmtNum(ep[0], 3)}, ${fmtNum(ep[1], 3)}` + (this.snapPt && this.snapOn && this.toolWantsPoint() ? `  ${snapName(this.snapPt.k)}` : '') + (base && this.toolWantsPoint() ? `  ${fmtNum(Math.hypot(ep[0] - base[0], ep[1] - base[1]), 3)} < ${fmtNum(Math.atan2(ep[1] - base[1], ep[0] - base[0]) * 180 / Math.PI, 2)}°` : '');
       this.invalidate();
@@ -308,7 +308,7 @@ export class CanvasView {
     return `${name} [${this.trimMode === 'quick' ? 'Quick' : 'Standard'}] — Select object to ${ex ? 'extend' : 'trim'}, Shift = ${ex ? 'trim' : 'extend'}${this.pending.edges ? ` [${this.pending.edges.length} edges]` : ''}  [T edges / F fence / C crossing / O mode / R erase / U undo], Enter = end:`;
   }
   private edgePrompt() { return `${this.tool.toUpperCase()} — Select ${this.tool === 'extend' ? 'boundary' : 'cutting'} edges (click / window / crossing), Enter when done (none = every object):`; }
-  /** Two clicks on empty space: a crossing box (Standard mode, or after C) or a fence line (Quick mode, or after F). */
+  /** A drag or two clicks on empty space: a crossing box (Standard mode, or after C) or a fence — freehand when dragged — (Quick mode, or after F). */
   trimCrossing(): boolean { return this.pending.crossing ?? (this.trimMode === 'standard'); }
   setTrimMode(m: 'quick' | 'standard') { this.trimMode = m; try { localStorage.setItem('nx.trimmode', m); } catch { } }
   /** One pick per object crossed by the path (the first crossing counts). */
@@ -690,7 +690,7 @@ export class CanvasView {
     // TRIM / EXTEND hover preview: the part that goes (dashed) or comes (solid)
     if (this.isTrim() && this.pending.preview && this.dragMode === 'none') { const pv = this.pending.preview; const pts: Pt[] = []; for (let i = 0; i + 1 < pv.pts.length; i += 2) pts.push([pv.pts[i], pv.pts[i + 1]]); ctx.strokeStyle = sel; ctx.lineWidth = 3; ctx.setLineDash(pv.extend ? [] : [3, 4]); this.strokeWorld(ctx, pts, false); ctx.setLineDash([]); ctx.lineWidth = 1; }
     // fence (TRIM / EXTEND drag)
-    const fenceRect = this.isTrim() && this.step === 0 && this.boxClick && this.trimCrossing();
+    const fenceRect = this.isTrim() && this.step === 0 && this.trimCrossing();   // Standard mode (or after C): the drag shows the ordinary selection rectangle; Quick mode (or after F): the freehand path
     if (this.isTrim() && this.step === 0 && this.dragMode === 'box' && this.dragStart && this.cursor && !fenceRect) { ctx.strokeStyle = T.crossing; ctx.setLineDash([4, 3]); ctx.beginPath(); const a = w2s(v, this.dragStart[0], this.dragStart[1]); ctx.moveTo(a[0], a[1]); for (const q of this.boxClick ? [] : this.fencePath) { const s = w2s(v, q[0], q[1]); ctx.lineTo(s[0], s[1]); } const b = w2s(v, this.cursor[0], this.cursor[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); }
     // selection box
     if (this.dragMode === 'box' && this.dragStart && this.cursor && (fenceRect || !(this.isTrim() && this.step === 0))) { const a = w2s(v, this.dragStart[0], this.dragStart[1]), b = w2s(v, this.cursor[0], this.cursor[1]); const crossing = this.cursor[0] < this.dragStart[0]; ctx.strokeStyle = crossing ? T.crossing : T.window; ctx.setLineDash(crossing ? [4, 3] : []); ctx.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); ctx.setLineDash([]); ctx.fillStyle = crossing ? T.crossingFill : T.windowFill; ctx.fillRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); }
