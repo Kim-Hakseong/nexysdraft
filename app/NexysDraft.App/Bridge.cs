@@ -87,7 +87,7 @@ public sealed class Bridge
             case "new": e.New(); return null;   // no question asked (tests, scripts); the UI goes through the host command newDrawing
             case "save.cancel": e.CancelSave(); return null;
             case "saveTo": return e.SaveAsync(S(r, "path")).ContinueWith(t => (object?)t.Result, TaskScheduler.FromCurrentSynchronizationContext());
-            case "exportPdfTo": return e.ExportPdfAsync(S(r, "path")).ContinueWith(t => (object?)t.Result, TaskScheduler.FromCurrentSynchronizationContext());
+            case "exportPdfTo": return e.ExportPdfAsync(S(r, "path"), mono: B(r, "mono")).ContinueWith(t => (object?)t.Result, TaskScheduler.FromCurrentSynchronizationContext());
             case "lossWarnings": return e.LossWarnings();
             case "check": { var ck = e.Check(); return ck == null ? null : new { dwgOk = ck.DwgOk, recommended = ck.Recommended, planB = ck.PlanB, estimateSeconds = ck.EstimateSeconds, items = ck.Items.Select(i => new { kind = i.Kind, count = i.Count, detail = i.Detail, blocking = i.Blocking, recommendDxf = i.RecommendDxf, handles = i.Handles }).ToList(), fontFixes = ck.FontFixes.Select(f => new { style = f.Style, oldFont = f.OldFont, newFont = f.NewFamily + (f.NewFile != "" && f.Mode == Core.Dxf.FontCompatMode.C ? " (" + f.NewFile + ")" : "") }).ToList(), imageOnly = ck.ImageOnly, imageCount = ck.ImageCount, dxf = new { source = e.Doc!.Version, tooNew = Core.Dxf.DxfSave.TooNew(e.Doc), dflt = Core.Dxf.DxfSave.TooNew(e.Doc) ? "r2000" : "keep", limit = Core.Dxf.DxfSave.NanoCadNewest } }; }
             case "setFontCompat": e.FontCompat = B(r, "on", true); e.Touch(); return null;

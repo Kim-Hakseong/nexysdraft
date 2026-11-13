@@ -60,7 +60,7 @@ public static class DrawingPdf
     /// <summary>Scale (paper mm per drawing unit) for a sheet on its chosen paper with the 10 mm margin.</summary>
     public static double MmPerUnit(Document doc, Sheet sheet) { var p = ChoosePaper(doc, sheet); return Math.Min((p.wMm - 2 * MarginMm) / Math.Max(1e-9, sheet.W), (p.hMm - 2 * MarginMm) / Math.Max(1e-9, sheet.H)); }
 
-    public static Result Export(Document doc, string path, string? fontPath = null)
+    public static Result Export(Document doc, string path, string? fontPath = null, bool mono = false)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         fontPath ??= TrueTypeFont.FindSystemFont() ?? throw new FileNotFoundException("no TrueType font (malgun.ttf) found");
@@ -70,7 +70,7 @@ public static class DrawingPdf
         int texts = 0;
         foreach (var sheet in pageSheets)
         {
-            var (ctx, info) = RenderSheet(doc, pdf, sheet, ents);
+            var (ctx, info) = RenderSheet(doc, pdf, sheet, ents, mono);
             texts += info.Texts; infos.Add(info);
         }
         var bytes = pdf.Build(Path.GetFileNameWithoutExtension(doc.Path));
@@ -91,13 +91,13 @@ public static class DrawingPdf
         return pageSheets;
     }
 
-    static (Ctx ctx, PageInfo info) RenderSheet(Document doc, PdfWriter pdf, Sheet sheet, List<Entity> ents)
+    static (Ctx ctx, PageInfo info) RenderSheet(Document doc, PdfWriter pdf, Sheet sheet, List<Entity> ents, bool mono = false)
     {
         var paper = ChoosePaper(doc, sheet); double pw = paper.wMm * Pt, ph = paper.hMm * Pt;
         var page = pdf.AddPage(pw, ph);
         double w = Math.Max(1e-9, sheet.W), h = Math.Max(1e-9, sheet.H); double scale = Math.Min((pw - 2 * Margin) / w, (ph - 2 * Margin) / h);
         double ox = (pw - w * scale) / 2 - sheet.X0 * scale, oy = (ph - h * scale) / 2 - sheet.Y0 * scale;
-        var ctx = new Ctx(doc, page, scale, ox, oy, sheet); int texts = 0;
+        var ctx = new Ctx(doc, page, scale, ox, oy, sheet) { Mono = mono }; int texts = 0;
         foreach (var e in ents)
         {
             var b = Bounds.Of(e, doc, 0); if (b == null) continue;
@@ -123,33 +123,33 @@ public static class DrawingPdf
     /// (paper chosen like a sheet). Each part can be switched off; with no sheet detected the merged file is the extents page.
     /// <paramref name="collapseSingle"/> (draft5b): when the merged PDF has a single page (one sheet and no rest, or no sheet detected) the per-page and
     /// overview files would repeat it, so only the merged file is written. Callers that name the parts explicitly (CLI flags) pass false.</summary>
-    public static (Result? merged, List<OutFile> files) ExportSet(Document doc, string mainPath, bool merged = true, bool sheets = true, bool overview = true, string? fontPath = null, bool collapseSingle = false)
+    public static (Result? merged, List<OutFile> files) ExportSet(Document doc, string mainPath, bool merged = true, bool sheets = true, bool overview = true, string? fontPath = null, bool collapseSingle = false, bool mono = false)
     {
         var files = new List<OutFile>(); Result? res = null;
         string dir = Path.GetDirectoryName(Path.GetFullPath(mainPath))!, stem = Path.GetFileNameWithoutExtension(mainPath);
         Directory.CreateDirectory(dir);
         fontPath ??= TrueTypeFont.FindSystemFont() ?? throw new FileNotFoundException("no TrueType font (malgun.ttf) found");
-        if (merged) { res = Export(doc, mainPath, fontPath); files.Add(new OutFile(Path.GetFullPath(mainPath), "merged", res.Pages, string.Join("/", res.PageInfos.Select(p => p.Paper).Distinct()))); }
+        if (merged) { res = Export(doc, mainPath, fontPath, mono); files.Add(new OutFile(Path.GetFullPath(mainPath), "merged", res.Pages, string.Join("/", res.PageInfos.Select(p => p.Paper).Distinct()))); }
         if (collapseSingle && res != null && res.Pages == 1) { sheets = false; overview = false; }
         if (sheets)
         {
             // one file per page of the merged PDF: sheets name__001 …, the content outside the sheets name__rest, an undetected drawing name__001
             var list = res?.Sheets ?? PageSheets(doc, doc.Entities.Where(e => !e.PaperSpace && e is not Unknown && Visible(doc, e)).ToList(), out _);
-            foreach (var s in list) { string label = s.Label is { Length: > 0 } l ? l : "001"; string p = Path.Combine(dir, stem + "__" + label + ".pdf"); ExportSheet(doc, p, s, fontPath); files.Add(new OutFile(p, "sheet", 1, ChoosePaper(doc, s).name)); }
+            foreach (var s in list) { string label = s.Label is { Length: > 0 } l ? l : "001"; string p = Path.Combine(dir, stem + "__" + label + ".pdf"); ExportSheet(doc, p, s, fontPath, mono); files.Add(new OutFile(p, "sheet", 1, ChoosePaper(doc, s).name)); }
         }
         if (overview)
         {
             var b = Bounds.Of(doc);
-            if (b != null) { var s = new Sheet(b.Value.x0, b.Value.y0, b.Value.x1, b.Value.y1, "overview"); string p = Path.Combine(dir, stem + "__overview.pdf"); ExportSheet(doc, p, s, fontPath); files.Add(new OutFile(p, "overview", 1, ChoosePaper(doc, s).name)); }
+            if (b != null) { var s = new Sheet(b.Value.x0, b.Value.y0, b.Value.x1, b.Value.y1, "overview"); string p = Path.Combine(dir, stem + "__overview.pdf"); ExportSheet(doc, p, s, fontPath, mono); files.Add(new OutFile(p, "overview", 1, ChoosePaper(doc, s).name)); }
         }
         return (res, files);
     }
 
-    static void ExportSheet(Document doc, string path, Sheet sheet, string fontPath)
+    static void ExportSheet(Document doc, string path, Sheet sheet, string fontPath, bool mono = false)
     {
         var font = TrueTypeFont.Load(fontPath); var pdf = new PdfWriter(font);
         var ents = doc.Entities.Where(e => !e.PaperSpace && e is not Unknown && Visible(doc, e)).ToList();
-        RenderSheet(doc, pdf, sheet, ents);
+        RenderSheet(doc, pdf, sheet, ents, mono);
         File.WriteAllBytes(path, pdf.Build(Path.GetFileNameWithoutExtension(path)));
     }
 
@@ -184,6 +184,8 @@ public static class DrawingPdf
     sealed class Ctx
     {
         readonly Document _doc; readonly PdfWriter.Page _p; readonly double _k, _ox, _oy; readonly Sheet _sheet;
+        /// <summary>Monochrome: every line, fill and text is black (like the monochrome plot style).</summary>
+        public bool Mono;
         public Ctx(Document doc, PdfWriter.Page p, double k, double ox, double oy, Sheet sheet) { _doc = doc; _p = p; _k = k; _ox = ox; _oy = oy; _sheet = sheet; }
         (double x, double y) P(V3 v, Xform t) { var q = t.Apply(v); return (q.X * _k + _ox, q.Y * _k + _oy); }
         int ColorOf(Entity e, (int col, string layer)? ctx)
@@ -200,7 +202,7 @@ public static class DrawingPdf
         /// <summary>Draw one entity under a transform (block nesting); returns the number of text strings written.</summary>
         public int Draw(Entity e, (int col, string layer)? bctx, Xform t, int depth)
         {
-            int texts = 0; int col = ColorOf(e, bctx); int rgb = PrintColor(col);
+            int texts = 0; int col = ColorOf(e, bctx); int rgb = Mono ? 0 : PrintColor(col);
             _p.Stroke(rgb); _p.LineWidth(LineWidthPt(e) * (depth == 0 ? 1 : 1));
             double k = t.ScaleFactor;
             _p.Dash(e is Line or Circle or Arc or Ellipse or LwPolyline or Polyline or Spline ? DashOf(e, bctx, k) : null);
@@ -210,8 +212,8 @@ public static class DrawingPdf
                 case Circle c: Poly(Tess.Arc(c.Center.X, c.Center.Y, c.Radius, 0, 360, true, 2), t, true); break;
                 case Arc a: Poly(Tess.Arc(a.Center.X, a.Center.Y, a.Radius, a.StartDeg, a.EndDeg, true, 2), t, false); break;
                 case Ellipse el: Poly(Tess.EllipseArc(el.Center, el.Major, el.Ratio, el.StartParam, el.EndParam), t, false); break;
-                case LwPolyline p: Poly(PolyPts(p.Vertices, p.Closed), t, false); break;
-                case Polyline p: Poly(PolyPts(p.Vertices, p.Closed), t, false); break;
+                case LwPolyline p: if (!WidePoly(p.Vertices, p.Closed, t, rgb, k)) Poly(PolyPts(p.Vertices, p.Closed), t, false); break;
+                case Polyline p: if (p.Is3D || !WidePoly(p.Vertices, p.Closed, t, rgb, k)) Poly(PolyPts(p.Vertices, p.Closed), t, false); break;
                 case Spline sp: Poly(Tess.Spline(sp), t, false); break;
                 case Solid s: { var pts = new[] { s.P0, s.P1, s.P3, s.P2 }.Select(v => P(v, t)).ToList(); _p.Fill(rgb); _p.FillPolygons(new[] { pts.SelectMany(q => new[] { q.x, q.y }).ToArray() }); break; }
                 case Point pt: { var a = P(pt.Pos, t); _p.Line(a.x - 1, a.y, a.x + 1, a.y); _p.Line(a.x, a.y - 1, a.x, a.y + 1); break; }
@@ -271,6 +273,33 @@ public static class DrawingPdf
             var pts = new List<double>(); int n = vs.Count; if (n == 0) return pts;
             for (int i = 0; i < n; i++) { var v = vs[i]; if (i == 0) { pts.Add(v.X); pts.Add(v.Y); } bool last = i == n - 1; if (last && !closed) break; var nx = vs[(i + 1) % n]; Tess.Bulge(v.X, v.Y, nx.X, nx.Y, v.Bulge, pts); }
             return pts;
+        }
+        /// <summary>A polyline with width: one width → stroked at that width (mitred corners); tapering → one filled quadrilateral per piece. False when it has no width.</summary>
+        bool WidePoly(List<PVertex> vs, bool closed, Xform t, int rgb, double k)
+        {
+            if (vs.Count < 2 || !vs.Any(v => v.StartWidth > 0 || v.EndWidth > 0)) return false;
+            double w0 = vs[0].StartWidth; int nseg = closed ? vs.Count : vs.Count - 1;
+            if (vs.Take(nseg).All(v => v.StartWidth == w0 && v.EndWidth == w0))
+            {
+                _p.LineWidth(Math.Max(0.2, w0 * k * _k)); var pts = PolyPts(vs, closed);
+                if (closed && pts.Count >= 8) { pts.RemoveRange(pts.Count - 2, 2); Poly(pts, t, true); } else Poly(pts, t, false);
+                return true;
+            }
+            var loops = new List<double[]>(); _p.LineWidth(0.25);
+            for (int i = 0; i < nseg; i++)
+            {
+                var v = vs[i]; var nx = vs[(i + 1) % vs.Count]; var seg = new List<double> { v.X, v.Y }; Tess.Bulge(v.X, v.Y, nx.X, nx.Y, v.Bulge, seg); int m = seg.Count / 2 - 1;
+                for (int j = 0; j < m; j++)
+                {
+                    double x0 = seg[j * 2], y0 = seg[j * 2 + 1], x1 = seg[j * 2 + 2], y1 = seg[j * 2 + 3], dx = x1 - x0, dy = y1 - y0, l = Math.Sqrt(dx * dx + dy * dy); if (l < 1e-12) continue;
+                    double a = (v.StartWidth + (v.EndWidth - v.StartWidth) * j / m) / 2, z = (v.StartWidth + (v.EndWidth - v.StartWidth) * (j + 1) / m) / 2, ux = -dy / l, uy = dx / l;
+                    if (a <= 0 && z <= 0) { var p0 = P(new V3(x0, y0), t); var p1 = P(new V3(x1, y1), t); _p.Line(p0.x, p0.y, p1.x, p1.y); continue; }
+                    var q = new[] { P(new V3(x0 + ux * a, y0 + uy * a), t), P(new V3(x1 + ux * z, y1 + uy * z), t), P(new V3(x1 - ux * z, y1 - uy * z), t), P(new V3(x0 - ux * a, y0 - uy * a), t) };
+                    loops.Add(q.SelectMany(c => new[] { c.x, c.y }).ToArray());
+                }
+            }
+            if (loops.Count > 0) { _p.Fill(rgb); _p.FillPolygons(loops); }
+            return true;
         }
         void Poly(List<double> pts, Xform t, bool closed)
         {

@@ -1,7 +1,7 @@
 // Client-side document: entity records from the engine (PageDoc), tessellated geometry cache, grid index, hit testing and snapping.
 export interface Run { t: string; f?: string | null; b?: number; i?: number; hf?: number; wf?: number; u?: number; c?: number | null; abs?: number }
 export interface Ent {
-  h: string; t: string; l: string; c: number; tc?: number; lt?: string; inv?: number; lw?: number; p?: number[]; cl?: number; w?: number; heavy?: number; spline?: number; ctrl?: number[];
+  h: string; t: string; l: string; c: number; tc?: number; lt?: string; inv?: number; lw?: number; p?: number[]; cl?: number; w?: number; ws?: number[]; heavy?: number; spline?: number; ctrl?: number[];
   ht?: number; rot?: number; s?: string; ha?: number; va?: number; wf?: number; st?: string; font?: string; shx?: number; attr?: string; attdef?: number; ob?: number; bw?: number; ud?: number;
   at?: number; ls?: number; raw?: string; lines?: Run[][];
   blk?: string; attrs?: Ent[]; grid?: number[]; gridf?: number[];
@@ -109,7 +109,8 @@ export class Doc {
       case 'C': { if (!p) return null; const pts = arcPts(p[0], p[1], p[2], 0, 360); const segs = polyToSegs(pts, false); return { parts: [{ col, segs }], fills: [], texts: [], bbox: [p[0] - p[2], p[1] - p[2], p[0] + p[2], p[1] + p[2]], snaps: [p[0], p[1], SNAP_CEN, p[0] + p[2], p[1], SNAP_QUAD, p[0], p[1] + p[2], SNAP_QUAD, p[0] - p[2], p[1], SNAP_QUAD, p[0], p[1] - p[2], SNAP_QUAD] }; }
       case 'A': { if (!p) return null; const pts = arcPts(p[0], p[1], p[2], p[3], p[4]); const segs = polyToSegs(pts, false); let sw = p[4] - p[3]; while (sw <= 0) sw += 360; const am = (p[3] + sw / 2) * Math.PI / 180; return { parts: [{ col, segs }], fills: [], texts: [], bbox: bboxOf(pts), snaps: [pts[0], pts[1], SNAP_END, pts[pts.length - 2], pts[pts.length - 1], SNAP_END, p[0], p[1], SNAP_CEN, p[0] + p[2] * Math.cos(am), p[1] + p[2] * Math.sin(am), SNAP_MID] }; }
       case 'P': {
-        if (!p) return null; const n = p.length / 3; const pts: number[] = []; const snaps: number[] = []; const closed = !!e.cl;
+        if (!p || e.ws) return null;   // a polyline with a width goes the general way (filled outline)
+        const n = p.length / 3; const pts: number[] = []; const snaps: number[] = []; const closed = !!e.cl;
         for (let i = 0; i < n; i++) {
           const x = p[i * 3], y = p[i * 3 + 1], b = p[i * 3 + 2]; if (i === 0) pts.push(x, y); if (!e.spline) snaps.push(x, y, SNAP_END);
           if (i === n - 1 && !closed) break;
@@ -143,14 +144,18 @@ export class Doc {
       case 'A': { const pts = arcPts(p[0], p[1], p[2], p[3], p[4]); poly(pts, false); snap(pts[0], pts[1], SNAP_END); snap(pts[pts.length - 2], pts[pts.length - 1], SNAP_END); snap(p[0], p[1], SNAP_CEN); let sw = p[4] - p[3]; while (sw <= 0) sw += 360; const am = (p[3] + sw / 2) * Math.PI / 180; snap(p[0] + p[2] * Math.cos(am), p[1] + p[2] * Math.sin(am), SNAP_MID); break; }
       case 'E': { const pts = ellPts(p[0], p[1], p[2], p[3], p[4], p[5], p[6]); poly(pts, false); snap(p[0], p[1], SNAP_CEN); snap(pts[0], pts[1], SNAP_END); snap(pts[pts.length - 2], pts[pts.length - 1], SNAP_END); break; }
       case 'P': {
-        const n = p.length / 3; const pts: number[] = []; const closed = !!e.cl;
+        const n = p.length / 3; const pts: number[] = []; const closed = !!e.cl; const ws = e.ws; const hw: number[] = [];
         for (let i = 0; i < n; i++) {
           const x = p[i * 3], y = p[i * 3 + 1], b = p[i * 3 + 2]; if (i === 0) pts.push(x, y); if (!e.spline) snap(x, y, SNAP_END);
           const last = i === n - 1; if (last && !closed) break;
-          const nx = p[((i + 1) % n) * 3], ny = p[((i + 1) % n) * 3 + 1];
+          const nx = p[((i + 1) % n) * 3], ny = p[((i + 1) % n) * 3 + 1]; const before = pts.length / 2;
           if (Math.abs(b) < 1e-12) { pts.push(nx, ny); if (!e.spline) snap((x + nx) / 2, (y + ny) / 2, SNAP_MID); } else bulgePts(x, y, nx, ny, b, pts);
+          if (ws) { const k = pts.length / 2 - before; const a = (ws[i * 2] ?? 0) / 2, z = (ws[i * 2 + 1] ?? 0) / 2; for (let j = 0; j < k; j++) hw.push(a + (z - a) * j / k, a + (z - a) * (j + 1) / k); }
         }
-        poly(pts, false); break;
+        poly(pts, false);
+        // width (constant or tapering): the outline is filled, as in AutoCAD
+        if (ws) for (const q of widePolys(pts, hw, closed)) { const o = new Float32Array(q.length); for (let i = 0; i < q.length; i += 2) { const t = T(q[i], q[i + 1]); o[i] = t[0]; o[i + 1] = t[1]; } g.fills.push({ col, poly: o }); }
+        break;
       }
       case 'S': { seg(p[0], p[1], p[2], p[3]); seg(p[2], p[3], p[6], p[7]); seg(p[6], p[7], p[4], p[5]); seg(p[4], p[5], p[0], p[1]); const q: number[] = []; for (const [x, y] of [[p[0], p[1]], [p[2], p[3]], [p[6], p[7]], [p[4], p[5]]]) { const t = T(x, y); q.push(t[0], t[1]); } g.fills.push({ col, poly: new Float32Array(q) }); for (let i = 0; i < 8; i += 2) snap(p[i], p[i + 1], SNAP_END); break; }
       case 'PT': { seg(p[0] - 1e-9, p[1], p[0] + 1e-9, p[1]); snap(p[0], p[1], SNAP_END); break; }
@@ -344,6 +349,36 @@ export function arcPts(cx: number, cy: number, r: number, a0: number, a1: number
 export function ellPts(cx: number, cy: number, mx: number, my: number, ratio: number, s: number, e: number): number[] {
   let sw = e - s; while (sw <= 1e-12) sw += Math.PI * 2; const nx = -my * ratio, ny = mx * ratio; const n = Math.max(8, Math.min(128, Math.ceil(sw / (Math.PI * 2) * 72))); const out: number[] = [];
   for (let i = 0; i <= n; i++) { const t = s + sw * i / n; out.push(cx + mx * Math.cos(t) + nx * Math.sin(t), cy + my * Math.cos(t) + ny * Math.sin(t)); }
+  return out;
+}
+/** Outlines of a polyline with width. `pts` = the tessellated path (x, y …), `hw` = half width at the start and at the end of every segment of it.
+ *  One polygon per stretch of continuous width (mitred corners, square ends); a closed polyline of one width gives a ring (outer loop + inner loop, joined by a bridge). */
+export function widePolys(pts: number[], hw: number[], closed: boolean): number[][] {
+  const out: number[][] = []; const m = pts.length / 2 - 1; if (m < 1) return out;
+  type Seg = { x0: number; y0: number; x1: number; y1: number; nx: number; ny: number; a: number; z: number };
+  const segs: Seg[] = [];
+  for (let i = 0; i < m; i++) { const x0 = pts[i * 2], y0 = pts[i * 2 + 1], x1 = pts[i * 2 + 2], y1 = pts[i * 2 + 3]; const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy); if (l < 1e-12) continue; segs.push({ x0, y0, x1, y1, nx: -dy / l, ny: dx / l, a: hw[i * 2] ?? 0, z: hw[i * 2 + 1] ?? 0 }); }
+  const joined = (p: Seg, q: Seg) => Math.abs(p.z - q.a) <= 1e-9 * Math.max(1, p.z) && p.z > 0;
+  const mitre = (p: Seg, q: Seg, h: number): [number, number] => { let mx = p.nx + q.nx, my = p.ny + q.ny; const l = Math.hypot(mx, my); if (l < 1e-6) return [p.nx * h, p.ny * h]; const k = Math.min(2 / l, 4) * h / l; return [mx * k, my * k]; };
+  const wide = (s: Seg) => s.a > 0 || s.z > 0;
+  const n = segs.length; if (!n) return out;
+  if (closed && n > 2 && segs.every(wide) && segs.every((s, i) => joined(s, segs[(i + 1) % n]))) {
+    const L: number[] = [], R: number[] = [];
+    for (let i = 0; i < n; i++) { const p = segs[(i + n - 1) % n], q = segs[i]; const o = mitre(p, q, q.a); L.push(q.x0 + o[0], q.y0 + o[1]); R.push(q.x0 - o[0], q.y0 - o[1]); }
+    const ring = [...L, L[0], L[1], R[0], R[1]]; for (let i = n - 1; i >= 1; i--) ring.push(R[i * 2], R[i * 2 + 1]); ring.push(R[0], R[1]);
+    out.push(ring); return out;
+  }
+  let i = 0;
+  while (i < n) {
+    if (!wide(segs[i])) { i++; continue; }
+    let j = i; while (j + 1 < n && wide(segs[j + 1]) && joined(segs[j], segs[j + 1])) j++;
+    const L: number[] = [], R: number[] = []; const s0 = segs[i], s1 = segs[j];
+    L.push(s0.x0 + s0.nx * s0.a, s0.y0 + s0.ny * s0.a); R.push(s0.x0 - s0.nx * s0.a, s0.y0 - s0.ny * s0.a);
+    for (let k = i; k < j; k++) { const o = mitre(segs[k], segs[k + 1], segs[k].z); L.push(segs[k].x1 + o[0], segs[k].y1 + o[1]); R.push(segs[k].x1 - o[0], segs[k].y1 - o[1]); }
+    L.push(s1.x1 + s1.nx * s1.z, s1.y1 + s1.ny * s1.z); R.push(s1.x1 - s1.nx * s1.z, s1.y1 - s1.ny * s1.z);
+    const poly = [...L]; for (let k = R.length / 2 - 1; k >= 0; k--) poly.push(R[k * 2], R[k * 2 + 1]);
+    out.push(poly); i = j + 1;
+  }
   return out;
 }
 export function bulgePts(x0: number, y0: number, x1: number, y1: number, b: number, out: number[]) {

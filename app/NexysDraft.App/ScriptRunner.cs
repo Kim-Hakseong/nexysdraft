@@ -13,7 +13,7 @@ namespace NexysDraft.App;
 /// <c>NexysDraft.exe --script job.txt [--out dir] [--json]</c>: line-oriented commands without a window. Each line: a command and its
 /// arguments (coordinates as x,y). Results and errors (line number, reason) go to result.json in --out (default: the job file's folder) and,
 /// with --json, to stdout. Exit code 0 when every line succeeded, 1 otherwise, 2 when the job file could not be read.
-/// Commands: new | open PATH | save PATH(.dxf|.dwg) [--ver r2000|keep] [--no-image] [--no-fontfix] | pdf PATH [--merged] [--sheets] [--overview] | select all|none|window X0,Y0 X1,Y1|crossing …|handles H1 H2 … | layer new NAME [COLOR] |
+/// Commands: new | open PATH | save PATH(.dxf|.dwg) [--ver r2000|keep] [--no-image] [--no-fontfix] | pdf PATH [--merged] [--sheets] [--overview] [--mono] | select all|none|window X0,Y0 X1,Y1|crossing …|handles H1 H2 … | layer new NAME [COLOR] |
 /// layer current NAME | layer set NAME on|off|frozen|thawed|locked|unlocked | l X0,Y0 X1,Y1 [X2,Y2 …] | pl [c] X,Y … | c CX,CY R | dli X0,Y0 X1,Y1 DX,DY [angle] |
 /// rec X0,Y0 X1,Y1 | a X1,Y1 X2,Y2 X3,Y3 | el X0,Y0 X1,Y1 HALF | pol N CX,CY R [c] | po X,Y | dt X,Y H TEXT | mt X,Y W H TEXT |
 /// layer new NAME [COLOR] [LINETYPE] | layer set NAME LINETYPE | lt LINETYPE (selection) | ltscale N | ddi CX,CY R [ANGLE] | dra CX,CY R [ANGLE] | dli … [--text "Ø<>"] |
@@ -85,8 +85,9 @@ public static class ScriptRunner
                 {
                     // pdf PATH [--merged] [--sheets] [--overview]: no flag = all three (draft5 I3), collapsed to the merged file for a single-page drawing (draft5b); named flags are followed as given
                     bool fm = a.RemoveAll(x => x.Equals("--merged", StringComparison.OrdinalIgnoreCase)) > 0, fs = a.RemoveAll(x => x.Equals("--sheets", StringComparison.OrdinalIgnoreCase)) > 0, fo = a.RemoveAll(x => x.Equals("--overview", StringComparison.OrdinalIgnoreCase)) > 0;
+                    bool mono = a.RemoveAll(x => x.Equals("--mono", StringComparison.OrdinalIgnoreCase)) > 0;   // every line and text black
                     bool named = fm || fs || fo; if (!named) fm = fs = fo = true;
-                    string p = Path.GetFullPath(string.Join(" ", a)); Doc(); var r = e.ExportPdfAsync(p, fm, fs, fo, named).GetAwaiter().GetResult() ?? throw new IOException(e.StatusText); var lp = e.LastPdf;
+                    string p = Path.GetFullPath(string.Join(" ", a)); Doc(); var r = e.ExportPdfAsync(p, fm, fs, fo, named, mono).GetAwaiter().GetResult() ?? throw new IOException(e.StatusText); var lp = e.LastPdf;
                     var files = e.LastPdfFiles.Select(f => new { path = f.Path, kind = f.Kind, pages = f.Pages, paper = f.Paper }).ToList();
                     return new { path = p, files, fileCount = files.Count, note = e.LastPdfNote, pages = lp?.Pages ?? 0, sheets = lp?.Sheets.Count(s => s.Label != "rest") ?? 0, detected = lp?.SheetsDetected ?? false, texts = lp?.Texts ?? 0, ms = lp?.Ms ?? 0, paper = lp?.PageInfos.Select(pi => new { pi.Label, pi.Paper, pi.WidthMm, pi.HeightMm, pi.Basis, pi.Texts, minTextMm = Math.Round(pi.MinTextMm, 2), p10TextMm = Math.Round(pi.P10TextMm, 2), medianTextMm = Math.Round(pi.MedianTextMm, 2) }).ToList() };
                 }

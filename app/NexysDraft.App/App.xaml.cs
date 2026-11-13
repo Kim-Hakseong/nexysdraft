@@ -11,6 +11,7 @@ public partial class App : Application
         DispatcherUnhandledException += (_, ex) => { Diag.Trace("UNHANDLED " + ex.Exception); };
         AppDomain.CurrentDomain.UnhandledException += (_, ex) => Diag.Trace("UNHANDLED(domain) " + ex.ExceptionObject);
         TaskScheduler.UnobservedTaskException += (_, ex) => { Diag.Trace("UNOBSERVED " + ex.Exception); ex.SetObserved(); };
+        if (!SelfTest.Enabled && !Program.Fresh) Task.Run(FileAssoc.RegisterCurrentUser);   // no installer: a normal start lists this exe under "Open with" for .dwg / .dxf
         var win = new MainWindow();
         MainWindow = win;
         win.WhenReady.ContinueWith(_ => Diag.StartWatchdog(win.Dispatcher));   // stalls while WebView2 boots are not user-facing; count from the first page frame

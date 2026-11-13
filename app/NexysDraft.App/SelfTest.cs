@@ -219,6 +219,7 @@ public static class SelfTest
         await ClicksAsync(w);
         await TrimModesAsync(w);
         await GripsAsync(w);
+        await WideAssocAsync(w);
         await LangPanelsAsync(w);
         await HostKeysAsync(w);
         await CanvasThemeAsync(w);
@@ -533,6 +534,45 @@ public static class SelfTest
         // NEW from the header button: an empty, untitled drawing that takes a line at once
         var nw = await JS(w, "document.querySelector('.hdr-tools [data-a=new]').click(); await nx.test.settle(400); const n0 = nx.test.doc() ? nx.test.doc().order.length : -1; const name = nx.test.state().file ? nx.test.state().file.name : null; await nx.test.cmd('l'); await nx.test.cmd('0,0'); await nx.test.cmd('50,20'); await nx.test.key('Escape'); await nx.test.settle(250); return { n0, name, n1: nx.test.doc().order.length, rail: !!document.querySelector('[data-a=new].pill') };");
         GB("new_drawing_button", nw.GetProperty("n0").GetInt32() == 0 && nw.GetProperty("n1").GetInt32() == 1 && nw.GetProperty("name").GetString() == "untitled.dxf" && nw.GetProperty("rail").GetBoolean() && e.Doc!.Entities.Count == 1, nw.GetRawText());
+    }
+
+    // ================================================================== draft5m: polylines with width are filled, PDF options dialog, "Open with" registration and the default-program question
+    static async Task WideAssocAsync(MainWindow w)
+    {
+        var d0 = Core.Model.Document.CreateNew(); var ed0 = new Core.Edit.Editor(d0);
+        var frame = new Core.Model.LwPolyline { Closed = true, ConstWidth = 6 };
+        foreach (var (x, y) in new[] { (0.0, 0.0), (400.0, 0.0), (400.0, 277.0), (0.0, 277.0) }) frame.Vertices.Add(new Core.Model.PVertex { X = x, Y = y, StartWidth = 6, EndWidth = 6 });
+        string hf = ed0.Add(frame, "0").Added[0].e.Handle;
+        var arrow = new Core.Model.LwPolyline(); arrow.Vertices.Add(new Core.Model.PVertex { X = 50, Y = 50, StartWidth = 0, EndWidth = 20 }); arrow.Vertices.Add(new Core.Model.PVertex { X = 90, Y = 50 });
+        string ha = ed0.Add(arrow, "0").Added[0].e.Handle; ed0.AddLine(20, 20, 380, 20, "0");
+        string path = Path.Combine(OutDir, "files", "wide.dxf"); Directory.CreateDirectory(Path.GetDirectoryName(path)!); Core.Dxf.DxfWriter.Write(d0, path, Core.Dxf.DxfWriter.Mode.R2000, Core.Dxf.FontCompat.Plan(d0), false, true);
+        await Open(w, path);
+        var g = await JS(w, $"await nx.test.settle(200); await nx.test.zoomExtents(); const d = nx.test.doc(); const f = d.geomOf('{hf}'), a = d.geomOf('{ha}'); const pick = await nx.test.pick(200, 2.5); return {{ frameFills: f.fills.length, ring: f.fills[0] ? f.fills[0].poly.length / 2 : 0, bbox: f.bbox, arrowFills: a.fills.length, arrow: a.fills[0] ? Array.from(a.fills[0].poly) : [], picked: pick.length }};");
+        var bb = Arr(g.GetProperty("bbox")); var ar = Arr(g.GetProperty("arrow"));
+        bool okFrame = g.GetProperty("frameFills").GetInt32() == 1 && g.GetProperty("ring").GetInt32() == 10 && bb.Length == 4 && Math.Abs(bb[0] + 3) < 1e-6 && Math.Abs(bb[1] + 3) < 1e-6 && Math.Abs(bb[2] - 403) < 1e-4 && Math.Abs(bb[3] - 280) < 1e-4;
+        bool okArrow = g.GetProperty("arrowFills").GetInt32() == 1 && ar.Length == 8 && ar.Max(v => v) == 90 && Math.Abs(ar.Where((_, i) => i % 2 == 1).Max() - 60) < 1e-6 && Math.Abs(ar.Where((_, i) => i % 2 == 1).Min() - 40) < 1e-6;
+        GB("wide_polyline_filled", okFrame && okArrow && g.GetProperty("picked").GetInt32() == 1, $"frame width 6: fills {g.GetProperty("frameFills").GetInt32()}, ring points {g.GetProperty("ring").GetInt32()} (want 10), bbox [{string.Join(", ", bb.Select(v => v.ToString("0.###")))}] (want -3,-3,403,280); arrow 0→20: fills {g.GetProperty("arrowFills").GetInt32()}, y 40…60 {okArrow}; a click inside the width (200, 2.5) selects it: {g.GetProperty("picked").GetInt32()}");
+        await Shot(w, "17_wide_polyline");
+        // PDF button: options dialog with the monochrome checkbox; Esc closes it without exporting
+        var pd = await JS(w, "await nx.test.key('Escape'); document.querySelector('.hdr-tools [data-a=pdf]').click(); await nx.test.settle(60); const box = document.querySelector('.pdf-opt [data-f=mono]'); const open = !!box; const go = !!document.querySelector('.pdf-opt [data-b=go]'); await nx.test.key('Escape'); await nx.test.settle(60); return { open, go, closed: !document.querySelector('.pdf-opt') };");
+        GB("pdf_options_dialog", pd.GetProperty("open").GetBoolean() && pd.GetProperty("go").GetBoolean() && pd.GetProperty("closed").GetBoolean(), pd.GetRawText());
+        // the monochrome export through the bridge command the dialog uses
+        string mono = Path.Combine(OutDir, "files", "wide_mono.pdf");
+        await w.Engine.ExportPdfAsync(mono, true, false, false, true, true);
+        GB("pdf_monochrome_export", File.Exists(mono) && w.Engine.StatusText.Contains("monochrome"), w.Engine.StatusText);
+        // "Open with" registration (written under a scratch key here, HKCU\Software\Classes in the product) and the default-program question
+        using (var root = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\NexysDraft\SelfTest"))
+        {
+            bool first = FileAssoc.Register(root, @"C:\Apps\NexysDraft\NexysDraft.exe"), second = FileAssoc.Register(root, @"C:\Apps\NexysDraft\NexysDraft.exe");
+            string? cmd = root.OpenSubKey(@"Software\Classes\NexysDraft.dwg\shell\open\command")?.GetValue(null) as string;
+            bool ow = root.OpenSubKey(@"Software\Classes\.dwg\OpenWithProgids")?.GetValue("NexysDraft.dwg") != null && root.OpenSubKey(@"Software\Classes\.dxf\OpenWithProgids")?.GetValue("NexysDraft.dxf") != null;
+            string? cap = root.OpenSubKey(@"Software\RegisteredApplications")?.GetValue("NexysDraft") as string;
+            FileAssoc.Unregister(root); bool gone = root.OpenSubKey(@"Software\Classes\NexysDraft.dwg") == null && root.OpenSubKey(@"Software\Classes\.dwg\OpenWithProgids")?.GetValue("NexysDraft.dwg") == null;
+            GB("assoc_register_open_with", first && !second && cmd == "\"C:\\Apps\\NexysDraft\\NexysDraft.exe\" \"%1\"" && ow && cap == @"Software\NexysDraft\Capabilities" && gone, $"first write {first}, second write changes nothing {!second}, command {cmd}, OpenWithProgids {ow}, RegisteredApplications {cap}, removed again {gone}");
+        }
+        Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\NexysDraft\SelfTest", false);
+        var ap = await JS(w, "await window.nxDefaultPrompt(true); await nx.test.settle(60); const m = document.querySelector('.assoc'); const r = { open: !!m, set: !!document.querySelector('.assoc [data-b=set]'), never: !!document.querySelector('.assoc [data-f=never]') }; const l = document.querySelector('.assoc [data-b=later]'); if (l) l.click(); return { ...r, closed: !document.querySelector('.assoc') };");
+        GB("assoc_default_question", ap.GetProperty("open").GetBoolean() && ap.GetProperty("set").GetBoolean() && ap.GetProperty("never").GetBoolean() && ap.GetProperty("closed").GetBoolean(), ap.GetRawText() + " (the question is not asked by itself in automation runs)");
     }
 
     // ================================================================== grips: drag the end of a line to make it shorter / longer; rollover highlight; a hurried tap on empty space

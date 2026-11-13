@@ -1,5 +1,15 @@
 # 진행 현황 — NexysDraft
 
+## 2026-11-13 draft5m (흑백 PDF / 굵은 선이 화면에 안 나옴 / 연결 프로그램)
+| 항목 | 판정 | 근거 |
+|---|---|---|
+| PDF 흑백 옵션: PDF 버튼 → 옵션 창의 체크 하나(기억됨). CLI `pdf … --mono` | 완료 | D5mTests.Pdf_Monochrome_Has_Only_Black, pdf_options_dialog, pdf_monochrome_export |
+| 굵은 선: 원인 = 폭이 있는 폴리선(LWPOLYLINE 43 / 40·41)의 폭을 그리지 않음. 화면은 채운 윤곽(모서리 마이터, 테이퍼 포함), PDF는 그 폭으로 인쇄 | 완료 | wide_polyline_filled, D5mTests.Wide_Polyline_Is_Printed_At_Its_Width, 사용자 도면 캡처(work/thick, 비공개) |
+| 연결 프로그램: 실행하면 HKCU에 .dwg/.dxf "연결 프로그램" 후보로 등록, 기본 프로그램이 아니면 시작 때 질문(다시 묻지 않기) → Windows 설정의 NexysDraft 화면 | 완료 | assoc_register_open_with, assoc_default_question, 개발 PC에서 --register / --unregister 레지스트리 확인 |
+| 셀프테스트 / dotnet test | PASS 87 · FAIL 0 / 63 | work/gates/d5m_selftest.txt |
+| v0.4.13 배포 | 완료 | |
+| UNVERIFIED | 설정 화면 바로가기(ms-settings:defaultapps?registeredAppUser=)는 Windows 11 기준. 실제 설정 화면에서의 선택은 사람 손으로 확인 필요. 선 가중치(370)는 화면에 그리지 않는다(PDF에는 반영) | |
+
 ## 2026-11-13 draft5l (사용자 확인: 트림 좋음 — 표준 모드의 드래그 모양만 사각형으로)
 | 항목 | 판정 | 근거 |
 |---|---|---|

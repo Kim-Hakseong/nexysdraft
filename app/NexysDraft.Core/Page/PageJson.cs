@@ -48,6 +48,12 @@ public static class PageJson
     static void Num(Utf8JsonWriter w, double v) { if (double.IsFinite(v)) w.WriteNumberValue(v); else w.WriteNumberValue(0); }
     static void Arr(Utf8JsonWriter w, string name, params double[] v) { w.WritePropertyName(name); w.WriteStartArray(); foreach (var x in v) Num(w, x); w.WriteEndArray(); }
 
+    /// <summary>"ws": start / end width of every polyline segment (sw0, ew0, sw1, ew1 …) — written only when a segment has a width.</summary>
+    static void Widths(Utf8JsonWriter w, List<PVertex> vs)
+    {
+        if (!vs.Any(v => v.StartWidth > 0 || v.EndWidth > 0)) return;
+        w.WritePropertyName("ws"); w.WriteStartArray(); foreach (var v in vs) { Num(w, v.StartWidth); Num(w, v.EndWidth); } w.WriteEndArray();
+    }
     /// <summary>Same keys as <see cref="PageDoc.Record"/>.</summary>
     public static void Record(Utf8JsonWriter w, Entity e, Document doc, Dictionary<string, (string font, bool shx)> fontOf)
     {
@@ -68,11 +74,11 @@ public static class PageJson
             case Ellipse el: w.WriteString("t", "E"); Arr(w, "p", el.Center.X, el.Center.Y, el.Major.X, el.Major.Y, el.Ratio, el.StartParam, el.EndParam); break;
             case LwPolyline p:
                 w.WriteString("t", "P"); w.WritePropertyName("p"); w.WriteStartArray(); foreach (var v in p.Vertices) { Num(w, v.X); Num(w, v.Y); Num(w, v.Bulge); } w.WriteEndArray();
-                if (p.Closed) w.WriteNumber("cl", 1); { double wd = p.ConstWidth > 0 ? p.ConstWidth : p.Vertices.Count > 0 ? Math.Max(p.Vertices[0].StartWidth, p.Vertices[0].EndWidth) : 0; if (wd > 0) w.WriteNumber("w", wd); }
+                if (p.Closed) w.WriteNumber("cl", 1); { double wd = p.ConstWidth > 0 ? p.ConstWidth : p.Vertices.Count > 0 ? Math.Max(p.Vertices[0].StartWidth, p.Vertices[0].EndWidth) : 0; if (wd > 0) w.WriteNumber("w", wd); } Widths(w, p.Vertices);
                 break;
             case Polyline p:
                 w.WriteString("t", "P"); w.WritePropertyName("p"); w.WriteStartArray(); foreach (var v in p.Vertices) { Num(w, v.X); Num(w, v.Y); Num(w, v.Bulge); } w.WriteEndArray();
-                if (p.Closed) w.WriteNumber("cl", 1); if (p.StartWidth > 0) w.WriteNumber("w", p.StartWidth); w.WriteNumber("heavy", 1);
+                if (p.Closed) w.WriteNumber("cl", 1); if (p.StartWidth > 0) w.WriteNumber("w", p.StartWidth); w.WriteNumber("heavy", 1); if (!p.Is3D) Widths(w, p.Vertices);
                 break;
             case Text t:
                 w.WriteString("t", "T"); Arr(w, "p", t.Pos.X, t.Pos.Y, t.Align.X, t.Align.Y); w.WriteNumber("ht", t.Height); w.WriteNumber("rot", t.Rotation); w.WriteString("s", TextCodes.Plain(t.Value)); w.WriteNumber("ha", t.HAlign); w.WriteNumber("va", t.VAlign); w.WriteNumber("wf", t.WidthFactor); w.WriteString("st", t.Style);

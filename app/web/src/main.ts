@@ -2,7 +2,7 @@
 import { bridge } from './bridge';
 import { Doc } from './doc';
 import { I } from './icons';
-import { CommandBar, FileRail, LayerRail, PropsRail, showLossThenSave } from './rails';
+import { CommandBar, FileRail, LayerRail, PropsRail, showLossThenSave, showPdfExport } from './rails';
 import { installTests } from './test';
 import { esc, fmtInt, h, H, Hreset } from './util';
 import { CanvasView } from './view';
@@ -60,7 +60,7 @@ function renderHeader() {
 }
 hdr.addEventListener('click', e => {
   const a = ((e.target as HTMLElement).closest('[data-a]') as HTMLElement | null)?.dataset.a; if (!a) return;
-  if (a === 'open') bridge.call('openDialog'); else if (a === 'new') bridge.call('newDrawing'); else if (a === 'save') bridge.call('save'); else if (a === 'savedwg') showLossThenSave(); else if (a === 'pdf') bridge.call('exportPdfDialog');
+  if (a === 'open') bridge.call('openDialog'); else if (a === 'new') bridge.call('newDrawing'); else if (a === 'save') bridge.call('save'); else if (a === 'savedwg') showLossThenSave(); else if (a === 'pdf') showPdfExport();
   else if (a === 'undo') bridge.call('undo'); else if (a === 'redo') bridge.call('redo'); else if (a === 'theme') bridge.call('setTheme', { theme: S?.theme === 'dark' ? 'light' : 'dark' });
   else if (a === 'lang') setLang(lang() === 'ko' ? 'en' : 'ko');
   else if (a === 'help' || a === 'about') showHelp();
@@ -114,7 +114,8 @@ view.onCommand = (name, arg) => {
     case 'lang': case 'language': { const a = (arg ?? '').trim().toLowerCase(); const to = a.startsWith('k') || a.startsWith('한') ? 'ko' : a.startsWith('e') ? 'en' : (lang() === 'ko' ? 'en' : 'ko'); if (to === lang()) cmd.add(`LANG = ${to}`); else setLang(to); return true; }
     case 'skill': case 'installskill': installSkill().then(t => t.split('\n').slice(1, 4).forEach(l => cmd.add(l))); return true;
     case 'panels': case 'panel': { const a = (arg ?? '').trim().toLowerCase(); togglePanel(a.startsWith('l') ? 'left' : a.startsWith('r') ? 'right' : 'both'); cmd.add(`PANELS — left ${panels.left ? 'on' : 'off'}, right ${panels.right ? 'on' : 'off'}`); return true; }
-    case 'open': bridge.call('openDialog'); return true; case 'save': bridge.call('save'); return true; case 'saveas': showLossThenSave(false); return true; case 'exportdwg': showLossThenSave(); return true; case 'pdf': bridge.call('exportPdfDialog'); return true;
+    case 'open': bridge.call('openDialog'); return true; case 'save': bridge.call('save'); return true; case 'saveas': showLossThenSave(false); return true; case 'exportdwg': showLossThenSave(); return true; case 'pdf': showPdfExport(); return true;
+    case 'default': case 'defaultapp': showDefaultPrompt(true); return true;
     case 'layer': layers.input.focus(); cmd.add(xl('LAYER — rail focused (type a name + Enter = new layer)')); return true;
     case 'new': bridge.call('newDrawing'); return true;
   }
@@ -139,7 +140,7 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); showLossThenSave(); return; }
   if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); bridge.call('undo'); return; }
   if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); bridge.call('redo'); return; }
-  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); bridge.call('exportPdfDialog'); return; }
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); showPdfExport(); return; }
   if (e.ctrlKey && e.key.toLowerCase() === 't') { e.preventDefault(); bridge.call('setTheme', { theme: S?.theme === 'dark' ? 'light' : 'dark' }); return; }
   if (e.ctrlKey && e.key.toLowerCase() === 'a' && !typing) { e.preventDefault(); view.run('selectall'); return; }
   if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === '1' || e.key === '2' || e.key === '0')) { e.preventDefault(); togglePanel(e.key === '1' ? 'right' : e.key === '2' ? 'left' : 'both'); return; }
@@ -180,6 +181,7 @@ function showHelp() {
     <p><b>선택</b> 클릭 · 빈 곳을 클릭하고 마우스를 옮긴 뒤 다시 클릭(또는 드래그): <b>오른쪽으로 = 파란 실선 창</b>(완전히 안에 든 것만), <b>왼쪽으로 = 초록 점선 교차</b>(조금이라도 걸친 것 전부) · Shift = 추가/제거 · Ctrl+A 전체 · Del 삭제 · Esc 취소.</p>
     <p><b>명령줄</b> 글자를 치면 바로 명령줄로 · Enter/Space = 확정·마지막 명령 반복 · Esc = 취소 · 우클릭 짧게(&lt;250 ms) = 확정·반복, 길게 = 메뉴(RIGHTCLICK TIMED/ENTER/MENU) · <code>x,y</code> · <code>@dx,dy</code> · <code>@길이&lt;각도</code> · 숫자 = 직접 거리. L · PL · C · <b>REC</b> 사각형 · <b>A</b> 호(3점) · <b>EL</b> 타원 · <b>POL</b> 다각형 · <b>PO</b> 점 · <b>DT</b> 문자 · <b>T</b> 여러 줄 문자 · DLI · M · CO · RO · MI · O · S · <b>TR</b> 자르기 · <b>EX</b> 연장 · E · U · Z(A/E/W/P) · RE 재생성 · R 다시 그리기 · LA · PR · DI 거리 · ID 좌표.</p>
     <p><b>새 도면</b> Ctrl+N · NEW (파일 없이 실행하면 새 도면으로 시작)</p>
+    <p><b>PDF</b> Ctrl+P → <b>흑백</b>을 체크하면 모든 선과 문자가 검정으로 나옵니다(선택은 기억됨). <b>연결 프로그램</b> NexysDraft를 한 번 실행하면 DWG·DXF 파일의 "연결 프로그램" 목록에 올라갑니다. 기본 프로그램으로 바꾸려면 명령 DEFAULT.</p>
     <p><b>그립 편집</b> 객체를 선택하면 나오는 네모 점을 끌거나, 클릭 → 이동 → 클릭 · 선의 끝 = 늘이기/줄이기 · 선의 중간·원의 중심 = 이동 · 원의 사분점 = 반지름 · Esc = 취소</p>
     <p><b>자르기/연장 모드</b> 표준 모드(기본): TR → 기준 객체 선택 → Enter → 자를 곳을 계속 클릭, Esc = 끝 (선택 없이 Enter = 모든 객체가 기준) / 빠른 모드: 바로 클릭 · 끌기 · 빈 곳 두 번 클릭 = 울타리 · 옵션 O 모드 전환, T 기준, F 울타리, C 교차, R 지우기, U 취소</p>
     <p><b>자르기/연장</b> TR: 지울 부분을 클릭(다른 객체와 만나는 곳까지 잘림) · EX: 늘릴 끝 쪽을 클릭(가장 가까운 객체까지) · Shift+클릭 = 반대 동작 · 드래그 = 선에 걸친 것 한꺼번에 · T = 기준 객체 직접 지정.</p>
@@ -196,6 +198,7 @@ function showHelp() {
     <p><b>Command line</b> typing goes straight to the command line · Enter / Space = confirm · repeat the last command · Esc = cancel · short right click (&lt;250 ms) = confirm · repeat, long = menu (RIGHTCLICK TIMED/ENTER/MENU) · <code>x,y</code> · <code>@dx,dy</code> · <code>@length&lt;angle</code> · a number = direct distance. L · PL · C · <b>REC</b> rectangle · <b>A</b> arc (3 points) · <b>EL</b> ellipse · <b>POL</b> polygon · <b>PO</b> point · <b>DT</b> text · <b>T</b> multiline text · DLI · M · CO · RO · MI · O · S · <b>TR</b> trim · <b>EX</b> extend · E · U · Z (A/E/W/P) · RE regen · R redraw · LA · PR · DI distance · ID point.</p>
     <p><b>Trim / extend</b> TR: click the part to remove (cut where it meets other objects) · EX: click near the end to lengthen (to the nearest object) · Shift+click = the other one · drag = everything the line crosses · T = choose the edges yourself.</p>
     <p><b>Drafting aids</b> hold <b>Shift</b> = temporary ortho · F8 ortho · F10 polar tracking (90°, POLAR 45) · <b>F11 object snap tracking</b> (rest the cursor on a snap point until a + appears, then follow the dotted horizontal / vertical path through it) · F3 object snap (end □ mid △ centre ○ intersection × quadrant ◇) · F7 grid · F9 grid snap. The status bar pills switch them too. Full table: docs/keys.md. Double-click a <b>text</b> = edit.</p>
+    <p><b>PDF</b> Ctrl+P → check <b>Monochrome</b> for black lines and text only (remembered). <b>Open with</b>: after one start NexysDraft is listed under "Open with" for DWG / DXF files; the DEFAULT command helps to make it the default program.</p>
     <p><b>Language</b> the globe button at the top, or the commands LANG KO / LANG EN.</p>
     <ul><li>Not included: fillet, dynamic blocks, hatch editing, 3D, XREF editing, plot styles.</li><li>DWG is written as R2000 (LibreDWG). A pre-check before saving shows whether other CAD programs will read it and why DXF may be the better choice.</li></ul>
     <p><b>Drawing with an AI agent</b> One click on the button below installs the NexysDraft skill for Antigravity CLI · Claude Code · Gemini CLI on this PC. Then open a new agent session and ask in plain words, e.g. "draw a 200 × 120 plate with four holes and save it as DWG". Click again after moving the program folder.</p>
@@ -217,6 +220,28 @@ document.addEventListener('nx-zoom-handles', (e: any) => {
   view.setSelection(ids); if (x0 <= x1) { const m = Math.max(x1 - x0, y1 - y0, 1) * 0.15; view.zoomWindow([x0 - m, y0 - m], [x1 + m, y1 + m]); }
 });
 applyPanels();
+/** "Make NexysDraft the default program for DWG / DXF?" — asked at start while another program (or none) is the default; `force` = asked for by the DEFAULT command.
+ *  Windows does not let a program change the default by itself: the button opens the Windows settings page of NexysDraft, where one click confirms. */
+async function showDefaultPrompt(force = false) {
+  const st: any = await bridge.call('assoc.status').catch(() => null); if (!st || document.querySelector('.assoc')) return;
+  if (!force && !st.ask) return;
+  if (st.dwg && st.dxf) { cmd.add(L('NexysDraft is already the default program for DWG and DXF.', 'NexysDraft가 이미 DWG·DXF의 기본 프로그램입니다.')); return; }
+  const cur = st.current ? L(` (now: ${esc(st.current)})`, ` (지금: ${esc(st.current)})`) : '';
+  const dlg = h(`<div class="modal-bg assoc"><div class="modal"><h3>${L('Open DWG / DXF files with NexysDraft?', 'DWG · DXF 파일을 NexysDraft로 열까요?')}</h3>
+    <p>${L('NexysDraft is now listed under "Open with" for DWG and DXF files.', 'NexysDraft가 DWG · DXF 파일의 "연결 프로그램" 목록에 등록되었습니다.')} ${L('To open them with a double click, make it the default program', '더블클릭으로 바로 열려면 기본 프로그램으로 설정하세요')}${cur}.</p>
+    <p>${L('Windows asks you to confirm this yourself: the button opens the Windows settings page of NexysDraft — choose .dwg and .dxf there.', 'Windows는 이 설정을 사용자가 직접 확인하게 합니다. 버튼을 누르면 Windows 설정의 NexysDraft 화면이 열리니, 거기서 .dwg와 .dxf를 선택하세요.')}</p>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" data-f="never"> ${L('Do not ask again', '다시 묻지 않기')}</label>
+    <div class="btns"><button class="pill" data-b="later">${L('Later', '나중에')}</button><button class="pill primary" data-b="set">${L('Set as default', '기본 프로그램으로 설정')}</button></div></div></div>`);
+  dlg.addEventListener('click', e => {
+    const b = ((e.target as HTMLElement).closest('[data-b]') as HTMLElement | null)?.dataset.b; if (!b) return;
+    if ((dlg.querySelector('[data-f=never]') as HTMLInputElement).checked) bridge.call('assoc.never', { never: true });
+    if (b === 'set') bridge.call('assoc.setDefault');
+    dlg.remove(); view.wrap.focus();
+  });
+  document.body.append(dlg);
+}
+(window as any).nxDefaultPrompt = showDefaultPrompt;
+setTimeout(() => showDefaultPrompt(), 1500);
 installTests({ view, cmd, getDoc: () => doc, getState: () => S, layers, props });
 bridge.call('state').then(st => applyState(st));
 bridge.post({ cmd: 'ready' });

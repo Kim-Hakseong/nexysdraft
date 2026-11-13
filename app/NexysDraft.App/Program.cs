@@ -17,6 +17,7 @@ public static class Program
             return ScriptRunner.Run(args);
         }
         if (args.Contains("--install-skill")) { try { AttachConsole(-1); } catch { } return SkillInstaller.Run(args); }
+        if (args.Contains("--register") || args.Contains("--unregister")) { try { AttachConsole(-1); } catch { } return FileAssoc.Run(args); }
         SelfTest.Args = args;
         Fresh = args.Contains("--fresh");
         var app = new App();

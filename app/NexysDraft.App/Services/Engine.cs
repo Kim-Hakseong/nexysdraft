@@ -170,7 +170,7 @@ public sealed class Engine
 
     /// <param name="merged">name.pdf with every sheet as a page</param><param name="sheets">name__001.pdf … one file per detected sheet</param><param name="overview">name__overview.pdf, the whole model space on one page</param>
     /// <param name="explicitParts">the caller named the parts (CLI flags): no single-sheet collapse</param>
-    public async Task<string?> ExportPdfAsync(string pdfPath, bool merged = true, bool sheets = true, bool overview = true, bool explicitParts = false)
+    public async Task<string?> ExportPdfAsync(string pdfPath, bool merged = true, bool sheets = true, bool overview = true, bool explicitParts = false, bool mono = false)
     {
         if (Doc == null) return null;
         try
@@ -178,11 +178,11 @@ public sealed class Engine
             AutoSizeText();
             SetStatus("Exporting PDF …", "busy"); var docRef = Doc; var sw = Stopwatch.StartNew();
             bool collapse = !explicitParts && merged && (sheets || overview);
-            var (res, files) = await Task.Run(() => DrawingPdf.ExportSet(docRef, pdfPath, merged, sheets, overview, null, collapse));
+            var (res, files) = await Task.Run(() => DrawingPdf.ExportSet(docRef, pdfPath, merged, sheets, overview, null, collapse, mono));
             LastPdf = res; LastPdfFiles.Clear(); LastPdfFiles.AddRange(files);
             LastPdfNote = collapse && res != null && res.Pages == 1 ? "single sheet — merged only" : "";
             string list = string.Join(", ", files.Select(f => $"{Path.GetFileName(f.Path)} ({f.Pages} p, {f.Paper})"));
-            SetStatus($"PDF: {files.Count} file(s), {files.Sum(f => f.Pages)} page(s){(LastPdfNote != "" ? " (" + LastPdfNote + ")" : "")} — {list}{(res != null ? $" · {res.Texts} texts" : "")} · {sw.Elapsed.TotalMilliseconds:F0} ms");
+            SetStatus($"PDF: {files.Count} file(s), {files.Sum(f => f.Pages)} page(s){(LastPdfNote != "" ? " (" + LastPdfNote + ")" : "")}{(mono ? " · monochrome" : "")} — {list}{(res != null ? $" · {res.Texts} texts" : "")} · {sw.Elapsed.TotalMilliseconds:F0} ms");
             return files.Count > 0 ? files[0].Path : null;
         }
         catch (Exception ex) { Diag.Trace("pdf failed " + ex); SetStatus("PDF export failed: " + ex.Message, "error"); return null; }

@@ -118,13 +118,20 @@ public partial class MainWindow : Window
             case "exportPdfDialog":
                 {
                     if (Engine.Doc == null) return null;
-                    var dlg = new SaveFileDialog { Filter = "PDF|*.pdf", FileName = Path.GetFileNameWithoutExtension(Engine.Doc.Path) + ".pdf" };
+                    var dlg = new SaveFileDialog { Filter = "PDF|*.pdf", FileName = Path.GetFileNameWithoutExtension(Engine.Doc.Path == "" ? "untitled" : Engine.Doc.Path) + ".pdf" };
                     if (dlg.ShowDialog(this) != true) return null;
-                    return await Engine.ExportPdfAsync(dlg.FileName);
+                    return await Engine.ExportPdfAsync(dlg.FileName, mono: Bridge.B(args, "mono"));
                 }
             case "capture": { string path = args.GetProperty("path").GetString()!; await CaptureAsync(path); return path; }
             case "openUrl": { var u = Bridge.S(args, "url"); if (u.StartsWith("http")) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(u) { UseShellExecute = true }); return null; }
             case "openFolder": { var p = Bridge.S(args, "path"); if (Directory.Exists(p)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", p) { UseShellExecute = true }); return null; }
+            case "assoc.status":
+                {
+                    bool auto = SelfTest.Enabled || Program.Fresh; bool dwg = FileAssoc.IsDefault(".dwg"), dxf = FileAssoc.IsDefault(".dxf");
+                    return new { dwg, dxf, ask = !auto && !(dwg && dxf) && !FileAssoc.NeverAsk, current = Path.GetFileName(FileAssoc.DefaultExe(".dwg")) };
+                }
+            case "assoc.setDefault": if (!SelfTest.Enabled) { FileAssoc.RegisterCurrentUser(); FileAssoc.OpenDefaultAppsSettings(); } return null;
+            case "assoc.never": if (!SelfTest.Enabled) FileAssoc.NeverAsk = Bridge.B(args, "never", true); return null;
             case "quit": Close(); return null;
         }
         throw new NotSupportedException("unknown command " + cmd);

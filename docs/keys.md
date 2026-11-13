@@ -51,7 +51,8 @@ AutoCAD를 쓰던 사람이 바로 쓸 수 있도록 자주 쓰는 키와 조작
 | Ctrl+O | 열기 |
 | Ctrl+S | 저장 |
 | Ctrl+Shift+S | 다른 이름으로(저장 사전 점검 창) |
-| Ctrl+P | PDF 내보내기 |
+| Ctrl+P | PDF 내보내기 — 옵션 창에서 **흑백**(모든 선·문자를 검정으로) 체크, Enter = 내보내기, Esc = 취소. 선택은 기억됨 (v0.4.13) |
+| DEFAULT | DWG·DXF 기본 프로그램 설정 안내 창(Windows 설정의 NexysDraft 화면을 연다). 프로그램을 한 번 실행하면 "연결 프로그램" 목록에는 자동으로 올라간다 (v0.4.13) |
 | Ctrl+Z / Ctrl+Y | 실행 취소 / 다시 실행 |
 | Ctrl+A | 전체 선택 |
 | Del | 선택 삭제 |

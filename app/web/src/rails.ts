@@ -23,9 +23,26 @@ export class FileRail {
     this.body.addEventListener('click', e => {
       const t = e.target as HTMLElement; const a = (t.closest('[data-a]') as HTMLElement | null)?.dataset.a; const o = (t.closest('[data-open]') as HTMLElement | null)?.dataset.open;
       if (o) { bridge.call('open', { paths: [o] }); return; }
-      if (a === 'open') bridge.call('openDialog'); else if (a === 'new') bridge.call('newDrawing'); else if (a === 'save') bridge.call('save'); else if (a === 'saveas') showLossThenSave(false); else if (a === 'savedwg') showLossThenSave(true); else if (a === 'pdf') bridge.call('exportPdfDialog');
+      if (a === 'open') bridge.call('openDialog'); else if (a === 'new') bridge.call('newDrawing'); else if (a === 'save') bridge.call('save'); else if (a === 'saveas') showLossThenSave(false); else if (a === 'savedwg') showLossThenSave(true); else if (a === 'pdf') showPdfExport();
     });
   }
+}
+
+/** PDF export options: monochrome (every line and text black, like the monochrome plot style) — remembered; Enter = export, Esc = cancel. */
+export function showPdfExport() {
+  if (document.querySelector('.pdf-opt') || !(window as any).nxState?.file) return;
+  let mono = false; try { mono = localStorage.getItem('nx.pdf.mono') === '1'; } catch { }
+  const dlg = h(`<div class="modal-bg pdf-opt"><div class="modal"><h3>${L('Export PDF', 'PDF 내보내기')}</h3>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" data-f="mono" ${mono ? 'checked' : ''}> <span><b>${L('Monochrome', '흑백')}</b> — ${L('every line and text in black, no colour', '모든 선과 문자를 검정으로, 색 없이')}</span></label>
+    <p style="color:var(--muted)">${L('Unchecked: colours as on screen, darkened for white paper.', '체크하지 않으면 화면의 색 그대로(흰 종이에 맞게 어둡게) 나옵니다.')}</p>
+    <div class="btns"><button class="pill" data-b="cancel">${L('Cancel', '취소')}</button><button class="pill primary" data-b="go">${L('Export', '내보내기')}</button></div></div></div>`);
+  const box = dlg.querySelector('[data-f=mono]') as HTMLInputElement;
+  const close = () => { document.removeEventListener('keydown', onKey, true); dlg.remove(); };
+  const go = () => { const m = box.checked; try { localStorage.setItem('nx.pdf.mono', m ? '1' : '0'); } catch { } close(); bridge.call('exportPdfDialog', { mono: m }); };
+  const onKey = (e: KeyboardEvent) => { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); close(); } else if (e.key === 'Enter') { e.preventDefault(); go(); } };
+  document.addEventListener('keydown', onKey, true);
+  dlg.addEventListener('click', e => { const b = ((e.target as HTMLElement).closest('[data-b]') as HTMLElement | null)?.dataset.b; if (b === 'go') go(); else if (b === 'cancel' || e.target === dlg) close(); });
+  document.body.append(dlg); (dlg.querySelector('[data-b=go]') as HTMLElement).focus();
 }
 
 /** Save dialog (draft3 G2, draft4 H1/H2): R2000 pre-check verdict, reasons with handles (double-click = zoom to them), font compatibility checkbox
